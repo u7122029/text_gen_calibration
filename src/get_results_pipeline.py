@@ -65,7 +65,8 @@ def main(prompt_type: str="FCoT",
 
     # Get token.
     with open("token.txt") as f:
-        token = f.read()
+        token = f.read().strip()
+        ic(token)
 
     tokeniser = AutoTokenizer.from_pretrained(model_name, token=token, padding_side="left")
     tokeniser.pad_token_id = tokeniser.eos_token_id
