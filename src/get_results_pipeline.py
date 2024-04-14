@@ -17,7 +17,7 @@ torch.manual_seed(0)
 def get_dataset(tokeniser, format_chat_func):
     df = pd.read_json("test.jsonl", lines=True)
     df["answer"] = df["answer"].apply(lambda x: int(re.sub(r'[^\w\s]', '', x.split("####")[1])))
-    dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:200].tolist()])
+    dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:10].tolist()])
     dataset = dataset.map(lambda x: {"formatted": format_chat_func(x, tokeniser)}, batched=True)
     return dataset
 

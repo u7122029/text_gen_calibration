@@ -173,10 +173,11 @@ class WATCCalibrator(Calibrator, ABC):
                 compiled_probs.append(prob)
 
             all_preds.append(torch.Tensor(outs["final_answers"]))
-            all_confs.append(torch.Tensor(compiled_probs))
-
+            all_confs.append(torch.stack(compiled_probs))
+        
         all_preds = torch.cat(all_preds)
-
+        all_confs = torch.stack(all_confs)
+        ic(all_confs.shape)
         self.calibrator_model.train()
         progress = tqdm(range(epochs), desc="optimising")
         for _ in progress:
