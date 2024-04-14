@@ -17,7 +17,7 @@ torch.manual_seed(0)
 def get_dataset(tokeniser, format_chat_func):
     df = pd.read_json("test.jsonl", lines=True)
     df["answer"] = df["answer"].apply(lambda x: int(re.sub(r'[^\w\s]', '', x.split("####")[1])))
-    dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:10].tolist()])
+    dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:200].tolist()])
     dataset = dataset.map(lambda x: {"formatted": format_chat_func(x, tokeniser)}, batched=True)
     return dataset
 
@@ -51,10 +51,12 @@ def show_results(filepath: Path, dataset: Dataset):
 # mistralai/Mistral-7B-Instruct-v0.2
 # zhengr/MixTAO-7Bx2-MoE-v8.1
 # google/gemma-1.1-7b-it
-def main(prompt_type: str="FCoT",
+# meta-llama/Llama-2-7b-chat-hf
+def main(prompt_type: str="CoT",
          calibrator_type="ReLu_WATC",
-         model_name="mistralai/Mistral-7B-Instruct-v0.2",
-         debug_responses=True):
+         model_name="meta-llama/Llama-2-7b-hf",
+         debug_responses=True,
+         redo_results=True):
     if prompt_type not in prompt_dict:
         raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
@@ -76,7 +78,7 @@ def main(prompt_type: str="FCoT",
     p = Path("results") / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)
     file_path = Path(f"{str(p)}.pt")
-    if file_path.exists():
+    if file_path.exists() and not redo_results:
         show_results(file_path,dataset)
         quit()
 

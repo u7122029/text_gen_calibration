@@ -159,14 +159,12 @@ class WATCCalibrator(Calibrator, ABC):
                                             )
 
             outs = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=False)
-            truncated_tokens = outs["tokens"]
-            ic(type(truncated_tokens))
+            truncated_tokens = outs["tokens"] # List[torch tokens as ints]
 
             if self.debug_responses:
                 ic(outs["final_answers"])
+
             prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
-            #sequences = generated.sequences.cpu()
-            #responses = sequences[:, inputs.input_ids.shape[1]:]
             compiled_probs = []
             for truncated_token_set, prob_vec in zip(truncated_tokens, prob_vecs):
                 prob = torch.take_along_dim(prob_vec[:len(truncated_token_set)],
@@ -177,8 +175,6 @@ class WATCCalibrator(Calibrator, ABC):
             all_confs.append(torch.stack(compiled_probs))
         
         all_preds = torch.cat(all_preds)
-        all_confs = torch.stack(all_confs)
-        ic(all_confs.shape)
 
         self.calibrator_model.train()
         progress = tqdm(range(epochs), desc="optimising")
@@ -208,7 +204,7 @@ class ReLu_WATC(WATCCalibrator):
             self.t = nn.Parameter(torch.Tensor([t]))
 
         def forward(self, inp):
-            inp = -(1 - self.f)/(1 - self.t) * nn.functional.relu(inp - self.t) + 1
+            inp *= -(1 - self.f)/(1 - self.t) * nn.functional.relu(inp - self.t) + 1
             confidences = inp.mean(dim=1)
             return confidences
 
