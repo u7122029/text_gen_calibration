@@ -160,6 +160,7 @@ class WATCCalibrator(Calibrator, ABC):
 
             outs = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=False)
             truncated_tokens = outs["tokens"]
+            ic(type(truncated_tokens))
 
             if self.debug_responses:
                 ic(outs["final_answers"])
@@ -178,6 +179,7 @@ class WATCCalibrator(Calibrator, ABC):
         all_preds = torch.cat(all_preds)
         all_confs = torch.stack(all_confs)
         ic(all_confs.shape)
+
         self.calibrator_model.train()
         progress = tqdm(range(epochs), desc="optimising")
         for _ in progress:
