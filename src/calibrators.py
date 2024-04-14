@@ -166,11 +166,14 @@ class WATCCalibrator(Calibrator, ABC):
             prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
             #sequences = generated.sequences.cpu()
             #responses = sequences[:, inputs.input_ids.shape[1]:]
-
-            compiled_probs = torch.take_along_dim(prob_vecs, truncated_tokens.unsqueeze(2), dim=2).squeeze(2)
+            compiled_probs = []
+            for truncated_token_set, prob_vec in zip(truncated_tokens, prob_vecs):
+                prob = torch.take_along_dim(prob_vec[:len(truncated_token_set)],
+                                            truncated_token_set.unsqueeze(1), dim=1).squeeze(1)
+                compiled_probs.append(prob)
 
             all_preds.append(torch.Tensor(outs["final_answers"]))
-            all_confs.append(compiled_probs)
+            all_confs.append(torch.Tensor(compiled_probs))
 
         all_preds = torch.cat(all_preds)
 
