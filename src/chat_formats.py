@@ -66,6 +66,7 @@ class CoT(ChatProcessor):
         # Computing probabilities using the generated logits.
         out_dict = {
             "explanations": explanations,
+            "tokens": responses,
             "final_answers": final_answers
         }
 
