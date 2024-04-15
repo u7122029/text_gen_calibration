@@ -204,8 +204,8 @@ class ReLu_WATC(WATCCalibrator):
             self.t = nn.Parameter(torch.Tensor([t]))
 
         def forward(self, inp):
-            inp *= -(1 - self.f)/(1 - self.t) * nn.functional.relu(inp - self.t) + 1
-            confidences = inp.mean(dim=1)
+            inp_next = inp *(-(1 - self.f)/(1 - self.t) * nn.functional.relu(inp - self.t) + 1)
+            confidences = inp_next.mean(dim=1)
             return confidences
 
     def __init__(self, tokeniser, model, debug_responses, f=0.5, t=0.5):
@@ -217,11 +217,12 @@ class Step_WATC(WATCCalibrator):
         def __init__(self, t=0.5, f=0.5):
             super().__init__()
             self.f = nn.Parameter(torch.Tensor([f]))
-            self.t = t # The step function is discontinuous at t. So we should not try to move it around.
+            self.t = nn.Parameter(torch.Tensor([t]))
 
         def forward(self, inp):
-            inp[inp >= self.t] *= self.f
-            confidences = inp.mean(dim=1)
+            mask = inp >= self.t
+            inp_next = inp[mask] * self.f
+            confidences = inp_next.mean(dim=1)
             return confidences
 
     def __init__(self, tokeniser, model, debug_responses, t=0.5, f=0.5):

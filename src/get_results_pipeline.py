@@ -52,9 +52,9 @@ def show_results(filepath: Path, dataset: Dataset):
 # zhengr/MixTAO-7Bx2-MoE-v8.1
 # google/gemma-1.1-7b-it
 # meta-llama/Llama-2-7b-chat-hf
-def main(prompt_type: str="CoT",
+def main(prompt_type: str="FCoT",
          calibrator_type="ReLu_WATC",
-         model_name="meta-llama/Llama-2-7b-hf",
+         model_name="mistralai/Mistral-7B-Instruct-v0.2",
          debug_responses=True,
          redo_results=True):
     if prompt_type not in prompt_dict:
