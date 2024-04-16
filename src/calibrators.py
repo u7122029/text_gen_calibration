@@ -86,10 +86,10 @@ class StopwordRemover(Calibrator):
 
 
 class GSDCalibrator(Calibrator):
-    def __init__(self, tokeniser, model):
-        super().__init__(tokeniser, model)
+    def __init__(self, tokeniser, model, debug_responses=True):
+        super().__init__(tokeniser, model, debug_responses)
 
-    def calibrate(self, dataloader: DataLoader, formatter_cls, num_trials_per_input=3):
+    def calibrate(self, dataloader: DataLoader, formatter_cls, num_trials_per_input=5):
         #all_explanations = []
         all_answers = []
         all_confs = []
