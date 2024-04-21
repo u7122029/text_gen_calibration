@@ -33,8 +33,9 @@ class CoT(ChatProcessor):
                       template_type: ChatTemplateType = ChatTemplateType.SYSTEM_USER_CHAT):
         out = []
         for question in inputs["question"]:
-            system_text = ("You are a friendly chatbot that only outputs in the form:\n**Explanation:** <Your "
-                           "explanation>\n**Final Answer:** <A single number>")
+            system_text = ("You are a friendly chatbot that only outputs in the form:\n"
+                           "**Explanation:** <Your explanation>\n"
+                           "**Final Answer:** <A single number>")
             if template_type == CoT.ChatTemplateType.SYSTEM_USER_CHAT:
                 # Try using the system prompt
                 formatted = tokeniser.apply_chat_template([{"role": "system", "content": system_text},
@@ -50,7 +51,7 @@ class CoT(ChatProcessor):
                     add_generation_prompt=True,
                     return_tensors="pt")
             elif template_type == CoT.ChatTemplateType.NO_TEMPLATE:
-                formatted = f"{system_text}\n\n{question}\n"
+                formatted = f"{system_text}\n\n**Question:** {question}\n"
             else:
                 raise Exception("Invalid template_type.")
             out.append(formatted)
