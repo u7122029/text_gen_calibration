@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def main(prompt_type: str="CoT",
-         model_name="google/gemma-1.1-2b-it"):
+         model_name="tiiuae/falcon-7b-instruct"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
@@ -87,7 +87,7 @@ def main(prompt_type: str="CoT",
             eos_conf = torch.mean(torch.take_along_dim(prob_vec[not_eos_mask],
                                                        eos_tokens.unsqueeze(1), dim=1).squeeze(1))
 
-            #ic(tokeniser.batch_decode([response, non_stopword_tokens, no_eos_tokens]))
+            ic(tokeniser.batch_decode([response, non_stopword_tokens, no_eos_tokens]))
             outputs[base_idx + i, 0] = regular_conf
             outputs[base_idx + i, 1] = non_stopword_conf
             outputs[base_idx + i, 2] = no_eos_conf
