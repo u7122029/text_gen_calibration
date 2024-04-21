@@ -5,13 +5,14 @@ from abc import ABC, abstractmethod
 from datasets import Dataset
 import re
 from icecream import ic
+from enum import Enum
 from tqdm import tqdm
 
 
 class ChatProcessor(ABC):
     @staticmethod
     @abstractmethod
-    def format_inputs(inputs: Dataset, tokeniser):
+    def format_inputs(inputs: Dataset, tokeniser, **kwargs):
         pass
 
     @staticmethod
@@ -21,26 +22,37 @@ class ChatProcessor(ABC):
 
 
 class CoT(ChatProcessor):
+    class ChatTemplateType(Enum):
+        SYSTEM_USER_CHAT = 1
+        USER_CHAT = 2
+        NO_TEMPLATE = 3
+
     @staticmethod
-    def format_inputs(inputs: Dataset, tokeniser):
+    def format_inputs(inputs: Dataset,
+                      tokeniser,
+                      template_type: ChatTemplateType = ChatTemplateType.SYSTEM_USER_CHAT):
         out = []
         for question in inputs["question"]:
             system_text = ("You are a friendly chatbot that only outputs in the form:\n**Explanation:** <Your "
                            "explanation>\n**Final Answer:** <A single number>")
-            try:
+            if template_type == CoT.ChatTemplateType.SYSTEM_USER_CHAT:
                 # Try using the system prompt
                 formatted = tokeniser.apply_chat_template([{"role": "system", "content": system_text},
                                                            {"role": "user", "content": f"**Question:** {question}"}],
                                                           tokenize=False,
                                                           add_generation_prompt=True,
                                                           return_tensors="pt")
-            except:
+            elif template_type == CoT.ChatTemplateType.USER_CHAT:
                 # Try not using the system prompt
                 formatted = tokeniser.apply_chat_template(
                     [{"role": "user", "content": f"{system_text}\n\n**Question:** {question}"}],
                     tokenize=False,
                     add_generation_prompt=True,
                     return_tensors="pt")
+            elif template_type == CoT.ChatTemplateType.NO_TEMPLATE:
+                formatted = f"{system_text}\n\n{question}\n"
+            else:
+                raise Exception("Invalid template_type.")
             out.append(formatted)
         return out
 

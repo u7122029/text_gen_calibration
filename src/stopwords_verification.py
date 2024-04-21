@@ -1,6 +1,6 @@
 import fire
 from get_results_pipeline import get_dataset
-from chat_formats import prompt_dict
+from chat_formats import prompt_dict, CoT
 from icecream import ic
 from transformers import AutoTokenizer, AutoModelForCausalLM, __version__
 import torch
@@ -21,8 +21,12 @@ def main(prompt_type: str="CoT",
     tokeniser = AutoTokenizer.from_pretrained(model_name, token=token, padding_side="left")
     tokeniser.pad_token_id = tokeniser.eos_token_id
 
-    #dataset = get_dataset(tokeniser, formatter_cls.format_inputs, 720)
-    dataset = get_dataset(tokeniser, None, 720)
+    dataset = get_dataset(tokeniser,
+                          lambda x,y: formatter_cls.format_inputs(x,
+                                                                  y,
+                                                                  template_type=CoT.ChatTemplateType.NO_TEMPLATE),
+                          720)
+    #dataset = get_dataset(tokeniser, None, 720)
     dl = DataLoader(dataset, batch_size=10)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
