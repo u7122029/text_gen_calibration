@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def main(prompt_type: str="CoT",
-         model_name="tiiuae/falcon-7b-instruct"):
+         model_name="google/gemma-1.1-7b-it"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
@@ -32,6 +32,7 @@ def main(prompt_type: str="CoT",
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",
                                                  torch_dtype=torch.float16,
+                                                 attn_implementation="flash_attention_2",
                                                  token=token)
     stopwords_original = stopwords.words("english")
     stopwords_english = stopwords_original + [f" {x.capitalize()}" for x in stopwords_original]
