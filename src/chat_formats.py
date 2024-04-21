@@ -7,6 +7,7 @@ import re
 from icecream import ic
 from tqdm import tqdm
 
+
 class ChatProcessor(ABC):
     @staticmethod
     @abstractmethod
@@ -35,10 +36,11 @@ class CoT(ChatProcessor):
                                                           return_tensors="pt")
             except:
                 # Try not using the system prompt
-                formatted = tokeniser.apply_chat_template([{"role": "user", "content": f"{system_text}\n\n**Question:** {question}"}],
-                                                           tokenize=False,
-                                                           add_generation_prompt=True,
-                                                           return_tensors="pt")
+                formatted = tokeniser.apply_chat_template(
+                    [{"role": "user", "content": f"{system_text}\n\n**Question:** {question}"}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    return_tensors="pt")
             out.append(formatted)
         return out
 
@@ -154,7 +156,7 @@ class FCoT(ChatProcessor):
                           end_token="\"\"\"END\"\"\"",
                           get_confidence=False,
                           debug_responses=True) -> dict:
-        #inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+        # inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
         end_tokens = tokeniser(end_token, return_tensors="pt", add_special_tokens=False).input_ids[0]
         prob_vecs = torch.softmax(torch.stack(model_outs.logits).permute(1, 0, 2), dim=2).cpu()
         sequences = model_outs.sequences.cpu()

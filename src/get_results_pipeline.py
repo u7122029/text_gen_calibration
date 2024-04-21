@@ -21,7 +21,11 @@ def get_dataset(tokeniser, format_chat_func, size=None):
         dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:size].tolist()])
     else:
         dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df)).tolist()])
-    dataset = dataset.map(lambda x: {"formatted": format_chat_func(x, tokeniser)}, batched=True)
+
+    if format_chat_func is None:
+        dataset = dataset.map(lambda x: {"formatted": x}, batched=True)
+    else:
+        dataset = dataset.map(lambda x: {"formatted": format_chat_func(x, tokeniser)}, batched=True)
     return dataset
 
 
