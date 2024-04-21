@@ -2,7 +2,7 @@ import fire
 from get_results_pipeline import get_dataset
 from chat_formats import prompt_dict
 from icecream import ic
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, __version__
 import torch
 from torch.utils.data import DataLoader
 from nltk.corpus import stopwords
@@ -10,12 +10,9 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
-def get_tokens_and_attentions(word_list, tokeniser):
-    items = tokeniser(word_list, add_special_tokens=False, padding=True, return_tensors="pt")
-    return items.input_ids, items.attention_mask
-
 def main(prompt_type: str="CoT",
-         model_name="mistralai/Mistral-7B-Instruct-v0.2"):
+         model_name="google/gemma-1.1-2b-it"):
+    ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
         token = f.read().strip()
@@ -24,19 +21,24 @@ def main(prompt_type: str="CoT",
     tokeniser = AutoTokenizer.from_pretrained(model_name, token=token, padding_side="left")
     tokeniser.pad_token_id = tokeniser.eos_token_id
 
-    dataset = get_dataset(tokeniser, formatter_cls.format_inputs)
-    dl = DataLoader(dataset, batch_size=1)
+    dataset = get_dataset(tokeniser, formatter_cls.format_inputs, 720)
+    dl = DataLoader(dataset, batch_size=10)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",
                                                  torch_dtype=torch.float16,
                                                  token=token)
-    stopwords_english = stopwords.words("english")
+    stopwords_original = stopwords.words("english")
+    stopwords_english = stopwords_original + [f" {x.capitalize()}" for x in stopwords_original]
+    stopwords_english += [f" {x}" for x in stopwords_original]
+    stopwords_english += [x.capitalize() for x in stopwords_original]
+
     stopwords_d = tokeniser(stopwords_english, add_special_tokens=False, padding=True, return_tensors="pt")
     stopword_tokens = stopwords_d.input_ids
     stopword_attention_mask = stopwords_d.attention_mask
+    outputs = torch.zeros(len(dl.dataset), 5)
 
-    for items in tqdm(dl):
+    for base_idx, items in tqdm(zip(range(0, len(dl)*dl.batch_size, dl.batch_size), dl), total=len(dl)):
         formatted = items["formatted"]
         inputs = tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
         generated = model.generate(**inputs,
@@ -48,44 +50,58 @@ def main(prompt_type: str="CoT",
         prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
         sequences = generated.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
-        processed_responses = []
-        outputs = torch.zeros(len(responses), 3)
 
         for i, (response, prob_vec) in enumerate(zip(responses, prob_vecs)):
-            mask = torch.ones(len(response))
-            eos_mask = torch.ones(len(response))
+            mask = torch.ones(len(response)) # 0 for stopword, 1 otherwise
+
+            eos_mask = torch.ones(len(response)) # 0 for <eos>, 1 otherwise
             eos_indices = torch.where(response == tokeniser.eos_token_id)[0]
             eos_mask[eos_indices] = 0
             eos_mask = eos_mask.bool()
 
-            for stopword_token_set in stopword_tokens:
-                response_unfolded = response.unfold(0, len(stopword_token_set), 1)
-
-                indices = torch.where(torch.all(response_unfolded == stopword_token_set, dim=1))[0]
+            for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask):
+                tokens = stopword_token_set[attention_mask.bool()]
+                response_unfolded = response.unfold(0, len(tokens), 1)
+                indices = torch.where(torch.all(response_unfolded == tokens, dim=1))[0]
                 mask[indices] = 0
 
             mask = mask.bool()
-            non_stopword_tokens = (response[mask])[eos_mask]
-            stopword_tokens = (response[not mask])[eos_mask]
-            eos_tokens = response[not eos_mask]
+            not_eos_mask = torch.logical_not(eos_mask)
 
-            non_stopword_conf = torch.mean(torch.take_along_dim((prob_vec[mask])[eos_mask],
+            mask_and_eos_mask = torch.logical_and(mask, eos_mask)
+            inv_mask_and_eos_mask = torch.logical_not(mask_and_eos_mask)
+
+            non_stopword_tokens = response[mask_and_eos_mask]
+            no_eos_tokens = response[eos_mask]
+            extracted_stopword_tokens = response[inv_mask_and_eos_mask]
+            eos_tokens = response[not_eos_mask]
+
+            regular_conf = torch.mean(torch.take_along_dim(prob_vec,
+                                                           response.unsqueeze(1), dim=1).squeeze(1))
+            no_eos_conf = torch.mean(torch.take_along_dim(prob_vec[eos_mask],
+                                                          no_eos_tokens.unsqueeze(1), dim=1).squeeze(1))
+            non_stopword_conf = torch.mean(torch.take_along_dim(prob_vec[mask_and_eos_mask],
                                                                 non_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            stopword_conf = torch.mean(torch.take_along_dim((prob_vec[not mask])[eos_mask],
-                                                            stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            eos_conf = torch.mean(torch.take_along_dim(prob_vec[not eos_mask],
+            stopword_conf = torch.mean(torch.take_along_dim(prob_vec[inv_mask_and_eos_mask],
+                                                            extracted_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
+            eos_conf = torch.mean(torch.take_along_dim(prob_vec[not_eos_mask],
                                                        eos_tokens.unsqueeze(1), dim=1).squeeze(1))
 
-            outputs[i, 0] = non_stopword_conf
-            outputs[i, 1] = stopword_conf
-            outputs[i, 2] = eos_conf
-            non_stopword_response, stopword_response, eos_response = (
-                tokeniser.batch_decode([non_stopword_tokens, stopword_tokens, eos_tokens]))
-            ic(non_stopword_response)
-            ic(stopword_response)
-            ic(eos_response)
-        plt.boxplot(outputs, labels=["x1", "x2", "x3"])
-        plt.savefig("output-1.jpg")
+            #ic(tokeniser.batch_decode([response, non_stopword_tokens, no_eos_tokens]))
+            outputs[base_idx + i, 0] = regular_conf
+            outputs[base_idx + i, 1] = non_stopword_conf
+            outputs[base_idx + i, 2] = no_eos_conf
+            outputs[base_idx + i, 3] = stopword_conf
+            outputs[base_idx + i, 4] = eos_conf
+
+    eos_confs = outputs[:, 4]
+    plt.figure()
+    plt.boxplot([outputs[:,0], outputs[:, 1], outputs[:, 2], outputs[:, 3], eos_confs[~eos_confs.isnan()]],
+                labels=["regular confidences", "no eos",  "no stopwords nor eos", "stopwords and eos only", "eos tokens only"])
+    plt.title("Average Token Confidence (ATC) for each CoT Response Type.")
+    plt.xticks(rotation=45)
+    plt.ylabel("ATC")
+    plt.savefig("out.svg", format="svg", bbox_inches="tight")
 
 
 if __name__ == "__main__":

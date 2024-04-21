@@ -29,13 +29,13 @@ class CoT(ChatProcessor):
             try:
                 # Try using the system prompt
                 formatted = tokeniser.apply_chat_template([{"role": "system", "content": system_text},
-                                                           {"role": "user", "content": question}],
+                                                           {"role": "user", "content": f"**Question:** {question}"}],
                                                           tokenize=False,
                                                           add_generation_prompt=True,
                                                           return_tensors="pt")
             except:
                 # Try not using the system prompt
-                formatted = tokeniser.apply_chat_template([{"role": "user", "content": f"{system_text}\n\n{question}"}],
+                formatted = tokeniser.apply_chat_template([{"role": "user", "content": f"{system_text}\n\n**Question:** {question}"}],
                                                            tokenize=False,
                                                            add_generation_prompt=True,
                                                            return_tensors="pt")

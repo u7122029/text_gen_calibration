@@ -14,10 +14,13 @@ from pathlib import Path
 torch.manual_seed(0)
 
 
-def get_dataset(tokeniser, format_chat_func):
+def get_dataset(tokeniser, format_chat_func, size=None):
     df = pd.read_json("test.jsonl", lines=True)
     df["answer"] = df["answer"].apply(lambda x: int(re.sub(r'[^\w\s]', '', x.split("####")[1])))
-    dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:200].tolist()])
+    if size is not None:
+        dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df))[:size].tolist()])
+    else:
+        dataset = Dataset.from_pandas(df.iloc[torch.randperm(len(df)).tolist()])
     dataset = dataset.map(lambda x: {"formatted": format_chat_func(x, tokeniser)}, batched=True)
     return dataset
 
@@ -51,6 +54,8 @@ def show_results(filepath: Path, dataset: Dataset):
 # mistralai/Mistral-7B-Instruct-v0.2
 # zhengr/MixTAO-7Bx2-MoE-v8.1
 # google/gemma-1.1-7b-it
+# google/gemma-1.1-2b-it
+# Qwen/Qwen1.5-1.8B-Chat
 # meta-llama/Llama-2-7b-chat-hf
 def main(prompt_type: str="FCoT",
          calibrator_type="ReLu_WATC",
