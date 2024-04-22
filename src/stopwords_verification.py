@@ -27,12 +27,13 @@ def main(prompt_type: str="CoT",
                                                                   template_type=CoT.ChatTemplateType.DOLLY_15K),
                           720)
     #dataset = get_dataset(tokeniser, None, 720)
-    dl = DataLoader(dataset, batch_size=10)
+    dl = DataLoader(dataset, batch_size=1)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",
                                                  torch_dtype=torch.float16,
-                                                 attn_implementation="flash_attention_2",
+                                                 #attn_implementation="flash_attention_2",
+                                                 resume_download=True,
                                                  token=token)
     stopwords_original = stopwords.words("english")
     stopwords_english = stopwords_original + [f" {x.capitalize()}" for x in stopwords_original]
