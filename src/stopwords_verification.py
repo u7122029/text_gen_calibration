@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def main(prompt_type: str="CoT",
-         model_name="mosaicml/mpt-7b-instruct"):
+         model_name="mistralai/Mistral-7B-Instruct-v0.2"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
@@ -24,7 +24,7 @@ def main(prompt_type: str="CoT",
     dataset = get_dataset(tokeniser,
                           lambda x,y: formatter_cls.format_inputs(x,
                                                                   y,
-                                                                  template_type=CoT.ChatTemplateType.DOLLY_15K),
+                                                                  template_type=CoT.ChatTemplateType.SYSTEM_USER_CHAT),
                           720)
     #dataset = get_dataset(tokeniser, None, 720)
     dl = DataLoader(dataset, batch_size=1)
@@ -47,6 +47,7 @@ def main(prompt_type: str="CoT",
 
     for base_idx, items in tqdm(zip(range(0, len(dl)*dl.batch_size, dl.batch_size), dl), total=len(dl)):
         formatted = items["formatted"]
+        ic(formatted)
         inputs = tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
         generated = model.generate(**inputs,
                                    max_new_tokens=550,
