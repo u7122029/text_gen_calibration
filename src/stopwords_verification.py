@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def main(prompt_type: str="CoT",
-         model_name="google/gemma-1.1-7b-it"):
+         model_name="mosaicml/mpt-7b-instruct"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
