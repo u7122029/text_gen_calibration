@@ -24,7 +24,7 @@ def main(prompt_type: str="CoT",
     dataset = get_dataset(tokeniser,
                           lambda x,y: formatter_cls.format_inputs(x,
                                                                   y,
-                                                                  template_type=CoT.ChatTemplateType.NO_TEMPLATE),
+                                                                  template_type=CoT.ChatTemplateType.DOLLY_15K),
                           720)
     #dataset = get_dataset(tokeniser, None, 720)
     dl = DataLoader(dataset, batch_size=10)

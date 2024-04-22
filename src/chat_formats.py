@@ -26,6 +26,7 @@ class CoT(ChatProcessor):
         SYSTEM_USER_CHAT = 1
         USER_CHAT = 2
         NO_TEMPLATE = 3
+        DOLLY_15K = 4
 
     @staticmethod
     def format_inputs(inputs: Dataset,
@@ -52,6 +53,22 @@ class CoT(ChatProcessor):
                     return_tensors="pt")
             elif template_type == CoT.ChatTemplateType.NO_TEMPLATE:
                 formatted = f"{system_text}\n\n**Question:** {question}\n"
+            elif template_type == CoT.ChatTemplateType.DOLLY_15K:
+                INSTRUCTION_KEY = "### Instruction:"
+                RESPONSE_KEY = "### Response:"
+                INTRO_BLURB = "Below is an instruction that describes a task. Write a response that appropriately completes the request."
+                PROMPT_FOR_GENERATION_FORMAT = """{intro}
+                {instruction_key}
+                {instruction}
+                {response_key}
+                """.format(
+                    intro=INTRO_BLURB,
+                    instruction_key=INSTRUCTION_KEY,
+                    instruction="{instruction}",
+                    response_key=RESPONSE_KEY,
+                )
+                formatted = PROMPT_FOR_GENERATION_FORMAT.format(instruction=f"{system_text}\n\n**Question:** {question}")
+
             else:
                 raise Exception("Invalid template_type.")
             out.append(formatted)
