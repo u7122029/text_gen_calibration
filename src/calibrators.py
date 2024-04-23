@@ -23,12 +23,22 @@ class StopwordRemover(Calibrator):
     def __init__(self, tokeniser, model, debug_responses):
         super().__init__(tokeniser, model, debug_responses)
         self.stopwords = corpus.stopwords.words('english')
-        self.stopword_tokens = sorted([self.tokeniser(stopword,
-                                                      return_tensors="pt",
-                                                      padding=True,
-                                                      add_special_tokens=False).input_ids[0] for stopword in self.stopwords],
-                                      key=lambda x: len(x),
-                                      reverse=True)
+        self.stopwords += [f" {x.capitalize()}" for x in self.stopwords]
+        self.stopwords += [f" {x}" for x in self.stopwords]
+        self.stopwords += [x.capitalize() for x in self.stopwords]
+
+        # convert the stopword strings into token indices + their attention masks.
+        generated = self.tokeniser(self.stopwords,
+                                   return_tensors="pt",
+                                   padding=True,
+                                   add_special_tokens=False)
+
+        stopword_tokens = generated.input_ids
+        stopword_attention_mask = generated.attention_mask
+
+        # Remove the padding.
+        self.stopword_tokens = [stopword_token_set[attention_mask.bool()]
+                                for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask)]
 
     def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
         all_preds = []
@@ -57,24 +67,28 @@ class StopwordRemover(Calibrator):
             prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
             sequences = generated.sequences.cpu()
             responses = sequences[:, inputs.input_ids.shape[1]:]
-            processed_responses = []
+            responses_after_stopword_removal = []
 
             for response, prob_vec in zip(responses, prob_vecs):
-                mask = torch.ones(len(response))
+                # Find the eos tokens.
+                eos_mask = torch.ones(len(response))
                 eos_indices = torch.where(response == self.tokeniser.eos_token_id)[0]
-                mask[eos_indices] = 0
+                eos_mask[eos_indices] = 0
+
+                # Find the stopword tokens.
+                stopword_mask = torch.ones(len(response))
                 for stopword_token_set in self.stopword_tokens:
                     response_unfolded = response.unfold(0, len(stopword_token_set), 1)
+                    indices = torch.where(torch.all(response_unfolded == stopword_token_set))[0]
+                    stopword_mask[indices] = 0
+                stopword_mask = stopword_mask.bool()
 
-                    rows, cols = torch.where(response_unfolded == stopword_token_set)
-                    indices = rows + cols
-                    mask[indices] = 0
-                mask = mask.bool()
-                modified_response = response[mask]
-                processed_responses.append(modified_response)
-                uncalibrated_conf = torch.mean(torch.take_along_dim(prob_vec,
-                                                                    response.unsqueeze(1), dim=1).squeeze(1))
-                calibrated_conf = torch.mean(torch.take_along_dim(prob_vec[mask],
+                uncalibrated_conf = torch.mean(torch.take_along_dim(prob_vec[eos_mask],
+                                                                    response[eos_mask].unsqueeze(1), dim=1).squeeze(1))
+
+                modified_response = response[stopword_mask & eos_mask]
+                responses_after_stopword_removal.append(modified_response)
+                calibrated_conf = torch.mean(torch.take_along_dim(prob_vec[stopword_mask & eos_mask],
                                                                   modified_response.unsqueeze(1), dim=1).squeeze(1))
                 all_calibrated_confs.append(calibrated_conf)
                 all_uncalibrated_confs.append(uncalibrated_conf)

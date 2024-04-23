@@ -59,24 +59,26 @@ def main(prompt_type: str="CoT",
         sequences = generated.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
 
+        # iterate through each generated response within the batch.
         for i, (response, prob_vec) in enumerate(zip(responses, prob_vecs)):
-            mask = torch.ones(len(response)) # 0 for stopword, 1 otherwise
-
+            # Find where the <eos> tokens are. Mask should filter them out on application.
             eos_mask = torch.ones(len(response)) # 0 for <eos>, 1 otherwise
             eos_indices = torch.where(response == tokeniser.eos_token_id)[0]
             eos_mask[eos_indices] = 0
             eos_mask = eos_mask.bool()
 
+            # Find where the stopwords are. Mask should filter them out on application.
+            stopword_mask = torch.ones(len(response))  # 0 for stopword, 1 otherwise
             for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask):
                 tokens = stopword_token_set[attention_mask.bool()]
                 response_unfolded = response.unfold(0, len(tokens), 1)
                 indices = torch.where(torch.all(response_unfolded == tokens, dim=1))[0]
-                mask[indices] = 0
+                stopword_mask[indices] = 0
 
-            mask = mask.bool()
+            stopword_mask = stopword_mask.bool()
             not_eos_mask = torch.logical_not(eos_mask)
 
-            mask_and_eos_mask = torch.logical_and(mask, eos_mask)
+            mask_and_eos_mask = torch.logical_and(stopword_mask, eos_mask)
             inv_mask_and_eos_mask = torch.logical_not(mask_and_eos_mask)
 
             non_stopword_tokens = response[mask_and_eos_mask]
