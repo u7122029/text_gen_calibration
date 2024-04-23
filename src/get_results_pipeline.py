@@ -64,7 +64,7 @@ def show_results(filepath: Path, dataset: Dataset):
 # meta-llama/Llama-2-7b-chat-hf
 def main(prompt_type: str="CoT",
          calibrator_type="StopwordRemover",
-         model_name="mistralai/Mistral-7B-Instruct-v0.2",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          redo_results=True):
     if prompt_type not in prompt_dict:
@@ -96,7 +96,7 @@ def main(prompt_type: str="CoT",
         show_results(file_path,dataset)
         quit()
 
-    dl = DataLoader(dataset, batch_size=2)
+    dl = DataLoader(dataset, batch_size=1)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",

@@ -58,8 +58,6 @@ class StopwordRemover(Calibrator):
                                             return_dict_in_generate=True,
                                             pad_token_id=self.tokeniser.eos_token_id
                                             )
-            if self.debug_responses:
-                ic(self.tokeniser.batch_decode(generated.sequences))
 
             outs = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=False)
             all_preds.append(torch.Tensor(outs["final_answers"]))
@@ -80,7 +78,7 @@ class StopwordRemover(Calibrator):
                 stopword_mask = torch.ones(len(response))
                 for stopword_token_set in self.stopword_tokens:
                     response_unfolded = response.unfold(0, len(stopword_token_set), 1)
-                    indices = torch.where(torch.all(response_unfolded == stopword_token_set))[0]
+                    indices = torch.where(torch.all(response_unfolded == stopword_token_set, dim=1))[0]
                     stopword_mask[indices] = 0
                 stopword_mask = stopword_mask.bool()
 
@@ -95,7 +93,6 @@ class StopwordRemover(Calibrator):
                 all_uncalibrated_confs.append(uncalibrated_conf)
 
                 ic(self.tokeniser.batch_decode([response, modified_response]))
-                quit()
 
         all_preds = torch.cat(all_preds)
         confs_after_calib = torch.Tensor(all_calibrated_confs)

@@ -53,8 +53,7 @@ def main(prompt_type: str="CoT",
                                    max_new_tokens=550,
                                    output_logits=True,
                                    return_dict_in_generate=True,
-                                   pad_token_id=tokeniser.eos_token_id
-                                   )
+                                   pad_token_id=tokeniser.eos_token_id)
         prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
         sequences = generated.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
