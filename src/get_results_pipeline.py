@@ -62,7 +62,7 @@ def show_results(filepath: Path, dataset: Dataset):
 # Qwen/Qwen1.5-1.8B-Chat
 # meta-llama/Llama-2-7b-chat-hf
 def main(prompt_type: str="CoT",
-         calibrator_type="ReLu_WATC",
+         calibrator_type="StopwordRemover",
          model_name="mistralai/Mistral-7B-Instruct-v0.2",
          debug_responses=True,
          redo_results=True):
