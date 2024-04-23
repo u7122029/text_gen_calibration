@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def main(prompt_type: str="CoT",
-         model_name="mistralai/Mistral-7B-Instruct-v0.2"):
+         model_name="meta-llama/Meta-Llama-3-8B-Instruct"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
