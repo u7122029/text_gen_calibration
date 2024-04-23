@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from nltk.corpus import stopwords
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 
 def main(prompt_type: str="CoT",
@@ -45,6 +46,7 @@ def main(prompt_type: str="CoT",
     stopword_attention_mask = stopwords_d.attention_mask
     outputs = torch.zeros(len(dl.dataset), 5)
 
+    covered = torch.zeros(len(dl.dataset), dtype=torch.bool)
     for base_idx, items in tqdm(zip(range(0, len(dl)*dl.batch_size, dl.batch_size), dl), total=len(dl)):
         formatted = items["formatted"]
         ic(formatted)
@@ -75,38 +77,41 @@ def main(prompt_type: str="CoT",
                 stopword_mask[indices] = 0
 
             stopword_mask = stopword_mask.bool()
-            not_eos_mask = torch.logical_not(eos_mask)
 
-            mask_and_eos_mask = torch.logical_and(stopword_mask, eos_mask)
-            inv_mask_and_eos_mask = torch.logical_not(mask_and_eos_mask)
-
-            non_stopword_tokens = response[mask_and_eos_mask]
+            non_stopword_tokens = response[stopword_mask & eos_mask]
             no_eos_tokens = response[eos_mask]
-            extracted_stopword_tokens = response[inv_mask_and_eos_mask]
-            eos_tokens = response[not_eos_mask]
+            extracted_stopword_tokens = response[~stopword_mask]
+            eos_tokens = response[~eos_mask]
 
             regular_conf = torch.mean(torch.take_along_dim(prob_vec,
                                                            response.unsqueeze(1), dim=1).squeeze(1))
+            no_stopword_no_eos_conf = torch.mean(torch.take_along_dim(prob_vec[stopword_mask & eos_mask],
+                                                                non_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
             no_eos_conf = torch.mean(torch.take_along_dim(prob_vec[eos_mask],
                                                           no_eos_tokens.unsqueeze(1), dim=1).squeeze(1))
-            non_stopword_conf = torch.mean(torch.take_along_dim(prob_vec[mask_and_eos_mask],
-                                                                non_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            stopword_conf = torch.mean(torch.take_along_dim(prob_vec[inv_mask_and_eos_mask],
+            stopword_conf = torch.mean(torch.take_along_dim(prob_vec[~stopword_mask],
                                                             extracted_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            eos_conf = torch.mean(torch.take_along_dim(prob_vec[not_eos_mask],
+            eos_conf = torch.mean(torch.take_along_dim(prob_vec[~eos_mask],
                                                        eos_tokens.unsqueeze(1), dim=1).squeeze(1))
 
             ic(tokeniser.batch_decode([response, non_stopword_tokens, no_eos_tokens]))
             outputs[base_idx + i, 0] = regular_conf
-            outputs[base_idx + i, 1] = non_stopword_conf
+            outputs[base_idx + i, 1] = no_stopword_no_eos_conf
             outputs[base_idx + i, 2] = no_eos_conf
             outputs[base_idx + i, 3] = stopword_conf
             outputs[base_idx + i, 4] = eos_conf
+            covered[base_idx + i] = True
 
+    assert torch.all(covered).item()
     eos_confs = outputs[:, 4]
+    ic("Means Table:")
+    table = [["Unprocessed", "No Stopwords Nor EOS", "No EOS", "Stopwords Only", "EOS Tokens Only"],
+             [torch.nanmean(outputs[:, i]) for i in range(5)]]
+    print(tabulate(table[1:], headers=table[0], tablefmt="simple_grid"))
+
     plt.figure()
     plt.boxplot([outputs[:,0], outputs[:, 1], outputs[:, 2], outputs[:, 3], eos_confs[~eos_confs.isnan()]],
-                labels=["regular confidences", "no eos",  "no stopwords nor eos", "stopwords and eos only", "eos tokens only"])
+                labels=["regular confidences", "no stopwords nor eos",  "no eos", "stopwords only", "eos tokens only"])
     plt.title("Average Token Confidence (ATC) for each CoT Response Type.")
     plt.xticks(rotation=45)
     plt.ylabel("ATC")
