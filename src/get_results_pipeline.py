@@ -86,7 +86,8 @@ def main(prompt_type: str="CoT",
     dataset = get_dataset(tokeniser,
                           lambda x,y: formatter_cls.format_inputs(x,
                                                                   y,
-                                                                  template_type=CoT.ChatTemplateType.USER_CHAT))
+                                                                  template_type=CoT.ChatTemplateType.USER_CHAT),
+                          720)
 
     p = Path("results") / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)

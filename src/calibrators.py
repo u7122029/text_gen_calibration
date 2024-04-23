@@ -74,6 +74,7 @@ class StopwordRemover(Calibrator):
                 eos_mask = torch.ones(len(response))
                 eos_indices = torch.where(response == self.tokeniser.eos_token_id)[0]
                 eos_mask[eos_indices] = 0
+                eos_mask = eos_mask.bool()
 
                 # Find the stopword tokens.
                 stopword_mask = torch.ones(len(response))
