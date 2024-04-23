@@ -10,6 +10,7 @@ from icecream import ic
 from chat_formats import prompt_dict
 from calibrators import calibrator_dict
 from pathlib import Path
+from chat_formats import CoT
 
 torch.manual_seed(0)
 
@@ -82,7 +83,10 @@ def main(prompt_type: str="CoT",
     tokeniser = AutoTokenizer.from_pretrained(model_name, token=token, padding_side="left")
     tokeniser.pad_token_id = tokeniser.eos_token_id
 
-    dataset = get_dataset(tokeniser, formatter_cls.format_inputs)
+    dataset = get_dataset(tokeniser,
+                          lambda x,y: formatter_cls.format_inputs(x,
+                                                                  y,
+                                                                  template_type=CoT.ChatTemplateType.USER_CHAT))
 
     p = Path("results") / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)
