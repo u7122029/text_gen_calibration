@@ -77,9 +77,10 @@ def show_results(filepath: Path, dataset: Dataset):
 # google/gemma-1.1-2b-it
 # Qwen/Qwen1.5-1.8B-Chat
 # meta-llama/Llama-2-7b-chat-hf
+# meta-llama/Meta-Llama-3-8B-Instruct
 def main(prompt_type: str="CoT",
          calibrator_type="StopwordRemover",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="meta-llama/Meta-Llama-3-8B-Instruct",
          debug_responses=True,
          redo_results=True):
     if prompt_type not in prompt_dict:

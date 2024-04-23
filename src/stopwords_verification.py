@@ -12,7 +12,7 @@ from tabulate import tabulate
 
 
 def main(prompt_type: str="CoT",
-         model_name="meta-llama/Meta-Llama-3-8B-Instruct"):
+         model_name="mistralai/Mistral-7B-Instruct-v0.2"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
     with open("token.txt") as f:
@@ -25,10 +25,10 @@ def main(prompt_type: str="CoT",
     dataset = get_dataset(tokeniser,
                           lambda x,y: formatter_cls.format_inputs(x,
                                                                   y,
-                                                                  template_type=CoT.ChatTemplateType.SYSTEM_USER_CHAT),
-                          720)
+                                                                  template_type=CoT.ChatTemplateType.USER_CHAT),
+                          100)
     #dataset = get_dataset(tokeniser, None, 720)
-    dl = DataLoader(dataset, batch_size=1)
+    dl = DataLoader(dataset, batch_size=4)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",
