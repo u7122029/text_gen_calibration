@@ -93,6 +93,9 @@ class StopwordRemover(Calibrator):
                 all_calibrated_confs.append(calibrated_conf)
                 all_uncalibrated_confs.append(uncalibrated_conf)
 
+                ic(self.tokeniser.batch_decode([response, modified_response]))
+                quit()
+
         all_preds = torch.cat(all_preds)
         confs_after_calib = torch.Tensor(all_calibrated_confs)
         confs_before_calib = torch.Tensor(all_uncalibrated_confs)
