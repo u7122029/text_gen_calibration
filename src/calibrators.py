@@ -100,6 +100,31 @@ class StopwordRemover(Calibrator):
         return all_preds, confs_before_calib, confs_after_calib, None
 
 
+class TopKTokenPooling(Calibrator):
+    def __init__(self, tokeniser, model, debug_responses):
+        super().__init__(tokeniser, model, debug_responses)
+        self.stopwords = corpus.stopwords.words('english')
+        self.stopwords += [f" {x.capitalize()}" for x in self.stopwords]
+        self.stopwords += [f" {x}" for x in self.stopwords]
+        self.stopwords += [x.capitalize() for x in self.stopwords]
+
+        # convert the stopword strings into token indices + their attention masks.
+        generated = self.tokeniser(self.stopwords,
+                                   return_tensors="pt",
+                                   padding=True,
+                                   add_special_tokens=False)
+
+        stopword_tokens = generated.input_ids
+        stopword_attention_mask = generated.attention_mask
+
+        # Remove the padding.
+        self.stopword_tokens = [stopword_token_set[attention_mask.bool()]
+                                for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask)]
+
+    def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
+        pass
+
+
 class GSDCalibrator(Calibrator):
     def __init__(self, tokeniser, model, debug_responses=True):
         super().__init__(tokeniser, model, debug_responses)

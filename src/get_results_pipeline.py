@@ -1,16 +1,18 @@
 from torch.utils.data import DataLoader
-from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC, BinaryAccuracy
+from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
+from torcheval.metrics.functional import binary_auprc
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import pandas as pd
 import re
-from datasets import Dataset, tqdm
+from datasets import Dataset
 import fire
 from icecream import ic
 from chat_formats import prompt_dict
 from calibrators import calibrator_dict
 from pathlib import Path
 from chat_formats import CoT
+from tabulate import tabulate
 
 torch.manual_seed(0)
 
@@ -33,27 +35,40 @@ def get_dataset(tokeniser, format_chat_func, size=None):
 def show_results(filepath: Path, dataset: Dataset):
     ece_metric = BinaryCalibrationError(n_bins=15)
     auroc_metric = BinaryAUROC()
-    #accuracy_metric = BinaryAccuracy()
 
     results_dict = torch.load(str(filepath))
     all_preds = results_dict["all_preds"]
     correct = (all_preds == torch.Tensor(dataset["answer"])).int()
-    ic(correct)
+    correct_bool = correct.bool()
+
     confs_before_calib = results_dict["confs_before_calib"]
     confs_after_calib = results_dict["confs_after_calib"]
+    confs_diff = confs_after_calib - confs_before_calib
     d = {
-        "ece_before": ece_metric(confs_before_calib, correct).item(),
+        "ece_before":   ece_metric(confs_before_calib, correct).item(),
         "auroc_before": auroc_metric(confs_before_calib, correct).item(),
-        "ece_after": ece_metric(confs_after_calib, correct).item(),
-        "auroc_after": auroc_metric(confs_after_calib, correct).item(),
-        "acc": torch.mean(correct.float()).item()
+        "auprc_before": binary_auprc(confs_before_calib, correct).item(),
+        "ece_after":    ece_metric(confs_after_calib, correct).item(),
+        "auroc_after":  auroc_metric(confs_after_calib, correct).item(),
+        "auprc_after":  binary_auprc(confs_after_calib, correct).item(),
+        "acc":          torch.mean(correct.float()).item()
     }
-    ic(results_dict["model_name"])
-    ic(results_dict["prompt_type"])
-    ic(results_dict["calibrator_name"])
-    ic(results_dict["calibrator_params"])
-    ic(d)
-
+    num_samples = len(correct)
+    accuracy = d["acc"]
+    ic(num_samples)
+    ic(accuracy)
+    ic("Basic Metrics:")
+    table = [["Category",           "ECE",           "AUROC",           "AUPRC"],
+             ["Before Calibration", d["ece_before"], d["auroc_before"], d["auprc_before"]],
+             ["After Calibration",  d["ece_after"],  d["auroc_after"],  d["auprc_after"]]
+            ]
+    print(tabulate(table[1:], headers=table[0], tablefmt="heavy_outline"))
+    ic("Changes in Confidences:")
+    table1 = [["Category",     "All Preds",            "Correct Preds",                      "Incorrect Preds"],
+              ["Mean Change",  torch.mean(confs_diff), torch.mean(confs_diff[correct_bool]), torch.mean(confs_diff[~correct_bool])],
+              ["Total Change", torch.sum(confs_diff),  torch.sum(confs_diff[correct_bool]),  torch.sum(confs_diff[~correct_bool])]
+             ]
+    print(tabulate(table1[1:], headers=table1[0], tablefmt="heavy_outline"))
 
 # HuggingFaceH4/zephyr-7b-beta
 # mistralai/Mistral-7B-Instruct-v0.2
