@@ -44,6 +44,8 @@ def show_results(filepath: Path, dataset: Dataset):
     confs_before_calib = results_dict["confs_before_calib"]
     confs_after_calib = results_dict["confs_after_calib"]
     confs_diff = confs_after_calib - confs_before_calib
+    ic(torch.where(torch.isnan(confs_before_calib))[0])
+    ic(torch.where(torch.isnan(confs_after_calib))[0])
     d = {
         "ece_before":   ece_metric(confs_before_calib, correct).item(),
         "auroc_before": auroc_metric(confs_before_calib, correct).item(),
@@ -79,8 +81,8 @@ def show_results(filepath: Path, dataset: Dataset):
 # meta-llama/Llama-2-7b-chat-hf
 # meta-llama/Meta-Llama-3-8B-Instruct
 def main(prompt_type: str="CoT",
-         calibrator_type="StopwordRemover",
-         model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+         calibrator_type="TopKTokenPooling",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          redo_results=True):
     if prompt_type not in prompt_dict:
@@ -100,10 +102,10 @@ def main(prompt_type: str="CoT",
     tokeniser.pad_token_id = tokeniser.eos_token_id
 
     dataset = get_dataset(tokeniser,
-                          lambda x,y: formatter_cls.format_inputs(x,
-                                                                  y,
-                                                                  template_type=CoT.ChatTemplateType.USER_CHAT),
-                          720)
+                          lambda x, y: formatter_cls.format_inputs(x,
+                                                                   y,
+                                                                   template_type=CoT.ChatTemplateType.USER_CHAT),
+                          750)
 
     p = Path("results") / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +114,7 @@ def main(prompt_type: str="CoT",
         show_results(file_path,dataset)
         quit()
 
-    dl = DataLoader(dataset, batch_size=1)
+    dl = DataLoader(dataset, batch_size=4)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  device_map="auto",
@@ -123,8 +125,6 @@ def main(prompt_type: str="CoT",
     strategy_name = calibrator_dict[calibrator_type]
     strategy = strategy_name(tokeniser, model, debug_responses)
     all_preds, confs_before_calib, confs_after_calib, calibrator = strategy.calibrate(dl, formatter_cls)
-    if calibrator is not None:
-        ic(list(calibrator.parameters()))
 
     compiled = {
         #"explanations": all_explanations,
@@ -134,7 +134,7 @@ def main(prompt_type: str="CoT",
         "model_name": model_name,
         "calibrator_name": calibrator.__class__.__name__,
         "prompt_type": prompt_type,
-        "calibrator_params": None if calibrator is None else calibrator.state_dict()
+        #"calibrator_params": None if calibrator is None else calibrator.state_dict()
     }
 
     torch.save(compiled, f"{str(p)}.pt")

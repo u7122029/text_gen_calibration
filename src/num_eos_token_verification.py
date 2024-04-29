@@ -12,11 +12,13 @@ from tabulate import tabulate
 
 
 def main(prompt_type: str="CoT",
-         model_name: str="mistralai/Mistral-7B-Instruct-v0.2"):
+         model_name: str="mistralai/Mistral-7B-Instruct-v0.2",
+         base_max_new_tokens: int=550):
     """
-    Do stopwords increase or decrease response confidence?
+    Do more eos tokens increase or decrease confidence?
     :param prompt_type:
     :param model_name:
+    :param base_max_new_tokens:
     :return:
     """
     ic(__version__)
@@ -57,50 +59,68 @@ def main(prompt_type: str="CoT",
         formatted = items["formatted"]
         ic(formatted)
         inputs = tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-        generated = model.generate(**inputs,
-                                   max_new_tokens=550,
-                                   output_logits=True,
-                                   return_dict_in_generate=True,
-                                   pad_token_id=tokeniser.eos_token_id)
-        prob_vecs = torch.softmax(torch.stack(generated.logits).permute(1, 0, 2), dim=2).cpu()
-        sequences = generated.sequences.cpu()
-        responses = sequences[:, inputs.input_ids.shape[1]:]
+        generated_base = model.generate(**inputs,
+                                        max_new_tokens=base_max_new_tokens,
+                                        output_logits=True,
+                                        return_dict_in_generate=True,
+                                        pad_token_id=tokeniser.eos_token_id)
+
+        # Make another response that contains twice as many eos tokens.
+        generated_alt = model.generate(**inputs,
+                                       max_new_tokens=base_max_new_tokens*2,
+                                       output_logits=True,
+                                       return_dict_in_generate=True,
+                                       pad_token_id=tokeniser.eos_token_id)
+
+        prob_vecs_base = torch.softmax(torch.stack(generated_base.logits).permute(1, 0, 2), dim=2).cpu()
+        sequences_base = generated_base.sequences.cpu()
+        responses_base = sequences_base[:, inputs.input_ids.shape[1]:]
+
+        prob_vecs_alt = torch.softmax(torch.stack(generated_alt.logits).permute(1, 0, 2), dim=2).cpu()
+        sequences_alt = generated_alt.sequences.cpu()
+        responses_alt = sequences_alt[:, inputs.input_ids.shape[1]:]
 
         # iterate through each generated response within the batch.
-        for i, (response, prob_vec) in enumerate(zip(responses, prob_vecs)):
+        for i, (response_base, prob_vec_base, response_alt, prob_vec_alt) in (
+                enumerate(zip(responses_base, prob_vecs_base, responses_alt, prob_vecs_alt))):
             # Find where the <eos> tokens are. Mask should filter them out on application.
-            eos_mask = torch.ones(len(response)) # 0 for <eos>, 1 otherwise
-            eos_indices = torch.where(response == tokeniser.eos_token_id)[0]
-            eos_mask[eos_indices] = 0
-            eos_mask = eos_mask.bool()
+            eos_mask_base = torch.ones(len(response_base)) # 0 for <eos>, 1 otherwise
+            eos_indices_base = torch.where(response_base == tokeniser.eos_token_id)[0]
+            eos_mask_base[eos_indices_base] = 0
+            eos_mask_base = eos_mask_base.bool()
+
+            response_alt = torch.ones(len(response_alt))  # 0 for <eos>, 1 otherwise
+            eosresponse_alt = torch.where(response_alt == tokeniser.eos_token_id)[0]
+            response_alt[eosresponse_alt] = 0
+            response_alt = response_alt.bool()
 
             # Find where the stopwords are. Mask should filter them out on application.
-            stopword_mask = torch.ones(len(response))  # 0 for stopword, 1 otherwise
+            stopword_mask = torch.ones(len(response_base))  # 0 for stopword, 1 otherwise
             for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask):
                 tokens = stopword_token_set[attention_mask.bool()]
-                response_unfolded = response.unfold(0, len(tokens), 1)
+                response_unfolded = response_base.unfold(0, len(tokens), 1)
                 indices = torch.where(torch.all(response_unfolded == tokens, dim=1))[0]
                 stopword_mask[indices] = 0
 
             stopword_mask = stopword_mask.bool()
 
-            non_stopword_tokens = response[stopword_mask & eos_mask]
-            no_eos_tokens = response[eos_mask]
-            extracted_stopword_tokens = response[~stopword_mask]
-            eos_tokens = response[~eos_mask]
+            non_stopword_tokens = response_base[stopword_mask & eos_mask_base]
+            no_eos_tokens = response_base[eos_mask_base]
+            extracted_stopword_tokens = response_base[~stopword_mask]
+            eos_tokens = response_base[~eos_mask_base]
 
-            regular_conf = torch.mean(torch.take_along_dim(prob_vec,
-                                                           response.unsqueeze(1), dim=1).squeeze(1))
-            no_stopword_no_eos_conf = torch.mean(torch.take_along_dim(prob_vec[stopword_mask & eos_mask],
+            regular_conf = torch.mean(torch.take_along_dim(prob_vec_base,
+                                                           response_base.unsqueeze(1), dim=1).squeeze(1))
+            no_stopword_no_eos_conf = torch.mean(torch.take_along_dim(prob_vec_base[stopword_mask & eos_mask_base],
                                                                 non_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            no_eos_conf = torch.mean(torch.take_along_dim(prob_vec[eos_mask],
+            no_eos_conf = torch.mean(torch.take_along_dim(prob_vec_base[eos_mask_base],
                                                           no_eos_tokens.unsqueeze(1), dim=1).squeeze(1))
-            stopword_conf = torch.mean(torch.take_along_dim(prob_vec[~stopword_mask],
+            stopword_conf = torch.mean(torch.take_along_dim(prob_vec_base[~stopword_mask],
                                                             extracted_stopword_tokens.unsqueeze(1), dim=1).squeeze(1))
-            eos_conf = torch.mean(torch.take_along_dim(prob_vec[~eos_mask],
+            eos_conf = torch.mean(torch.take_along_dim(prob_vec_base[~eos_mask_base],
                                                        eos_tokens.unsqueeze(1), dim=1).squeeze(1))
 
-            ic(tokeniser.batch_decode([response, non_stopword_tokens, no_eos_tokens]))
+            ic(tokeniser.batch_decode([response_base, non_stopword_tokens, no_eos_tokens]))
             outputs[base_idx + i, 0] = regular_conf
             outputs[base_idx + i, 1] = no_stopword_no_eos_conf
             outputs[base_idx + i, 2] = no_eos_conf

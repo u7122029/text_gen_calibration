@@ -75,7 +75,7 @@ class CoT(ChatProcessor):
         return out
 
     @staticmethod
-    def process_responses(inputs, model_outs, tokeniser, get_confidence=False):
+    def process_responses(inputs, model_outs, tokeniser, **kwargs):
         prob_vecs = torch.softmax(torch.stack(model_outs.logits).permute(1, 0, 2), dim=2).cpu()
         sequences = model_outs.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
@@ -99,13 +99,9 @@ class CoT(ChatProcessor):
         out_dict = {
             "explanations": explanations,
             "tokens": responses,
-            "final_answers": final_answers
+            "final_answers": torch.Tensor(final_answers),
+            "token_confidences": torch.take_along_dim(prob_vecs, responses.unsqueeze(2), dim=2).squeeze(2)
         }
-
-        if get_confidence:
-            compiled_probs = torch.take_along_dim(prob_vecs, responses.unsqueeze(2), dim=2).squeeze(2)
-            confidences = compiled_probs.mean(dim=1)
-            out_dict["confidences"] = confidences
 
         return out_dict
 

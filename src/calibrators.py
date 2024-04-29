@@ -6,6 +6,8 @@ from icecream import ic
 from torch import nn, optim
 import inspect, sys
 from nltk import corpus
+import pandas as pd
+import numpy as np
 
 
 class Calibrator(ABC):
@@ -101,28 +103,134 @@ class StopwordRemover(Calibrator):
 
 
 class TopKTokenPooling(Calibrator):
+    class TokenPoolingCalibrator:
+        def __init__(self, tokens_to_filter: torch.Tensor, eos_token: int, temp_tokeniser=None):
+            self.tokens_to_filter = torch.ones(len(tokens_to_filter) + 1).int()
+            self.tokens_to_filter[:-1] = tokens_to_filter
+            self.tokens_to_filter[-1] = eos_token
+            self.temp_tokeniser = temp_tokeniser
+            print(self.temp_tokeniser.batch_decode(self.tokens_to_filter))
+            print("---")
+
+        def __call__(self, token_responses, token_confidences):
+            outs = []
+            for tokens, confidences in zip(token_responses, token_confidences):
+                mask = torch.BoolTensor([True] * len(tokens))
+                for token_to_filter in self.tokens_to_filter:
+                    mask = mask & (tokens != token_to_filter)
+                if torch.all(~mask).item():
+                    outs.append(0)
+                    continue
+                filtered_confidences = confidences[mask]
+                outs.append(torch.mean(filtered_confidences).item())
+
+            return torch.Tensor(outs)
+
     def __init__(self, tokeniser, model, debug_responses):
         super().__init__(tokeniser, model, debug_responses)
-        self.stopwords = corpus.stopwords.words('english')
-        self.stopwords += [f" {x.capitalize()}" for x in self.stopwords]
-        self.stopwords += [f" {x}" for x in self.stopwords]
-        self.stopwords += [x.capitalize() for x in self.stopwords]
 
-        # convert the stopword strings into token indices + their attention masks.
-        generated = self.tokeniser(self.stopwords,
-                                   return_tensors="pt",
-                                   padding=True,
-                                   add_special_tokens=False)
+    def calibrate(self, dataloader: DataLoader, formatter_cls, k=20, **kwargs):
+        incorrect_pooled = {}  # token_idx -> list of confidences
+        incorrect_token_responses = {}  # token_idx -> list of response numbers
 
-        stopword_tokens = generated.input_ids
-        stopword_attention_mask = generated.attention_mask
+        all_token_confidences = []
+        all_token_responses = []
+        confs_before_calibration = []
+        confs_after_calibration = []
+        all_preds = []
 
-        # Remove the padding.
-        self.stopword_tokens = [stopword_token_set[attention_mask.bool()]
-                                for stopword_token_set, attention_mask in zip(stopword_tokens, stopword_attention_mask)]
+        for batch_idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
+            formatted = batch["formatted"]
+            answers = batch["answer"]
 
-    def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
-        pass
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.model.generate(**inputs,
+                                            max_new_tokens=550,
+                                            output_logits=True,
+                                            return_dict_in_generate=True,
+                                            pad_token_id=self.tokeniser.eos_token_id)
+
+            out_dict = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=True)
+            final_answers = out_dict["final_answers"]
+            token_confidences = out_dict["token_confidences"]
+            correct = answers == final_answers
+            all_preds.append(final_answers)
+
+            start = batch_idx * dataloader.batch_size
+            end = start + dataloader.batch_size
+
+            # iterate through responses to categorise every outputted token.
+            for response_idx, is_correct, token_confs, tokens in zip(range(start, end),
+                                                                     correct,
+                                                                     token_confidences,
+                                                                     out_dict["tokens"]):
+                # Remove the eos tokens.
+                eos_mask = torch.ones(len(tokens))  # 0 for <eos>, 1 otherwise
+                eos_indices = torch.where(tokens == self.tokeniser.eos_token_id)[0]
+                eos_mask[eos_indices] = 0
+                eos_mask = eos_mask.bool()
+
+                token_confs = token_confs[eos_mask]
+                tokens = tokens[eos_mask]
+                all_token_confidences.append(token_confs)
+                all_token_responses.append(tokens)
+                confs_before_calibration.append(torch.mean(token_confs).item())
+
+                if is_correct.item():
+                    continue
+
+                token_responses_dict = incorrect_token_responses
+
+                for token, token_conf in zip(tokens, token_confs):
+                    token = token.item()
+                    token_conf = token_conf.item()
+                    if token not in incorrect_pooled:
+                        incorrect_pooled[token] = []
+                    if token not in token_responses_dict:
+                        token_responses_dict[token] = set()
+
+                    token_responses_dict[token].add(response_idx)
+                    incorrect_pooled[token].append(token_conf)
+        incorrect_d = {
+            "tokens": [],
+            "means": [],
+            "stds": [],
+            "total_occurrences": [],
+            "no_responses_appeared": []
+        }
+
+        incorrect_pooled_keys = list(incorrect_pooled.keys())
+        incorrect_d["tokens_str"] = self.tokeniser.batch_decode(incorrect_pooled_keys, skip_special_tokens=True)
+        for i in incorrect_pooled_keys:
+            v = incorrect_pooled[i]
+            v_tensor = torch.Tensor(v)
+            s = incorrect_token_responses[i]
+
+            incorrect_d["tokens"].append(i)
+            incorrect_d["total_occurrences"].append(len(v_tensor))
+            incorrect_d["no_responses_appeared"].append(len(s))
+
+            std, mean = torch.std_mean(v_tensor, unbiased=False)
+            incorrect_d["means"].append(mean.item())
+            incorrect_d["stds"].append(std.item())
+
+        incorrect_df = pd.DataFrame.from_dict(incorrect_d)
+
+        incorrect_df["scores"] = (((incorrect_df["means"] / (1 + incorrect_df["stds"]))
+                                  * np.log(incorrect_df["total_occurrences"]))
+                                  * np.sqrt(incorrect_df["no_responses_appeared"]))
+
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.max_rows', None)
+        incorrect_df = incorrect_df.sort_values("scores", ascending=False)
+
+        top_k_tokens = torch.Tensor(incorrect_df["tokens"].to_numpy())[:k]
+
+        calibrator_model = TopKTokenPooling.TokenPoolingCalibrator(top_k_tokens, self.tokeniser.eos_token_id, self.tokeniser)
+        confs_after_calibration = calibrator_model(all_token_responses, all_token_confidences)
+        confs_before_calibration = torch.Tensor(confs_before_calibration)
+        all_preds = torch.cat(all_preds)
+        return all_preds, confs_before_calibration, confs_after_calibration, calibrator_model
 
 
 class GSDCalibrator(Calibrator):
@@ -285,4 +393,4 @@ def dset_class_predicate(x):
 
 
 classes = inspect.getmembers(sys.modules[__name__], dset_class_predicate)
-calibrator_dict: dict[str, Calibrator] = {x: y for x, y in classes}
+calibrator_dict: dict[str, Calibrator.__class__] = {x: y for x, y in classes}
