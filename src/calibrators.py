@@ -8,6 +8,7 @@ import inspect, sys
 from nltk import corpus
 import pandas as pd
 import numpy as np
+from torch import nn, optim
 
 
 class Calibrator(ABC):
@@ -19,6 +20,88 @@ class Calibrator(ABC):
     @abstractmethod
     def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
         pass
+
+
+class TemperatureScalingVariant(Calibrator):
+    class TSModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+
+        def forward(self, x):
+            # x.shape: [batch_size, response length, vocab size]
+            x = x / self.temperature
+            x = torch.softmax(x, dim=2)
+            x = torch.max(x, dim=2).values
+            return x  # [batch_size, response_length]
+
+    def __init__(self, tokeniser, model, debug_responses):
+        super().__init__(tokeniser, model, debug_responses)
+
+    def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
+        all_token_confidences = []
+        all_token_responses = []
+        all_logits = []
+        confs_before_calibration = []
+        confs_after_calibration = []
+        all_preds = []
+        model = TemperatureScalingVariant.TSModel()
+        loss_fn = nn.CrossEntropyLoss()
+        optimiser = optim.SGD(model.parameters(), lr=0.01)
+
+        all_answers = []
+        for batch_idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
+            formatted = batch["formatted"]
+            answers = batch["answer"]
+
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.model.generate(**inputs,
+                                            max_new_tokens=550,
+                                            output_logits=True,
+                                            return_dict_in_generate=True,
+                                            pad_token_id=self.tokeniser.eos_token_id)
+            #logits = torch.stack(generated.logits).cpu().permute(1, 0, 2)
+
+            out_dict = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=True)
+            #processed_responses = out_dict["tokens"]
+            logits = out_dict["logits"]
+            all_logits.append(logits)
+
+            #prob_vecs = out_dict["prob_vecs"]
+            confs_no_calib = out_dict["confidences"]
+            final_answers = out_dict["final_answers"]
+            #token_confidences = out_dict["prob_vecs"]
+
+            all_answers.append(answers)
+            all_preds.append(final_answers)
+            confs_before_calibration.append(confs_no_calib)
+
+        confs_before_calibration = torch.cat(confs_before_calibration)
+        all_logits = torch.stack(all_logits, dim=0)
+        all_preds = torch.cat(all_preds)
+        all_answers = torch.cat(all_answers)
+        correct = (all_preds == all_answers).int()
+
+        # Optimise model.
+        model.train()
+        for epoch_idx in tqdm(range(50), desc="Training Calibrator"):
+            for logit_matrix, is_correct in zip(all_logits, correct):
+                optimiser.zero_grad()
+                out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
+                comp_vec = torch.ones(out_token_confs.shape)
+                comp_vec[:] = is_correct
+                loss = loss_fn(out_token_confs, comp_vec)
+                ic(loss.item())
+                loss.backward()
+                optimiser.step()
+        model.eval()
+
+        # Get results.
+        with torch.no_grad():
+            for logit_matrix, is_correct in zip(all_logits, correct):
+                out = torch.mean(model(logit_matrix.unsqueeze(0)).squeeze())
+                confs_after_calibration.append(out)
+        return all_preds, confs_before_calibration, confs_after_calibration, model
 
 
 class StopwordRemover(Calibrator):
@@ -102,7 +185,7 @@ class StopwordRemover(Calibrator):
         return all_preds, confs_before_calib, confs_after_calib, None
 
 
-class TopKTokenPooling(Calibrator):
+class TopKTokenPoolingV1(Calibrator):
     class TokenPoolingCalibrator:
         def __init__(self, tokens_to_filter: torch.Tensor, eos_token: int, temp_tokeniser=None):
             self.tokens_to_filter = torch.ones(len(tokens_to_filter) + 1).int()
@@ -217,7 +300,7 @@ class TopKTokenPooling(Calibrator):
         incorrect_df = pd.DataFrame.from_dict(incorrect_d)
 
         incorrect_df["scores"] = (((incorrect_df["means"] / (1 + incorrect_df["stds"]))
-                                  * np.log(incorrect_df["total_occurrences"]))
+                                   * np.log(incorrect_df["total_occurrences"]))
                                   * np.sqrt(incorrect_df["no_responses_appeared"]))
 
         pd.set_option('display.max_columns', None)
@@ -226,7 +309,8 @@ class TopKTokenPooling(Calibrator):
 
         top_k_tokens = torch.Tensor(incorrect_df["tokens"].to_numpy())[:k]
 
-        calibrator_model = TopKTokenPooling.TokenPoolingCalibrator(top_k_tokens, self.tokeniser.eos_token_id, self.tokeniser)
+        calibrator_model = TopKTokenPoolingV1.TokenPoolingCalibrator(top_k_tokens, self.tokeniser.eos_token_id,
+                                                                   self.tokeniser)
         confs_after_calibration = calibrator_model(all_token_responses, all_token_confidences)
         confs_before_calibration = torch.Tensor(confs_before_calibration)
         all_preds = torch.cat(all_preds)
@@ -266,7 +350,7 @@ class GSDCalibrator(Calibrator):
                 d_tuples = sorted([(v / num_trials_per_input, k) for k, v in d.items()], reverse=True)
                 factors = torch.arange(len(d_tuples))
                 factors[1:] = -factors[1:]
-                factors = 2**factors
+                factors = 2 ** factors
                 conf = torch.sum(torch.Tensor([x[0] for x in d_tuples]) * factors).item()
                 answer = d_tuples[0][1]
 
@@ -307,7 +391,7 @@ class WATCCalibrator(Calibrator, ABC):
                                             )
 
             outs = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=False)
-            truncated_tokens = outs["tokens"] # List[torch tokens as ints]
+            truncated_tokens = outs["tokens"]  # List[torch tokens as ints]
 
             if self.debug_responses:
                 ic(outs["final_answers"])
@@ -321,7 +405,7 @@ class WATCCalibrator(Calibrator, ABC):
 
             all_preds.append(torch.Tensor(outs["final_answers"]))
             all_confs.append(torch.stack(compiled_probs))
-        
+
         all_preds = torch.cat(all_preds)
 
         self.calibrator_model.train()
@@ -352,7 +436,7 @@ class ReLu_WATC(WATCCalibrator):
             self.t = nn.Parameter(torch.Tensor([t]))
 
         def forward(self, inp):
-            inp_next = inp *(-(1 - self.f)/(1 - self.t) * nn.functional.relu(inp - self.t) + 1)
+            inp_next = inp * (-(1 - self.f) / (1 - self.t) * nn.functional.relu(inp - self.t) + 1)
             confidences = inp_next.mean(dim=1)
             return confidences
 

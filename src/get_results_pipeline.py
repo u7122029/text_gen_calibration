@@ -81,7 +81,7 @@ def show_results(filepath: Path, dataset: Dataset):
 # meta-llama/Llama-2-7b-chat-hf
 # meta-llama/Meta-Llama-3-8B-Instruct
 def main(prompt_type: str="CoT",
-         calibrator_type="TopKTokenPooling",
+         calibrator_type="TemperatureScalingVariant",
          model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          redo_results=True):

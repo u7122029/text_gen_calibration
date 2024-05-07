@@ -75,18 +75,47 @@ class CoT(ChatProcessor):
         return out
 
     @staticmethod
-    def process_responses(inputs, model_outs, tokeniser, **kwargs):
-        prob_vecs = torch.softmax(torch.stack(model_outs.logits).permute(1, 0, 2), dim=2).cpu()
+    def process_responses(inputs, model_outs, tokeniser, remove_eos_tokens=True, **kwargs):
+        model_logits = torch.stack(model_outs.logits).permute(1, 0, 2)
+        prob_vecs = torch.softmax(model_logits, dim=2).cpu() # response_idx, response length, vocab_size
         sequences = model_outs.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
         batch_decoded = tokeniser.batch_decode(responses)
 
         explanations = []
         final_answers = []
-        for response in batch_decoded:
-            response = response.lower()
+        processed_responses = []
+        processed_prob_vecs = []
+        eos_masks = []
+        processed_logits = []
+        response_confidences = []
+        for decoded_response, encoded_response, prob_vec, logits in zip(batch_decoded, responses, prob_vecs, model_logits):
+            if remove_eos_tokens:
+                eos_mask = encoded_response != tokeniser.eos_token_id
+
+                logits_no_eos = logits[eos_mask]
+                token_response_no_eos = encoded_response[eos_mask]
+                prob_vec_no_eos = prob_vec[eos_mask]
+
+                processed_responses.append(token_response_no_eos)
+                processed_logits.append(logits_no_eos)
+
+                eos_masks.append(eos_mask)
+
+                token_confidences = torch.take_along_dim(prob_vec_no_eos,
+                                                         token_response_no_eos.unsqueeze(1), dim=1).squeeze(1)
+                processed_prob_vecs.append(token_confidences)
+                response_confidences.append(torch.mean(token_confidences).item())
+            else:
+                processed_responses.append(encoded_response)
+                token_confidences = torch.take_along_dim(prob_vec, encoded_response.unsqueeze(1), dim=1).squeeze(1)
+                processed_prob_vecs.append(token_confidences)
+                processed_logits.append(logits)
+                response_confidences.append(torch.mean(token_confidences).item())
+
+            decoded_response = decoded_response.lower()
             try:
-                s1 = response.split("**explanation:**")[1]
+                s1 = decoded_response.split("**explanation:**")[1]
                 explanation, final_answer_raw = s1.split("**final answer:**")
                 final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
                 explanations.append(explanation)
@@ -98,9 +127,11 @@ class CoT(ChatProcessor):
         # Computing probabilities using the generated logits.
         out_dict = {
             "explanations": explanations,
-            "tokens": responses,
-            "final_answers": torch.Tensor(final_answers),
-            "token_confidences": torch.take_along_dim(prob_vecs, responses.unsqueeze(2), dim=2).squeeze(2)
+            "tokens": processed_responses,
+            "prob_vecs": processed_prob_vecs,
+            "logits": model_logits,
+            "confidences": torch.Tensor(response_confidences),
+            "final_answers": torch.Tensor(final_answers)
         }
 
         return out_dict
