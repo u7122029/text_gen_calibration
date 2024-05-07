@@ -76,8 +76,8 @@ class CoT(ChatProcessor):
 
     @staticmethod
     def process_responses(inputs, model_outs, tokeniser, remove_eos_tokens=True, **kwargs):
-        model_logits = torch.stack(model_outs.logits).permute(1, 0, 2)
-        prob_vecs = torch.softmax(model_logits, dim=2).cpu() # response_idx, response length, vocab_size
+        model_logits = torch.stack(model_outs.logits).permute(1, 0, 2).cpu()
+        prob_vecs = torch.softmax(model_logits, dim=2) # response_idx, response length, vocab_size
         sequences = model_outs.sequences.cpu()
         responses = sequences[:, inputs.input_ids.shape[1]:]
         batch_decoded = tokeniser.batch_decode(responses)
