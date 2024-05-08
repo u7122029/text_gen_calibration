@@ -83,8 +83,8 @@ class TemperatureScalingVariant(Calibrator):
         # Optimise model.
         model.train()
         for epoch_idx in tqdm(range(50), desc="Training Calibrator"):
+            losses = 0
             for logits_batch, is_correct_batch in zip(all_logits, correct_dl):
-                losses = 0
                 optimiser.zero_grad()
                 for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
                     out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
@@ -94,7 +94,7 @@ class TemperatureScalingVariant(Calibrator):
                     losses += loss
                 losses.backward()
                 optimiser.step()
-                ic(epoch_idx, losses.item())
+            ic(epoch_idx, losses.item())
         model.eval()
 
         # Get results.
