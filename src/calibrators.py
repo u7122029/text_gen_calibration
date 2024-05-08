@@ -92,8 +92,8 @@ class TemperatureScalingVariant(Calibrator):
                     comp_vec[:] = is_correct
                     loss = loss_fn(out_token_confs, comp_vec)
                     losses += loss
-                losses.backward()
-                optimiser.step()
+            losses.backward()
+            optimiser.step()
             ic(epoch_idx, losses.item())
         model.eval()
 
