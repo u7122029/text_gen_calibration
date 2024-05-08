@@ -82,7 +82,7 @@ class TemperatureScalingVariant(Calibrator):
         correct_dl = DataLoader(TensorDataset(correct), batch_size=dataloader.batch_size)
         # Optimise model.
         model.train()
-        for epoch_idx in tqdm(range(50), desc="Training Calibrator"):
+        for epoch_idx in tqdm(range(10), desc="Training Calibrator"):
             losses = 0
             for logits_batch, is_correct_batch in zip(all_logits, correct_dl):
                 optimiser.zero_grad()
