@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 from icecream import ic
 from torch import nn, optim
 import inspect, sys
@@ -39,14 +39,12 @@ class TemperatureScalingVariant(Calibrator):
         super().__init__(tokeniser, model, debug_responses)
 
     def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
-        all_token_confidences = []
-        all_token_responses = []
         all_logits = []
         confs_before_calibration = []
         confs_after_calibration = []
         all_preds = []
         model = TemperatureScalingVariant.TSModel()
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.MSELoss()
         optimiser = optim.SGD(model.parameters(), lr=0.01)
 
         all_answers = []
@@ -77,31 +75,35 @@ class TemperatureScalingVariant(Calibrator):
             confs_before_calibration.append(confs_no_calib)
 
         confs_before_calibration = torch.cat(confs_before_calibration)
-        all_logits = torch.stack(all_logits, dim=0)
         all_preds = torch.cat(all_preds)
         all_answers = torch.cat(all_answers)
         correct = (all_preds == all_answers).int()
 
+        correct_dl = DataLoader(TensorDataset(correct), batch_size=dataloader.batch_size)
         # Optimise model.
         model.train()
         for epoch_idx in tqdm(range(50), desc="Training Calibrator"):
-            for logit_matrix, is_correct in zip(all_logits, correct):
+            for logits_batch, is_correct_batch in zip(all_logits, correct_dl):
+                losses = 0
                 optimiser.zero_grad()
-                out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
-                comp_vec = torch.ones(out_token_confs.shape)
-                comp_vec[:] = is_correct
-                loss = loss_fn(out_token_confs, comp_vec)
-                ic(loss.item())
-                loss.backward()
+                for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
+                    out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
+                    comp_vec = torch.ones(out_token_confs.shape)
+                    comp_vec[:] = is_correct
+                    loss = loss_fn(out_token_confs, comp_vec)
+                    losses += loss
+                losses.backward()
                 optimiser.step()
+                ic(epoch_idx, losses.item())
         model.eval()
 
         # Get results.
         with torch.no_grad():
-            for logit_matrix, is_correct in zip(all_logits, correct):
-                out = torch.mean(model(logit_matrix.unsqueeze(0)).squeeze())
-                confs_after_calibration.append(out)
-        return all_preds, confs_before_calibration, confs_after_calibration, model
+            for logits_batch in all_logits:
+                for logit_matrix in logits_batch:
+                    out = torch.mean(model(logit_matrix.unsqueeze(0)).squeeze())
+                    confs_after_calibration.append(out)
+        return all_preds, confs_before_calibration, torch.Tensor(confs_after_calibration), model
 
 
 class StopwordRemover(Calibrator):
