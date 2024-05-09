@@ -131,7 +131,8 @@ class CoT(ChatProcessor):
             "prob_vecs": processed_prob_vecs,
             "logits": model_logits,
             "confidences": torch.Tensor(response_confidences),
-            "final_answers": torch.Tensor(final_answers)
+            "final_answers": torch.Tensor(final_answers),
+            "eos_masks": torch.stack(eos_masks)
         }
 
         return out_dict

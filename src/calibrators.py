@@ -31,8 +31,8 @@ class TemperatureScalingVariant(Calibrator):
         def forward(self, x):
             # x.shape: [batch_size, response length, vocab size]
             x = x / self.temperature
-            x = torch.softmax(x, dim=2)
-            x = torch.max(x, dim=2).values
+            x = torch.softmax(x, dim=1)
+            x = torch.max(x, dim=1).values
             return x  # [batch_size, response_length]
 
     def __init__(self, tokeniser, model, debug_responses):
@@ -40,12 +40,11 @@ class TemperatureScalingVariant(Calibrator):
 
     def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
         all_logits = []
+        all_eos_masks = []
         confs_before_calibration = []
         confs_after_calibration = []
         all_preds = []
-        model = TemperatureScalingVariant.TSModel()
-        loss_fn = nn.MSELoss()
-        optimiser = optim.SGD(model.parameters(), lr=0.01)
+
 
         all_answers = []
         for batch_idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
@@ -68,6 +67,9 @@ class TemperatureScalingVariant(Calibrator):
             #prob_vecs = out_dict["prob_vecs"]
             confs_no_calib = out_dict["confidences"]
             final_answers = out_dict["final_answers"]
+            eos_masks = out_dict["eos_masks"]
+            all_eos_masks.append(eos_masks)
+
             #token_confidences = out_dict["prob_vecs"]
 
             all_answers.append(answers)
@@ -81,27 +83,42 @@ class TemperatureScalingVariant(Calibrator):
 
         correct_dl = DataLoader(TensorDataset(correct), batch_size=dataloader.batch_size)
         # Optimise model.
+        model = TemperatureScalingVariant.TSModel().cuda()
+        loss_fn = nn.MSELoss().cuda()
+        optimiser = optim.SGD(model.parameters(), lr=0.01)
         model.train()
-        for epoch_idx in tqdm(range(10), desc="Training Calibrator"):
+        for epoch_idx in tqdm(range(20), desc="Training Calibrator"):
             losses = 0
-            for logits_batch, is_correct_batch in zip(all_logits, correct_dl):
+            for logits_batch, eos_masks_batch, is_correct_batch in zip(all_logits, all_eos_masks, correct_dl):
                 optimiser.zero_grad()
-                for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
+                is_correct_batch = is_correct_batch[0]
+                masked_logits_batch = logits_batch[eos_masks_batch].cuda()
+                out_token_confs = model(masked_logits_batch)
+
+                comps = torch.zeros(logits_batch.shape[:2])
+                rows = torch.where(is_correct_batch == 1)[0]
+                comps[rows, :] = 1
+                comps = comps[eos_masks_batch].cuda()
+                loss = loss_fn(out_token_confs, comps)
+                loss.backward()
+                optimiser.step()
+                losses += loss.item()
+                """for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
                     out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
                     comp_vec = torch.ones(out_token_confs.shape)
                     comp_vec[:] = is_correct
                     loss = loss_fn(out_token_confs, comp_vec)
                     losses += loss
-            losses.backward()
-            optimiser.step()
-            ic(epoch_idx, losses.item())
+                """
+            ic(epoch_idx, losses)
         model.eval()
 
         # Get results.
         with torch.no_grad():
-            for logits_batch in all_logits:
-                for logit_matrix in logits_batch:
-                    out = torch.mean(model(logit_matrix.unsqueeze(0)).squeeze())
+            for logits_batch, eos_masks_batch in zip(all_logits, all_eos_masks):
+                for logit_matrix, eos_mask in zip(logits_batch, eos_masks_batch):
+                    inp = logit_matrix[eos_mask].unsqueeze(0).cuda()
+                    out = torch.mean(model(inp).squeeze()).cpu()
                     confs_after_calibration.append(out)
         return all_preds, confs_before_calibration, torch.Tensor(confs_after_calibration), model
 
