@@ -105,7 +105,7 @@ def main(prompt_type: str="CoT",
                           lambda x, y: formatter_cls.format_inputs(x,
                                                                    y,
                                                                    template_type=CoT.ChatTemplateType.USER_CHAT),
-                          400)
+                          750)
 
     p = Path("results") / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)

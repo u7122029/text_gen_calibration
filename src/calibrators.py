@@ -86,10 +86,18 @@ class TemperatureScalingVariant(Calibrator):
         model = TemperatureScalingVariant.TSModel().cuda()
         loss_fn = nn.MSELoss().cuda()
         optimiser = optim.SGD(model.parameters(), lr=0.01)
+
+        print("Training Calibrator")
         model.train()
-        for epoch_idx in tqdm(range(20), desc="Training Calibrator"):
-            losses = 0
-            for logits_batch, eos_masks_batch, is_correct_batch in zip(all_logits, all_eos_masks, correct_dl):
+        total_loss_last_epoch = None
+        epochs = 20
+        for epoch_idx in range(epochs):
+            pbar = tqdm(zip(all_logits, all_eos_masks, correct_dl),
+                        total=len(all_logits),
+                        desc=f"Epoch {epoch_idx+1}/{epochs}",
+                        postfix={"total_loss_last_epoch": total_loss_last_epoch})
+            total_loss_last_epoch = 0
+            for logits_batch, eos_masks_batch, is_correct_batch in pbar:
                 optimiser.zero_grad()
                 is_correct_batch = is_correct_batch[0]
                 masked_logits_batch = logits_batch[eos_masks_batch].cuda()
@@ -102,7 +110,7 @@ class TemperatureScalingVariant(Calibrator):
                 loss = loss_fn(out_token_confs, comps)
                 loss.backward()
                 optimiser.step()
-                losses += loss.item()
+                total_loss_last_epoch += loss.item()
                 """for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
                     out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
                     comp_vec = torch.ones(out_token_confs.shape)
@@ -110,15 +118,15 @@ class TemperatureScalingVariant(Calibrator):
                     loss = loss_fn(out_token_confs, comp_vec)
                     losses += loss
                 """
-            ic(epoch_idx, losses)
         model.eval()
 
         # Get results.
+        print("Getting Results")
         with torch.no_grad():
             for logits_batch, eos_masks_batch in zip(all_logits, all_eos_masks):
                 for logit_matrix, eos_mask in zip(logits_batch, eos_masks_batch):
-                    inp = logit_matrix[eos_mask].unsqueeze(0).cuda()
-                    out = torch.mean(model(inp).squeeze()).cpu()
+                    inp = logit_matrix[eos_mask].cuda()
+                    out = torch.mean(model(inp).cpu())
                     confs_after_calibration.append(out)
         return all_preds, confs_before_calibration, torch.Tensor(confs_after_calibration), model
 
