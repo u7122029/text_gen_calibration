@@ -18,7 +18,7 @@ class Calibrator(ABC):
         self.debug_responses = debug_responses
 
     @abstractmethod
-    def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
+    def calibrate(self, **kwargs):
         pass
 
 
@@ -35,53 +35,8 @@ class TemperatureScalingVariant(Calibrator):
             x = torch.max(x, dim=1).values
             return x  # [batch_size, response_length]
 
-    def __init__(self, tokeniser, model, debug_responses):
-        super().__init__(tokeniser, model, debug_responses)
-
-    def calibrate(self, dataloader: DataLoader, formatter_cls, **kwargs):
-        all_logits = []
-        all_eos_masks = []
-        confs_before_calibration = []
-        confs_after_calibration = []
-        all_preds = []
-
-
-        all_answers = []
-        for batch_idx, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
-            formatted = batch["formatted"]
-            answers = batch["answer"]
-
-            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-            generated = self.model.generate(**inputs,
-                                            max_new_tokens=550,
-                                            output_logits=True,
-                                            return_dict_in_generate=True,
-                                            pad_token_id=self.tokeniser.eos_token_id)
-            #logits = torch.stack(generated.logits).cpu().permute(1, 0, 2)
-
-            out_dict = formatter_cls.process_responses(inputs, generated, self.tokeniser, get_confidence=True)
-            #processed_responses = out_dict["tokens"]
-            logits = out_dict["logits"]
-            all_logits.append(logits)
-
-            #prob_vecs = out_dict["prob_vecs"]
-            confs_no_calib = out_dict["confidences"]
-            final_answers = out_dict["final_answers"]
-            eos_masks = out_dict["eos_masks"]
-            all_eos_masks.append(eos_masks)
-
-            #token_confidences = out_dict["prob_vecs"]
-
-            all_answers.append(answers)
-            all_preds.append(final_answers)
-            confs_before_calibration.append(confs_no_calib)
-
-        confs_before_calibration = torch.cat(confs_before_calibration)
-        all_preds = torch.cat(all_preds)
-        all_answers = torch.cat(all_answers)
-        correct = (all_preds == all_answers).int()
-
-        correct_dl = DataLoader(TensorDataset(correct), batch_size=dataloader.batch_size)
+    def calibrate(self, all_logits, all_eos_masks, correct, batch_size, **kwargs):
+        correct_dl = DataLoader(TensorDataset(correct), batch_size=batch_size)
         # Optimise model.
         model = TemperatureScalingVariant.TSModel().cuda()
         loss_fn = nn.MSELoss().cuda()
@@ -122,13 +77,14 @@ class TemperatureScalingVariant(Calibrator):
 
         # Get results.
         print("Getting Results")
+        confs_after_calibration = []
         with torch.no_grad():
             for logits_batch, eos_masks_batch in zip(all_logits, all_eos_masks):
                 for logit_matrix, eos_mask in zip(logits_batch, eos_masks_batch):
                     inp = logit_matrix[eos_mask].cuda()
                     out = torch.mean(model(inp).cpu())
                     confs_after_calibration.append(out)
-        return all_preds, confs_before_calibration, torch.Tensor(confs_after_calibration), model
+        return torch.Tensor(confs_after_calibration), model
 
 
 class StopwordRemover(Calibrator):
