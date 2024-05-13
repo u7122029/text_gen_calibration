@@ -7,7 +7,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from enum import Enum
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from typing import List
 
 
 class CoTFormat(Enum):
