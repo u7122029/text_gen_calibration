@@ -20,6 +20,8 @@ def show_results(filepath: Path):
 
     results_dict = torch.load(str(filepath))
     correct = results_dict["correct"]
+    calibrator_name = results_dict["calibrator_name"]
+    model_name = results_dict["model_name"]
 
     confs_before_calib = results_dict["confs_before_calib"]
     confs_after_calib = results_dict["confs_after_calib"]
@@ -37,6 +39,8 @@ def show_results(filepath: Path):
     }
     num_samples = len(correct)
     accuracy = d["acc"]
+    print(f"Model Name: {model_name}")
+    print(f"Calibrator Name: {calibrator_name}")
     print(f"No. Samples: {num_samples}")
     print(f"Accuracy: {accuracy}")
     print("Basic Metrics:")
@@ -62,14 +66,14 @@ def show_results(filepath: Path):
 # Qwen/Qwen1.5-1.8B-Chat
 # meta-llama/Llama-2-7b-chat-hf
 # meta-llama/Meta-Llama-3-8B-Instruct
-def main(prompt_type: str = "CoT",
-         dataset_name: str = "GSM",
+def main(prompt_type: str="CoT",
+         dataset_name: str="GSM",
          calibrator_type="TemperatureScalingVariant",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="HuggingFaceH4/zephyr-7b-beta",
          debug_responses=True,
          redo_results=True,
-         batch_size=4,
-         dset_size=200):
+         batch_size=2,
+         dset_size=300):
     if prompt_type not in prompt_dict:
         raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
