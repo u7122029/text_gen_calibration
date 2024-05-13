@@ -19,7 +19,9 @@ class CoTFormat(Enum):
     def from_model_name(cls, name):
         name_dict = {
             "google/gemma-1.1-2b-it": cls.USER_CHAT,
-            "google/gemma-1.1-7b-it": cls.USER_CHAT
+            "google/gemma-1.1-7b-it": cls.USER_CHAT,
+            "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
+            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT
         }
         return name_dict[name]
 
@@ -180,7 +182,7 @@ class GSMCoT:
                                                               {"role": "user", "content": f"**Question:** {question}"}],
                                                              tokenize=False,
                                                              add_generation_prompt=True,
-                                                             return_tensors="pt")["question"]
+                                                             return_tensors="pt")
             formatted.append(formatted_q)
         return {"formatted": formatted}
 
