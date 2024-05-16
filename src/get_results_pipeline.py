@@ -69,11 +69,11 @@ def show_results(filepath: Path):
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_type="TemperatureScalingVariant",
-         model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          redo_results=True,
-         batch_size=2,
-         dset_size=100):
+         batch_size=4,
+         dset_size=300):
     if prompt_type not in prompt_dict:
         raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 

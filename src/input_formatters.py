@@ -70,6 +70,7 @@ class GSMCoT:
         all_logits = []
         all_eos_masks = []
         all_preds = []
+        all_tokens = []
         confs_before_calibration = []
         all_answers = torch.Tensor(self.dataset["answer"])
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
@@ -85,6 +86,9 @@ class GSMCoT:
             logits = out_dict["logits"]
             all_logits.append(logits)
 
+            tokens = out_dict["tokens"]
+            all_tokens.append(tokens)
+
             confs_no_calib = out_dict["confidences"]
             final_answers = out_dict["final_answers"]
             eos_masks = out_dict["eos_masks"]
@@ -99,6 +103,7 @@ class GSMCoT:
         correct = all_preds == all_answers
         calibrator = calibrator_type(self.tokeniser, self.model, False)
         confs_after_calibration, self.__calibrator_model = calibrator.calibrate(
+            all_tokens=all_tokens,
             all_logits=all_logits,
             all_eos_masks=all_eos_masks,
             correct=correct,

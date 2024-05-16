@@ -23,7 +23,7 @@ class Calibrator(ABC):
 
 
 class TemperatureScalingVariant(Calibrator):
-    class TSModel(nn.Module):
+    class TSModel1(nn.Module):
         def __init__(self):
             super().__init__()
             self.temperature = nn.Parameter(torch.ones(1) * 1.5)
@@ -35,7 +35,20 @@ class TemperatureScalingVariant(Calibrator):
             x = torch.max(x, dim=1).values
             return x  # [batch_size, response_length]
 
-    def calibrate(self, all_logits, all_eos_masks, correct, batch_size, **kwargs):
+    class TSModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+
+        def forward(self, x, token_indices):
+            # x.shape: [logit_vec, vocab size]
+            x = x / self.temperature
+            x = torch.softmax(x, dim=1)
+            #x = torch.max(x, dim=1).values
+            x = torch.take_along_dim(x, token_indices.unsqueeze(-1), dim=1).squeeze(1)
+            return x  # [confs]
+
+    def calibrate(self, all_tokens, all_logits, all_eos_masks, correct, batch_size, **kwargs):
         correct_dl = DataLoader(TensorDataset(correct), batch_size=batch_size)
         # Optimise model.
         model = TemperatureScalingVariant.TSModel().cuda()
@@ -47,16 +60,19 @@ class TemperatureScalingVariant(Calibrator):
         total_loss_last_epoch = None
         epochs = 20
         for epoch_idx in range(epochs):
-            pbar = tqdm(zip(all_logits, all_eos_masks, correct_dl),
+            pbar = tqdm(zip(all_logits, all_eos_masks, correct_dl, all_tokens),
                         total=len(all_logits),
                         desc=f"Epoch {epoch_idx+1}/{epochs}",
                         postfix={"total_loss_last_epoch": total_loss_last_epoch})
             total_loss_last_epoch = 0
-            for logits_batch, eos_masks_batch, is_correct_batch in pbar:
+            for logits_batch, eos_masks_batch, is_correct_batch, tokens_batch in pbar:
                 optimiser.zero_grad()
                 is_correct_batch = is_correct_batch[0]
                 masked_logits_batch = logits_batch[eos_masks_batch].cuda()
-                out_token_confs = model(masked_logits_batch)
+
+                concatenated_tokens = torch.cat(tokens_batch)
+                masked_tokens_batch = concatenated_tokens.cuda()
+                out_token_confs = model(masked_logits_batch, masked_tokens_batch)
 
                 comps = torch.zeros(logits_batch.shape[:2])
                 rows = torch.where(is_correct_batch == 1)[0]
@@ -79,10 +95,11 @@ class TemperatureScalingVariant(Calibrator):
         print("Getting Results")
         confs_after_calibration = []
         with torch.no_grad():
-            for logits_batch, eos_masks_batch in zip(all_logits, all_eos_masks):
-                for logit_matrix, eos_mask in zip(logits_batch, eos_masks_batch):
-                    inp = logit_matrix[eos_mask].cuda()
-                    out = torch.mean(model(inp).cpu())
+            for logits_batch, eos_masks_batch, tokens_batch in zip(all_logits, all_eos_masks, all_tokens):
+                for logit_matrix, eos_mask, tokens in zip(logits_batch, eos_masks_batch, tokens_batch):
+                    inp1 = logit_matrix[eos_mask].cuda()
+                    inp2 = tokens.cuda()
+                    out = torch.mean(model(inp1, inp2).cpu())
                     confs_after_calibration.append(out)
         return torch.Tensor(confs_after_calibration), model
 
