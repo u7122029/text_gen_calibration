@@ -73,7 +73,7 @@ class TemperatureScalingVariant(Calibrator):
                 is_correct_batch = is_correct_batch[0]
                 masked_logits_batch = logits_batch[eos_masks_batch].cuda()
 
-                concatenated_tokens = torch.cat(tokens_batch)
+                concatenated_tokens = torch.cat(tokens_batch).cuda()
                 #masked_tokens_batch = concatenated_tokens.cuda()
                 out_token_confs = model(masked_logits_batch, concatenated_tokens)
                 #out_token_confs = torch.max(out_token_vocab_confs, dim=1).values
