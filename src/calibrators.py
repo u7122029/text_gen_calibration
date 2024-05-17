@@ -40,11 +40,14 @@ class TemperatureScalingVariant(Calibrator):
             super().__init__()
             self.temperature = nn.Parameter(torch.ones(1) * 1.5)
 
-        def forward(self, x):
+        def forward(self, x, tokens=None):
             # x.shape: [logit_vec, vocab size]
             x = x / self.temperature
             x = torch.softmax(x, dim=1)
-            x = torch.max(x, dim=1).values
+            if self.training:
+                x = torch.max(x, dim=1).values
+            else:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
             return x  # [confs]
 
@@ -99,7 +102,8 @@ class TemperatureScalingVariant(Calibrator):
             for logits_batch, eos_masks_batch, tokens_batch in zip(all_logits, all_eos_masks, all_tokens):
                 for logit_matrix, eos_mask, tokens in zip(logits_batch, eos_masks_batch, tokens_batch):
                     inp1 = logit_matrix[eos_mask].cuda()
-                    token_confs = model(inp1).cpu()
+                    inp2 = tokens.cuda()
+                    token_confs = model(inp1, inp2).cpu()
                     #token_confs = torch.max(token_vocab_confs, dim=1).values
                     #token_confs = torch.take_along_dim(token_vocab_confs, tokens.unsqueeze(1), dim=1).squeeze(1)
                     out = torch.mean(token_confs)
