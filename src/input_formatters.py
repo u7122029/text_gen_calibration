@@ -21,7 +21,8 @@ class CoTFormat(Enum):
             "google/gemma-1.1-2b-it": cls.USER_CHAT,
             "google/gemma-1.1-7b-it": cls.USER_CHAT,
             "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
-            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT
+            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
+            "mistralai/Mistral-7B-Instruct-v0.2": cls.USER_CHAT
         }
         return name_dict[name]
 
