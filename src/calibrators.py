@@ -44,7 +44,7 @@ class TemperatureScalingVariant(Calibrator):
             # x.shape: [logit_vec, vocab size]
             x = x / self.temperature
             x = torch.softmax(x, dim=1)
-            if self.training:
+            if False:#self.training:
                 x = torch.max(x, dim=1).values
             else:
                 x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
@@ -73,9 +73,9 @@ class TemperatureScalingVariant(Calibrator):
                 is_correct_batch = is_correct_batch[0]
                 masked_logits_batch = logits_batch[eos_masks_batch].cuda()
 
-                #concatenated_tokens = torch.cat(tokens_batch)
+                concatenated_tokens = torch.cat(tokens_batch)
                 #masked_tokens_batch = concatenated_tokens.cuda()
-                out_token_confs = model(masked_logits_batch)
+                out_token_confs = model(masked_logits_batch, concatenated_tokens)
                 #out_token_confs = torch.max(out_token_vocab_confs, dim=1).values
 
                 comps = torch.zeros(logits_batch.shape[:2])
