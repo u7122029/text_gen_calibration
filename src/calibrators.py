@@ -100,7 +100,8 @@ class TemperatureScalingVariant(Calibrator):
                 for logit_matrix, eos_mask, tokens in zip(logits_batch, eos_masks_batch, tokens_batch):
                     inp1 = logit_matrix[eos_mask].cuda()
                     token_vocab_confs = model(inp1).cpu()
-                    token_confs = torch.take_along_dim(token_vocab_confs, tokens.unsqueeze(1), dim=1).squeeze(1)
+                    token_confs = torch.max(token_vocab_confs, dim=1).values
+                    #token_confs = torch.take_along_dim(token_vocab_confs, tokens.unsqueeze(1), dim=1).squeeze(1)
                     out = torch.mean(token_confs)
                     confs_after_calibration.append(out)
         return torch.Tensor(confs_after_calibration), model
