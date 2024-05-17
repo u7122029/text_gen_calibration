@@ -40,12 +40,12 @@ class TemperatureScalingVariant(Calibrator):
             super().__init__()
             self.temperature = nn.Parameter(torch.ones(1) * 1.5)
 
-        def forward(self, x, token_indices):
+        def forward(self, x):
             # x.shape: [logit_vec, vocab size]
             x = x / self.temperature
             x = torch.softmax(x, dim=1)
             #x = torch.max(x, dim=1).values
-            x = torch.take_along_dim(x, token_indices.unsqueeze(-1), dim=1).squeeze(1)
+
             return x  # [confs]
 
     def calibrate(self, all_tokens, all_logits, all_eos_masks, correct, batch_size, **kwargs):
@@ -71,8 +71,9 @@ class TemperatureScalingVariant(Calibrator):
                 masked_logits_batch = logits_batch[eos_masks_batch].cuda()
 
                 concatenated_tokens = torch.cat(tokens_batch)
-                masked_tokens_batch = concatenated_tokens.cuda()
-                out_token_confs = model(masked_logits_batch, masked_tokens_batch)
+                #masked_tokens_batch = concatenated_tokens.cuda()
+                out_token_vocab_confs = model(masked_logits_batch)
+                out_token_confs = torch.max(out_token_vocab_confs, dim=1).values
 
                 comps = torch.zeros(logits_batch.shape[:2])
                 rows = torch.where(is_correct_batch == 1)[0]
@@ -98,8 +99,9 @@ class TemperatureScalingVariant(Calibrator):
             for logits_batch, eos_masks_batch, tokens_batch in zip(all_logits, all_eos_masks, all_tokens):
                 for logit_matrix, eos_mask, tokens in zip(logits_batch, eos_masks_batch, tokens_batch):
                     inp1 = logit_matrix[eos_mask].cuda()
-                    inp2 = tokens.cuda()
-                    out = torch.mean(model(inp1, inp2).cpu())
+                    token_vocab_confs = model(inp1).cpu()
+                    token_confs = torch.take_along_dim(token_vocab_confs, tokens.unsqueeze(1), dim=1).squeeze(1)
+                    out = torch.mean(token_confs)
                     confs_after_calibration.append(out)
         return torch.Tensor(confs_after_calibration), model
 
