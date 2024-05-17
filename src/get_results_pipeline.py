@@ -66,13 +66,14 @@ def show_results(filepath: Path):
 # Qwen/Qwen1.5-1.8B-Chat
 # meta-llama/Llama-2-7b-chat-hf
 # meta-llama/Meta-Llama-3-8B-Instruct
+# 01-ai/Yi-1.5-9B-Chat
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_type="TemperatureScalingVariant",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="01-ai/Yi-1.5-9B-Chat",
          debug_responses=True,
          redo_results=True,
-         batch_size=4,
+         batch_size=2,
          dset_size=300):
     if prompt_type not in prompt_dict:
         raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
