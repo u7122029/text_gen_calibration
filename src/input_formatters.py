@@ -23,7 +23,9 @@ class CoTFormat(Enum):
             "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
             "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
             "mistralai/Mistral-7B-Instruct-v0.2": cls.USER_CHAT,
-            "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT
+            "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
+            "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
+            "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT
         }
         return name_dict[name]
 

@@ -60,17 +60,19 @@ def show_results(filepath: Path):
 
 # HuggingFaceH4/zephyr-7b-beta
 # mistralai/Mistral-7B-Instruct-v0.2
-# zhengr/MixTAO-7Bx2-MoE-v8.1
+# zhengr/MixTAO-7Bx2-MoE-v8.1 cannot use
 # google/gemma-1.1-7b-it
 # google/gemma-1.1-2b-it
-# Qwen/Qwen1.5-1.8B-Chat
+# Qwen/Qwen1.5-1.8B-Chat not good.
 # meta-llama/Llama-2-7b-chat-hf
 # meta-llama/Meta-Llama-3-8B-Instruct
 # 01-ai/Yi-1.5-9B-Chat
+# NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
+# NousResearch/Hermes-2-Pro-Mistral-7B
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_type="TemperatureScalingVariant",
-         model_name="01-ai/Yi-1.5-9B-Chat",
+         model_name="meta-llama/Meta-Llama-3-8B-Instruct",
          debug_responses=True,
          redo_results=True,
          batch_size=2,
