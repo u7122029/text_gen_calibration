@@ -44,10 +44,7 @@ class TemperatureScalingVariant(Calibrator):
             # x.shape: [logit_vec, vocab size]
             x = x / self.temperature
             x = torch.softmax(x, dim=1)
-            if False:#self.training:
-                x = torch.max(x, dim=1).values
-            else:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
             return x  # [confs]
 
