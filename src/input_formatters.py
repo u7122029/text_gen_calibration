@@ -1,12 +1,17 @@
 import torch
 from torch import nn
 import pandas as pd
+from icecream import ic
 import re
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from enum import Enum
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from pathlib import Path
+
+RESULTS_PATH = Path("results")
+LOGITS_SUBDIR = Path("logits")
 
 
 class CoTFormat(Enum):
@@ -31,14 +36,12 @@ class CoTFormat(Enum):
 
 
 class GSMCoT:
-    def __init__(self, model_name, token, dset_size=None):
-        self.tokeniser = AutoTokenizer.from_pretrained(model_name, token=token, padding_side="left")
+    def __init__(self, model_name, dataset, token, dset_size=None):
+        self.model_name = model_name
+        self.dataset = dataset
+        self.tokeniser = AutoTokenizer.from_pretrained(self.model_name, token=token, padding_side="left")
         self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
 
-        self.dataset = pd.read_json("data/GSM/test.jsonl", lines=True)
-
-        # Get dataset and ensure that we only get dset_size entries.
-        self.dataset["answer"] = self.dataset["answer"].apply(lambda x: int(re.sub(r'[^\w\s]', '', x.split("####")[1])))
         indices = torch.randperm(len(self.dataset))
         if dset_size is not None:
             indices = indices[:dset_size]
@@ -59,25 +62,35 @@ class GSMCoT:
             raise Exception(f"Invalid enum value {cf}")
 
         self.dataset = self.dataset.map(format_func, batched=True)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name,
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_name,
                                                           device_map="auto",
                                                           torch_dtype=torch.float16,
                                                           token=token)
         self.__calibrator_model = None
         self.calibrator_type_used = None
 
-    def apply_calibrator(self, calibrator_type, results_batch_size=1, calibration_batch_size=1):
-        # TODO: Separate getting generation results from actual calibration
-        self.calibrator_type_used = calibrator_type
+    def get_name(self):
+        return self.__class__.__name__
 
-        dl = DataLoader(self.dataset, batch_size=results_batch_size)
+    def get_logits_and_tokens(self, batch_size, recompute=False):
+        """
+        Gets the logits from the model. No EOS tokens are filtered at all.
+        :param batch_size:
+        :param recompute:
+        :return:
+        """
+        target_dir = RESULTS_PATH / LOGITS_SUBDIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        filepath = target_dir / f"{self.get_name()}.pt"
+        if filepath.exists() and not recompute:
+            d = torch.load(filepath)
+            return d["all_logits"], d["all_tokens"]
+
+        dl = DataLoader(self.dataset, batch_size=batch_size)
         all_logits = []
-        all_eos_masks = []
-        all_preds = []
         all_tokens = []
-        confs_before_calibration = []
-        all_answers = torch.Tensor(self.dataset["answer"])
-        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
+        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc="Getting Logits and Tokens"):
             formatted = batch["formatted"]
 
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
@@ -86,99 +99,100 @@ class GSMCoT:
                                             output_logits=True,
                                             return_dict_in_generate=True,
                                             pad_token_id=self.tokeniser.eos_token_id)
-            out_dict = self.__process_generated_output(inputs, generated)
-            logits = out_dict["logits"]
-            all_logits.append(logits)
+            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
 
-            tokens = out_dict["tokens"]
-            all_tokens.append(tokens)
+            # get the tokens, then remove the ones that made up the input.
+            sequences = generated.sequences.cpu()
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
 
-            confs_no_calib = out_dict["confidences"]
-            final_answers = out_dict["final_answers"]
-            eos_masks = out_dict["eos_masks"]
-            all_eos_masks.append(eos_masks)
+            for logits in model_logits:
+                all_logits.append(logits)
 
-            #all_answers.append(answers)
-            all_preds.append(final_answers)
-            confs_before_calibration.append(confs_no_calib)
+            for response in responses:
+                all_tokens.append(response)
 
-        confs_before_calibration = torch.cat(confs_before_calibration)
-        all_preds = torch.cat(all_preds)
-        correct = all_preds == all_answers
+        out_dict = {
+            "all_logits": all_logits,
+            "all_tokens": all_tokens
+        }
+        torch.save(out_dict, str(RESULTS_PATH / LOGITS_SUBDIR / f"{self.get_name()}.pt"))
+        return all_logits, all_tokens
+
+    def apply_calibrator(self, calibrator_type, batch_size=1, recompute_logits=False):
+        self.calibrator_type_used = calibrator_type
+
+        original_logits, original_tokens = self.get_logits_and_tokens(batch_size, recompute=recompute_logits)
+
+        all_tokens = []
+        all_logits = []
+        #all_eos_masks = []
+        all_preds = []
+        confs_before_calib = []
+        for formatted, logits, tokens in zip(self.dataset["formatted"], original_logits, original_tokens):
+            out_dict = self.__process_generated_output(logits, tokens)
+
+            all_logits.append(out_dict["processed_logits"])
+            all_tokens.append(out_dict["processed_tokens"])
+            #all_eos_masks.append(out_dict["eos_mask"])
+            all_preds.append(out_dict["final_answer"])
+            confs_before_calib.append(out_dict["confidence"])
+
+        confs_before_calibration = torch.Tensor(confs_before_calib)
+        all_preds = torch.Tensor(all_preds)
+        correct = all_preds == torch.Tensor(self.dataset["answer"])
         calibrator = calibrator_type(self.tokeniser, self.model, False)
+
         confs_after_calibration, self.__calibrator_model = calibrator.calibrate(
             all_tokens=all_tokens,
             all_logits=all_logits,
-            all_eos_masks=all_eos_masks,
             correct=correct,
-            batch_size=calibration_batch_size
+            batch_size=batch_size
         )
 
         return confs_before_calibration, confs_after_calibration, correct
 
-    def get_calibrated_model(self):
+    def get_calibrator_model(self):
         if self.__calibrator_model is None: return None
         return nn.Sequential(self.model, self.__calibrator_model)
 
-    def __process_generated_output(self, inputs, generated):
-        model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
-        prob_vecs = torch.softmax(model_logits, dim=2)  # response_idx, response length, vocab_size
-        sequences = generated.sequences.cpu()
-        responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
-        batch_decoded = self.tokeniser.batch_decode(responses)
+    def __process_generated_output(self, logits, tokens):
+        """
+        Compute the model's answer,
+        the probability vectors for each token outputted, and the eos mask used on the output
+        :param logits: the generation logits for one prompt.
+        :param tokens: the tokens for one prompt.
+        :return:
+        """
+        prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
+        tokens = tokens.cpu()
+        decoded_response = self.tokeniser.decode(tokens)
 
-        #explanations = []
-        final_answers = []
-        processed_responses = []
-        processed_prob_vecs = []
-        eos_masks = []
-        processed_logits = []
-        response_confidences = []
-        for decoded_response, encoded_response, prob_vec, logits in zip(batch_decoded, responses, prob_vecs,
-                                                                        model_logits):
-            """if remove_eos_tokens:"""
-            eos_mask = encoded_response != self.tokeniser.eos_token_id
+        eos_mask = tokens != self.tokeniser.eos_token_id
 
-            logits_no_eos = logits[eos_mask]
-            token_response_no_eos = encoded_response[eos_mask]
-            prob_vec_no_eos = prob_vec[eos_mask]
+        processed_logits = logits[eos_mask]
+        processed_response = tokens[eos_mask]
+        prob_vecs_no_eos = prob_vecs[eos_mask]
 
-            processed_responses.append(token_response_no_eos)
-            processed_logits.append(logits_no_eos)
+        token_confidences = torch.take_along_dim(prob_vecs_no_eos,
+                                                 processed_response.unsqueeze(1), dim=1).squeeze(1)
+        response_confidence = torch.mean(token_confidences).item()
 
-            eos_masks.append(eos_mask)
-
-            token_confidences = torch.take_along_dim(prob_vec_no_eos,
-                                                     token_response_no_eos.unsqueeze(1), dim=1).squeeze(1)
-            processed_prob_vecs.append(token_confidences)
-            response_confidences.append(torch.mean(token_confidences).item())
-            """else:
-                processed_responses.append(encoded_response)
-                token_confidences = torch.take_along_dim(prob_vec, encoded_response.unsqueeze(1), dim=1).squeeze(1)
-                processed_prob_vecs.append(token_confidences)
-                processed_logits.append(logits)
-                response_confidences.append(torch.mean(token_confidences).item())"""
-
-            decoded_response = decoded_response.lower()
-            try:
-                s1 = decoded_response.split("**explanation:**")[1]
-                explanation, final_answer_raw = s1.split("**final answer:**")
-                final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
-                #explanations.append(explanation)
-                final_answers.append(final_answer)
-            except:
-                #explanations.append("")
-                final_answers.append(-1)
+        decoded_response = decoded_response.lower()
+        try:
+            s1 = decoded_response.split("**explanation:**")[1]
+            explanation, final_answer_raw = s1.split("**final answer:**")
+            final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
+        except:
+            final_answer = -1
 
         # Computing probabilities using the generated logits.
         out_dict = {
             #"explanations": explanations,
-            "tokens": processed_responses,
-            "prob_vecs": processed_prob_vecs,
-            "logits": model_logits,
-            "confidences": torch.Tensor(response_confidences),
-            "final_answers": torch.Tensor(final_answers),
-            "eos_masks": torch.stack(eos_masks)
+            "processed_tokens": processed_response,
+            "processed_logits": processed_logits,
+            "confidence": response_confidence,
+            "final_answer": final_answer,
+            "eos_mask": eos_mask
         }
 
         return out_dict

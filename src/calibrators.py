@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader, TensorDataset, IterableDataset
+from torch.utils.data import DataLoader, TensorDataset, IterableDataset, Dataset
 from icecream import ic
 from torch import nn, optim
 import inspect, sys
@@ -22,19 +22,41 @@ class Calibrator(ABC):
         pass
 
 
+class TokenLogitsDataset(Dataset):
+    def __init__(self, logits, tokens, correct):
+        self.logits = logits
+        self.tokens = tokens
+        self.correct = correct
+
+        assert len(self.logits) == len(self.tokens), \
+            f"given logits is not the same length as the tokens. len(logits): {len(self.logits)}, len(tokens): {len(self.tokens)}"
+        assert len(self.tokens) == len(self.correct), \
+            f"given tokens is not the same length as the labels. len(tokens): {len(self.tokens)}, len(correct): {len(self.correct)}."
+
+        self.correct_vectors = []
+        for t, c in zip(self.tokens, self.correct):
+            vec = torch.zeros(len(t)) + c
+            self.correct_vectors.append(vec)
+
+    def __getitem__(self, item):
+        return self.logits[item], self.tokens[item], self.correct_vectors[item]
+
+    def __len__(self):
+        return len(self.correct)
+
+    @staticmethod
+    def collate_fn(data):
+        logits = []
+        tokens = []
+        correct_vecs = []
+        for x in data:
+            logits.append(x[0])
+            tokens.append(x[1])
+            correct_vecs.append(x[2])
+        return torch.cat(logits), torch.cat(tokens), torch.cat(correct_vecs)
+
+
 class TemperatureScalingVariant(Calibrator):
-    class TSModel1(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
-
-        def forward(self, x):
-            # x.shape: [batch_size, response length, vocab size]
-            x = x / self.temperature
-            x = torch.softmax(x, dim=1)
-            x = torch.max(x, dim=1).values
-            return x  # [batch_size, response_length]
-
     class TSModel(nn.Module):
         def __init__(self):
             super().__init__()
@@ -44,12 +66,17 @@ class TemperatureScalingVariant(Calibrator):
             # x.shape: [logit_vec, vocab size]
             x = x / self.temperature
             x = torch.softmax(x, dim=1)
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
             return x  # [confs]
 
-    def calibrate(self, all_tokens, all_logits, all_eos_masks, correct, batch_size, **kwargs):
-        correct_dl = DataLoader(TensorDataset(correct), batch_size=batch_size)
+    def calibrate(self, all_tokens, all_logits, correct, batch_size, **kwargs):
+        calibration_dset = TokenLogitsDataset(all_logits, all_tokens, correct)
+        calibration_dl = DataLoader(calibration_dset,
+                                    batch_size=batch_size,
+                                    collate_fn=TokenLogitsDataset.collate_fn)
         # Optimise model.
         model = TemperatureScalingVariant.TSModel().cuda()
         loss_fn = nn.MSELoss().cuda()
@@ -60,51 +87,32 @@ class TemperatureScalingVariant(Calibrator):
         total_loss_last_epoch = None
         epochs = 20
         for epoch_idx in range(epochs):
-            pbar = tqdm(zip(all_logits, all_eos_masks, correct_dl, all_tokens),
-                        total=len(all_logits),
+            pbar = tqdm(calibration_dl,
                         desc=f"Epoch {epoch_idx+1}/{epochs}",
                         postfix={"total_loss_last_epoch": total_loss_last_epoch})
             total_loss_last_epoch = 0
-            for logits_batch, eos_masks_batch, is_correct_batch, tokens_batch in pbar:
+            for logits_batch, _, is_correct_batch in pbar:
+                logits_batch = logits_batch.to("cuda")
+                is_correct_batch = is_correct_batch.to("cuda")
+
                 optimiser.zero_grad()
-                is_correct_batch = is_correct_batch[0]
-                masked_logits_batch = logits_batch[eos_masks_batch].cuda()
-
-                concatenated_tokens = torch.cat(tokens_batch).cuda()
-                #masked_tokens_batch = concatenated_tokens.cuda()
-                out_token_confs = model(masked_logits_batch, concatenated_tokens)
-                #out_token_confs = torch.max(out_token_vocab_confs, dim=1).values
-
-                comps = torch.zeros(logits_batch.shape[:2])
-                rows = torch.where(is_correct_batch == 1)[0]
-                comps[rows, :] = 1
-                comps = comps[eos_masks_batch].cuda()
-                loss = loss_fn(out_token_confs, comps)
+                out_token_confs = model(logits_batch)
+                loss = loss_fn(out_token_confs, is_correct_batch)
                 loss.backward()
                 optimiser.step()
                 total_loss_last_epoch += loss.item()
-                """for logit_matrix, is_correct in zip(logits_batch, is_correct_batch[0]):
-                    out_token_confs = model(logit_matrix.unsqueeze(0)).squeeze()
-                    comp_vec = torch.ones(out_token_confs.shape)
-                    comp_vec[:] = is_correct
-                    loss = loss_fn(out_token_confs, comp_vec)
-                    losses += loss
-                """
         model.eval()
 
         # Get results.
         print("Getting Results")
         confs_after_calibration = []
         with torch.no_grad():
-            for logits_batch, eos_masks_batch, tokens_batch in zip(all_logits, all_eos_masks, all_tokens):
-                for logit_matrix, eos_mask, tokens in zip(logits_batch, eos_masks_batch, tokens_batch):
-                    inp1 = logit_matrix[eos_mask].cuda()
-                    inp2 = tokens.cuda()
-                    token_confs = model(inp1, inp2).cpu()
-                    #token_confs = torch.max(token_vocab_confs, dim=1).values
-                    #token_confs = torch.take_along_dim(token_vocab_confs, tokens.unsqueeze(1), dim=1).squeeze(1)
-                    out = torch.mean(token_confs)
-                    confs_after_calibration.append(out)
+            for logits, tokens, _ in calibration_dset:
+                logits = logits.cuda()
+                tokens = tokens.cuda()
+                token_confs = model(logits, tokens).cpu()
+                out = torch.mean(token_confs)
+                confs_after_calibration.append(out)
         return torch.Tensor(confs_after_calibration), model
 
 

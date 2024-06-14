@@ -10,6 +10,7 @@ from calibrators import calibrator_dict
 from pathlib import Path
 from tabulate import tabulate
 from input_formatters import GSMCoT
+from data_formats import get_dataset
 
 torch.manual_seed(0)
 
@@ -72,11 +73,12 @@ def show_results(filepath: Path):
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_type="TemperatureScalingVariant",
-         model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
-         redo_results=True,
-         batch_size=2,
-         dset_size=300):
+         redo_results=False,
+         batch_size=4,
+         dset_size=300,
+         recompute_logits=False):
     if prompt_type not in prompt_dict:
         raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
@@ -95,24 +97,13 @@ def main(prompt_type: str="CoT",
         show_results(file_path)
         quit()
 
-    input_formatter = GSMCoT(model_name, token, dset_size)
+    dataset = get_dataset(dataset_name)
+    input_formatter = GSMCoT(model_name, dataset, token, dset_size)
     confs_before_calib, confs_after_calib, correct = input_formatter.apply_calibrator(
         calibrator_dict[calibrator_type],
-        results_batch_size=batch_size,
-        calibration_batch_size=batch_size
+        batch_size=batch_size,
+        recompute_logits=recompute_logits
     )
-    """    
-    dl = DataLoader(dataset, batch_size=batch_size)
-
-    model = AutoModelForCausalLM.from_pretrained(model_name,
-                                                 device_map="auto",
-                                                 torch_dtype=torch.float16,
-                                                 token=token)
-                                                 #attn_implementation="flash_attention_2")
-
-    strategy_name = calibrator_dict[calibrator_type]
-    strategy = strategy_name(tokeniser, model, debug_responses)
-    all_preds, confs_before_calib, confs_after_calib, calibrator = strategy.calibrate(dl, formatter_cls)"""
 
     compiled = {
         #"explanations": all_explanations,
