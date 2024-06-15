@@ -33,7 +33,7 @@ def main(prompt_type: str="CoT",
                                                                   y,
                                                                   template_type=CoT.ChatTemplateType.USER_CHAT),
                           100)
-    #dataset = get_dataset(tokeniser, None, 720)
+    #calib_dataset = get_dataset(tokeniser, None, 720)
     dl = DataLoader(dataset, batch_size=4)
 
     model = AutoModelForCausalLM.from_pretrained(model_name,

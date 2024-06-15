@@ -5,59 +5,100 @@ import torch
 
 import fire
 from icecream import ic
-from chat_formats import prompt_dict
 from calibrators import calibrator_dict
 from pathlib import Path
 from tabulate import tabulate
 from input_formatters import GSMCoT
 from data_formats import get_dataset
+import os
 
 torch.manual_seed(0)
 
 
-def show_results(filepath: Path):
-    ece_metric = BinaryCalibrationError(n_bins=15)
-    auroc_metric = BinaryAUROC()
+class CompiledMetrics:
+    def __init__(self, confs_before, confs_after, correct, n_bins=15):
+        assert len(confs_before) == len(confs_after), "confidences before and after are not the same length."
+        assert len(confs_after) == len(correct), "correct is not the same length as confs_after and confs_before."
 
+        self.confs_before = confs_before
+        self.confs_after = confs_after
+        self.correct = correct
+
+        self.__ece_metric = BinaryCalibrationError(n_bins=n_bins)
+        self.__auroc_metric = BinaryAUROC()
+
+        self.ece_before = self.__ece_metric(self.confs_before, self.correct).item()
+        self.ece_after = self.__ece_metric(self.confs_after, self.correct).item()
+
+        self.auroc_before = self.__auroc_metric(self.confs_before, self.correct).item()
+        self.auroc_after = self.__auroc_metric(self.confs_after, self.correct).item()
+
+        self.auprc_before = binary_auprc(self.confs_before, self.correct).item()
+        self.auprc_after = binary_auprc(self.confs_after, self.correct).item()
+
+        self.accuracy = torch.mean(self.correct.float()).item()
+
+        self.confs_diff = self.confs_after - self.confs_before
+        self.all_mean_conf_change = torch.mean(self.confs_diff)
+        self.correct_mean_conf_change = torch.mean(self.confs_diff[self.correct])
+        self.incorrect_mean_conf_change = torch.mean(self.confs_diff[~self.correct])
+
+        self.all_total_conf_change = torch.sum(self.confs_diff)
+        self.correct_total_conf_change = torch.sum(self.confs_diff[self.correct])
+        self.incorrect_total_conf_change = torch.sum(self.confs_diff[~self.correct])
+
+    def __len__(self):
+        return len(self.correct)
+
+    def display(self):
+        print(f"No. Samples: {len(self)}")
+        print(f"Accuracy: {self.accuracy}")
+        print("\nBasic Metrics:")
+        table = [
+            ["Category",          "ECE",            "AUROC",           "AUPRC"],
+            ["Before Calibration", self.ece_before, self.auroc_before, self.auprc_before],
+            ["After Calibration",  self.ece_after, self.auroc_after, self.auprc_after]
+        ]
+        print(tabulate(table[1:], headers=table[0], tablefmt="github"))
+        print("\nChanges in Confidences:")
+        table1 = [
+            ["Category",     "All Preds",                "Correct Preds",               "Incorrect Preds"],
+            ["Mean Change",  self.all_mean_conf_change,  self.correct_mean_conf_change,  self.incorrect_mean_conf_change],
+            ["Total Change", self.all_total_conf_change, self.correct_total_conf_change, self.incorrect_total_conf_change]
+        ]
+        print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))
+
+    def save(self, filename):
+        out = {
+            "confs_before": self.confs_before,
+            "confs_after": self.confs_after,
+            "correct": self.correct
+        }
+        torch.save(out, filename)
+
+
+def show_results(filepath: Path):
     results_dict = torch.load(str(filepath))
-    correct = results_dict["correct"]
+
     calibrator_name = results_dict["calibrator_name"]
     model_name = results_dict["model_name"]
 
-    confs_before_calib = results_dict["confs_before_calib"]
-    confs_after_calib = results_dict["confs_after_calib"]
-    confs_diff = confs_after_calib - confs_before_calib
-    ic(torch.where(torch.isnan(confs_before_calib))[0])
-    ic(torch.where(torch.isnan(confs_after_calib))[0])
-    d = {
-        "ece_before": ece_metric(confs_before_calib, correct).item(),
-        "auroc_before": auroc_metric(confs_before_calib, correct).item(),
-        "auprc_before": binary_auprc(confs_before_calib, correct).item(),
-        "ece_after": ece_metric(confs_after_calib, correct).item(),
-        "auroc_after": auroc_metric(confs_after_calib, correct).item(),
-        "auprc_after": binary_auprc(confs_after_calib, correct).item(),
-        "acc": torch.mean(correct.float()).item()
-    }
-    num_samples = len(correct)
-    accuracy = d["acc"]
+    calib_metrics = CompiledMetrics(results_dict["calib_confs_original"],
+                                    results_dict["calib_confs_calibrated"],
+                                    results_dict["calib_correct"])
+    test_metrics = CompiledMetrics(results_dict["test_confs_original"],
+                                   results_dict["test_confs_calibrated"],
+                                   results_dict["test_correct"])
+
     print(f"Model Name: {model_name}")
     print(f"Calibrator Name: {calibrator_name}")
-    print(f"No. Samples: {num_samples}")
-    print(f"Accuracy: {accuracy}")
-    print("Basic Metrics:")
-    table = [["Category", "ECE", "AUROC", "AUPRC"],
-             ["Before Calibration", d["ece_before"], d["auroc_before"], d["auprc_before"]],
-             ["After Calibration", d["ece_after"], d["auroc_after"], d["auprc_after"]]
-             ]
-    print(tabulate(table[1:], headers=table[0], tablefmt="heavy_outline"))
-    print("Changes in Confidences:")
-    table1 = [["Category", "All Preds", "Correct Preds", "Incorrect Preds"],
-              ["Mean Change", torch.mean(confs_diff), torch.mean(confs_diff[correct]),
-               torch.mean(confs_diff[~correct])],
-              ["Total Change", torch.sum(confs_diff), torch.sum(confs_diff[correct]), torch.sum(confs_diff[~correct])]
-              ]
-    print(tabulate(table1[1:], headers=table1[0], tablefmt="heavy_outline"))
-
+    terminal_size = os.get_terminal_size().columns
+    print("-" * terminal_size)
+    print("Calibration Set Results:")
+    calib_metrics.display()
+    print("-" * terminal_size)
+    print("Test Set Results:")
+    test_metrics.display()
 
 # HuggingFaceH4/zephyr-7b-beta
 # mistralai/Mistral-7B-Instruct-v0.2
@@ -75,12 +116,13 @@ def main(prompt_type: str="CoT",
          calibrator_type="TemperatureScalingVariant",
          model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
-         redo_results=False,
          batch_size=4,
-         dset_size=300,
-         recompute_logits=False):
-    if prompt_type not in prompt_dict:
-        raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
+         calib_dset_size=300,
+         test_dset_size=300,
+         recompute_logits=False,
+         retrain_calibrator=False):
+    #if prompt_type not in prompt_dict:
+    #    raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
     if calibrator_type not in calibrator_dict:
         raise ValueError(f"calibrator_type '{calibrator_type}' not in {calibrator_dict.keys()}")
@@ -93,24 +135,28 @@ def main(prompt_type: str="CoT",
     p = Path("results") / dataset_name / calibrator_type / model_name / prompt_type
     p.parent.mkdir(parents=True, exist_ok=True)
     file_path = Path(f"{str(p)}.pt")
-    if file_path.exists() and not redo_results:
+    if file_path.exists() and not retrain_calibrator:
         show_results(file_path)
         quit()
 
     dataset = get_dataset(dataset_name)
-    input_formatter = GSMCoT(model_name, dataset, token, dset_size)
-    confs_before_calib, confs_after_calib, correct = input_formatter.apply_calibrator(
+    input_formatter = GSMCoT(model_name, dataset, token, calib_dset_size, test_dset_size)
+    calib_confs_original, calib_confs_calibrated, calib_correct = input_formatter.train_calibrator(
         calibrator_dict[calibrator_type],
         batch_size=batch_size,
         recompute_logits=recompute_logits
     )
+    test_confs_original, test_confs_calibrated, test_correct = input_formatter.test_calibrator(
+        calibrator_dict[calibrator_type]
+    )
 
     compiled = {
-        #"explanations": all_explanations,
-        #"all_preds": all_preds,
-        "confs_before_calib": confs_before_calib,
-        "confs_after_calib": confs_after_calib,
-        "correct": correct,
+        "calib_confs_original": calib_confs_original,
+        "calib_confs_calibrated": calib_confs_calibrated,
+        "calib_correct": calib_correct,
+        "test_confs_original": test_confs_original,
+        "test_confs_calibrated": test_confs_calibrated,
+        "test_correct": test_correct,
         "model_name": model_name,
         "calibrator_name": calibrator_type,
         "prompt_type": prompt_type,

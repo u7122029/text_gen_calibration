@@ -3,12 +3,12 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader, TensorDataset, IterableDataset, Dataset
 from icecream import ic
-from torch import nn, optim
 import inspect, sys
 from nltk import corpus
 import pandas as pd
 import numpy as np
 from torch import nn, optim
+from utils import TokenLogitsDataset
 
 
 class Calibrator(ABC):
@@ -16,44 +16,15 @@ class Calibrator(ABC):
         self.tokeniser = tokeniser
         self.model = model
         self.debug_responses = debug_responses
+        self.calibrator_model = None
 
     @abstractmethod
     def calibrate(self, **kwargs):
         pass
 
-
-class TokenLogitsDataset(Dataset):
-    def __init__(self, logits, tokens, correct):
-        self.logits = logits
-        self.tokens = tokens
-        self.correct = correct
-
-        assert len(self.logits) == len(self.tokens), \
-            f"given logits is not the same length as the tokens. len(logits): {len(self.logits)}, len(tokens): {len(self.tokens)}"
-        assert len(self.tokens) == len(self.correct), \
-            f"given tokens is not the same length as the labels. len(tokens): {len(self.tokens)}, len(correct): {len(self.correct)}."
-
-        self.correct_vectors = []
-        for t, c in zip(self.tokens, self.correct):
-            vec = torch.zeros(len(t)) + c
-            self.correct_vectors.append(vec)
-
-    def __getitem__(self, item):
-        return self.logits[item], self.tokens[item], self.correct_vectors[item]
-
-    def __len__(self):
-        return len(self.correct)
-
-    @staticmethod
-    def collate_fn(data):
-        logits = []
-        tokens = []
-        correct_vecs = []
-        for x in data:
-            logits.append(x[0])
-            tokens.append(x[1])
-            correct_vecs.append(x[2])
-        return torch.cat(logits), torch.cat(tokens), torch.cat(correct_vecs)
+    @abstractmethod
+    def test(self, **kwargs):
+        pass
 
 
 class TemperatureScalingVariant(Calibrator):
@@ -78,12 +49,12 @@ class TemperatureScalingVariant(Calibrator):
                                     batch_size=batch_size,
                                     collate_fn=TokenLogitsDataset.collate_fn)
         # Optimise model.
-        model = TemperatureScalingVariant.TSModel().cuda()
+        self.calibrator_model = TemperatureScalingVariant.TSModel().cuda()
         loss_fn = nn.MSELoss().cuda()
-        optimiser = optim.SGD(model.parameters(), lr=0.01)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=0.01)
 
         print("Training Calibrator")
-        model.train()
+        self.calibrator_model.train()
         total_loss_last_epoch = None
         epochs = 20
         for epoch_idx in range(epochs):
@@ -96,27 +67,34 @@ class TemperatureScalingVariant(Calibrator):
                 is_correct_batch = is_correct_batch.to("cuda")
 
                 optimiser.zero_grad()
-                out_token_confs = model(logits_batch)
+                out_token_confs = self.calibrator_model(logits_batch)
                 loss = loss_fn(out_token_confs, is_correct_batch)
                 loss.backward()
                 optimiser.step()
                 total_loss_last_epoch += loss.item()
-        model.eval()
+        self.calibrator_model.eval()
+        return self.calibrator_model
+
+    def test(self, test_tokens, test_logits, correct, **kwargs):
+        test_dset = TokenLogitsDataset(test_logits, test_tokens, correct)
 
         # Get results.
         print("Getting Results")
         confs_after_calibration = []
         with torch.no_grad():
-            for logits, tokens, _ in calibration_dset:
+            for logits, tokens, _ in test_dset:
                 logits = logits.cuda()
                 tokens = tokens.cuda()
-                token_confs = model(logits, tokens).cpu()
+                token_confs = self.calibrator_model(logits, tokens).cpu()
                 out = torch.mean(token_confs)
                 confs_after_calibration.append(out)
-        return torch.Tensor(confs_after_calibration), model
+        return torch.Tensor(confs_after_calibration)
 
 
 class StopwordRemover(Calibrator):
+    def test(self, **kwargs):
+        pass
+
     def __init__(self, tokeniser, model, debug_responses):
         super().__init__(tokeniser, model, debug_responses)
         self.stopwords = corpus.stopwords.words('english')
@@ -198,6 +176,9 @@ class StopwordRemover(Calibrator):
 
 
 class TopKTokenPoolingV1(Calibrator):
+    def test(self, **kwargs):
+        pass
+
     class TokenPoolingCalibrator:
         def __init__(self, tokens_to_filter: torch.Tensor, eos_token: int, temp_tokeniser=None):
             self.tokens_to_filter = torch.ones(len(tokens_to_filter) + 1).int()
