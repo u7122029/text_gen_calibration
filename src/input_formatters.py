@@ -7,10 +7,9 @@ from enum import Enum
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from pathlib import Path
-from utils import generate_over_dataloader
-
-RESULTS_PATH = Path("results")
-LOGITS_SUBDIR = Path("logits")
+from utils import RESULTS_PATH
+from calibrators import Calibrator
+from typing import Type, Optional
 
 
 class CoTFormat(Enum):
@@ -35,12 +34,19 @@ class CoTFormat(Enum):
 
 
 class GSMCoT:
-    def __init__(self, model_name, dataset, token, calib_dset_size, test_dset_size=None):
-        self.model_name = model_name
+    def __init__(self, llm_name, dataset, token, calib_dset_size, test_dset_size=None):
+        self.llm_name = llm_name
+        self.token = token
+        self.task_name = "GSM"
         self.dataset = dataset
-        self.tokeniser = AutoTokenizer.from_pretrained(self.model_name, token=token, padding_side="left")
+
+        # tokeniser is needed for dataset transformation.
+        self.tokeniser = AutoTokenizer.from_pretrained(self.llm_name, token=token, padding_side="left")
         self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
-        self.__calibrator_class = None
+        self.__calibrator: Optional[Calibrator] = None
+
+        self.target_dir = Path(RESULTS_PATH) / self.llm_name / self.task_name
+        self.target_dir.mkdir(parents=True, exist_ok=True)
 
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
@@ -60,7 +66,7 @@ class GSMCoT:
                             "**Final Answer:** <A single number>")
 
         # Format the datasets
-        cf = CoTFormat.from_model_name(model_name)
+        cf = CoTFormat.from_model_name(llm_name)
         if cf == CoTFormat.SYSTEM_USER_CHAT:
             format_func = self.__system_user_chat_format
         elif cf == CoTFormat.USER_CHAT:
@@ -72,137 +78,147 @@ class GSMCoT:
 
         self.calib_dataset = self.calib_dataset.map(format_func, batched=True)
         self.test_dataset = self.test_dataset.map(format_func, batched=True)
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_name,
-                                                          device_map="auto",
-                                                          torch_dtype=torch.float16,
-                                                          token=token)
-        self.__calibrator_model = None
-        self.calibrator_type_used = None
+        self.llm = None
+
+    def load_llm(self):
+        self.llm = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                        device_map="auto",
+                                                        torch_dtype=torch.float16,
+                                                        token=self.token)
 
     def get_name(self):
         return self.__class__.__name__
 
     def get_logits_and_tokens(self, batch_size=1, recompute=False):
         """
-        Gets the logits and tokens from the model over the calibration and test datasets.
+        Gets the logits and tokens from the llm over the calibration and test datasets.
         No EOS tokens are filtered at all.
         :param batch_size: generation batch size for both calib and test sets.
         :param recompute: whether to recompute the logits for both sets.
         :return:
         """
-        target_dir = RESULTS_PATH / LOGITS_SUBDIR
-        target_dir.mkdir(parents=True, exist_ok=True)
 
-        filepath = target_dir / f"{self.get_name()}.pt"
+        filepath = self.target_dir / f"logits.pt"
         if filepath.exists() and not recompute:
             d = torch.load(filepath)
             return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]
 
+        self.load_llm()
         dl_calib = DataLoader(self.calib_dataset, batch_size=batch_size)
         dl_test = DataLoader(self.test_dataset, batch_size=batch_size)
 
-        calib_dict = generate_over_dataloader(dl_calib, self.tokeniser, self.model, desc="Get Logits + Tokens (Calib)")
-        test_dict = generate_over_dataloader(dl_test, self.tokeniser, self.model, desc="Get Logits + Tokens (Test)")
+        calib_logits, calib_tokens = self.__generate_over_dataloader(dl_calib, desc="Get Logits + Tokens (Calib)")
+        test_logits, test_tokens = self.__generate_over_dataloader(dl_test, desc="Get Logits + Tokens (Test)")
 
         out_dict = {
-            "all_logits_calib": calib_dict["all_logits"],
-            "all_tokens_calib": calib_dict["test_tokens"],
-            "all_logits_test": test_dict["all_logits"],
-            "all_tokens_test": test_dict["test_tokens"]
+            "all_logits_calib": calib_logits,
+            "all_tokens_calib": calib_tokens,
+            "all_logits_test": test_logits,
+            "all_tokens_test": test_tokens
         }
-        torch.save(out_dict, str(RESULTS_PATH / LOGITS_SUBDIR / f"{self.get_name()}.pt"))
-        return (out_dict["all_logits_calib"],
-                out_dict["all_tokens_calib"],
-                out_dict["all_logits_test"],
-                out_dict["all_tokens_test"])
+        torch.save(out_dict, str(filepath))
+        return calib_logits, calib_tokens, test_logits, test_tokens
 
-    def train_calibrator(self, calibrator_type, batch_size=1, recompute_logits=False):
-        """
-        Train the calibrator model on the calibration dataset.
-        :param calibrator_type:
-        :param batch_size:
-        :param recompute_logits:
-        :return:
-        """
-        self.calibrator_type_used = calibrator_type
+    def run_calibration_pipeline(self,
+                                 calibrator_type: Type[Calibrator],
+                                 batch_size=1,
+                                 recompute_logits=False,
+                                 recalibrate=False):
+        # Try to get logits and tokens for both calib and test
+        calib_logits, calib_tokens, test_logits, test_tokens = self.get_logits_and_tokens(batch_size,
+                                                                                          recompute=recompute_logits)
 
-        original_logits, original_tokens, _, _ = self.get_logits_and_tokens(batch_size, recompute=recompute_logits)
+        # Get answers and whether they are correct (calib).
+        calib_preds = []
+        calib_confs_before = []
+        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], calib_logits, calib_tokens):
+            final_answer, confidence = self.__process_generated_output(logits, tokens)
 
-        all_tokens = []
-        all_logits = []
-        all_preds = []
-        confs_before_calib = []
-        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], original_logits, original_tokens):
-            out_dict = self.__process_generated_output(logits, tokens)
+            calib_preds.append(final_answer)
+            calib_confs_before.append(confidence)
+        calib_confs_before = torch.Tensor(calib_confs_before)
+        calib_preds = torch.Tensor(calib_preds)
+        calib_correct = calib_preds == torch.Tensor(self.calib_dataset["answer"])
 
-            all_logits.append(out_dict["processed_logits"])
-            all_tokens.append(out_dict["processed_tokens"])
-            all_preds.append(out_dict["final_answer"])
-            confs_before_calib.append(out_dict["confidence"])
+        # Get answers and whether they are correct (test).
+        test_preds = []
+        test_confs_before = []
+        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], test_logits, test_tokens):
+            final_answer, confidence = self.__process_generated_output(logits, tokens)
 
-        confs_before_calibration = torch.Tensor(confs_before_calib)
-        all_preds = torch.Tensor(all_preds)
-        correct = all_preds == torch.Tensor(self.calib_dataset["answer"])
-        self.__calibrator_class = calibrator_type(self.tokeniser, self.model, False)
+            test_preds.append(final_answer)
+            test_confs_before.append(confidence)
+        test_confs_before = torch.Tensor(test_confs_before)
+        test_preds = torch.Tensor(test_preds)
+        test_correct = test_preds == torch.Tensor(self.test_dataset["answer"])
 
-        self.__calibrator_class.calibrate(
-            all_tokens=all_tokens,
-            all_logits=all_logits,
-            correct=correct,
-            batch_size=batch_size
-        )
-        confs_after_calibration = self.__calibrator_class.test(
-            test_tokens=all_tokens,
-            test_logits=all_logits,
-            correct=correct,
-        )
+        # perform calibration
+        self.__calibrator = calibrator_type(self.tokeniser, self.llm, False)
 
-        return confs_before_calibration, confs_after_calibration, correct
+        weights_path = self.target_dir / self.__calibrator.get_name()
+        if (weights_path / "calib_weights.pt").exists() and not recalibrate:
+            self.__calibrator.load(str(weights_path / "calib_weights.pt"))
+        else:
+            weights_path.mkdir(parents=True, exist_ok=True)
+            self.__calibrator.calibrate(calib_tokens=calib_tokens,
+                                        calib_logits=calib_logits,
+                                        correct=calib_correct,
+                                        batch_size=batch_size)
+            self.__calibrator.save(str(weights_path / "calib_weights.pt"))
 
-    def test_calibrator(self, calibrator_type):
-        """
-        Test the calibrator model on the test dataset.
-        :param calibrator_type:
-        :param batch_size:
-        :param recompute_logits:
-        :return:
-        """
-        self.calibrator_type_used = calibrator_type
+        # test the calibrator.
+        calib_confs_after = self.__calibrator.test(test_tokens=calib_tokens,
+                                                   test_logits=calib_logits,
+                                                   correct=calib_correct,
+                                                   batch_size=batch_size)
 
-        _, _, original_logits, original_tokens = self.get_logits_and_tokens()
-        all_tokens = []
-        all_logits = []
-        all_preds = []
-        confs_before_calib = []
-        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], original_logits, original_tokens):
-            out_dict = self.__process_generated_output(logits, tokens)
+        test_confs_after = self.__calibrator.test(test_tokens=test_tokens,
+                                                  test_logits=test_logits,
+                                                  correct=test_correct,
+                                                  batch_size=batch_size)
 
-            all_logits.append(out_dict["processed_logits"])
-            all_tokens.append(out_dict["processed_tokens"])
-            all_preds.append(out_dict["final_answer"])
-            confs_before_calib.append(out_dict["confidence"])
-
-        confs_before_calibration = torch.Tensor(confs_before_calib)
-        all_preds = torch.Tensor(all_preds)
-        correct = all_preds == torch.Tensor(self.calib_dataset["answer"])
-        #self.__calibrator = calibrator_type(self.tokeniser, self.model, False)
-
-        confs_after_calibration = self.__calibrator_class.test(
-            test_tokens=all_tokens,
-            test_logits=all_logits,
-            correct=correct,
-        )
-
-        return confs_before_calibration, confs_after_calibration, correct
+        return calib_confs_before, calib_confs_after, calib_correct, test_confs_before, test_confs_after, test_correct
 
     def get_calibrator_model(self):
-        if self.__calibrator_model is None: return None
-        return nn.Sequential(self.model, self.__calibrator_model)
+        if self.__calibrator is None: return None
+        return nn.Sequential(self.llm, self.__calibrator.calibrator_model)
+
+    def get_results_path(self):
+        if self.__calibrator is None: return None
+        return self.target_dir / self.__calibrator.get_name()
+
+    def __generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
+        all_logits = []
+        all_tokens = []
+        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
+            formatted = batch["formatted"]
+
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.llm.generate(**inputs,
+                                          max_new_tokens=max_new_tokens,
+                                          output_logits=True,
+                                          return_dict_in_generate=True,
+                                          pad_token_id=self.tokeniser.eos_token_id)
+            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+
+            # get the tokens, then remove the ones that made up the input.
+            sequences = generated.sequences.cpu()
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+
+            for logits, response in zip(model_logits, responses):
+                eos_mask = response != self.tokeniser.eos_token_id
+
+                processed_logits = logits[eos_mask]
+                processed_response = response[eos_mask]
+
+                all_logits.append(processed_logits)
+                all_tokens.append(processed_response)
+
+        return all_logits, all_tokens
 
     def __process_generated_output(self, logits, tokens):
         """
-        Compute the model's answer,
-        the probability vectors for each token outputted, and the eos mask used on the output
+        Compute the llm's answer and confidence.
         :param logits: the generation logits for one prompt.
         :param tokens: the tokens for one prompt.
         :return:
@@ -211,14 +227,14 @@ class GSMCoT:
         tokens = tokens.cpu()
         decoded_response = self.tokeniser.decode(tokens)
 
-        eos_mask = tokens != self.tokeniser.eos_token_id
+        """eos_mask = tokens != self.tokeniser.eos_token_id
 
         processed_logits = logits[eos_mask]
         processed_response = tokens[eos_mask]
-        prob_vecs_no_eos = prob_vecs[eos_mask]
+        prob_vecs_no_eos = prob_vecs[eos_mask]"""
 
-        token_confidences = torch.take_along_dim(prob_vecs_no_eos,
-                                                 processed_response.unsqueeze(1), dim=1).squeeze(1)
+        token_confidences = torch.take_along_dim(prob_vecs,
+                                                 tokens.unsqueeze(1), dim=1).squeeze(1)
         response_confidence = torch.mean(token_confidences).item()
 
         decoded_response = decoded_response.lower()
@@ -229,17 +245,7 @@ class GSMCoT:
         except:
             final_answer = -1
 
-        # Computing probabilities using the generated logits.
-        out_dict = {
-            #"explanations": explanations,
-            "processed_tokens": processed_response,
-            "processed_logits": processed_logits,
-            "confidence": response_confidence,
-            "final_answer": final_answer,
-            "eos_mask": eos_mask
-        }
-
-        return out_dict
+        return final_answer, response_confidence
 
     def __system_user_chat_format(self, x):
         questions = x['question']

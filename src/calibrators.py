@@ -12,11 +12,23 @@ from utils import TokenLogitsDataset
 
 
 class Calibrator(ABC):
+    """
+    To use a Calibrator, you must
+    1. Run the calibrate method to generate a new instance of the given calibrator, or
+       load the calibrator llm weights to generate the calibrator llm.
+    2. Run the test method to test the calibrator on some data.
+
+    You may use the save method to save the parts of the calibrator that require persistence.
+    Note that the save method may not do anything at all if there is nothing to save.
+    """
     def __init__(self, tokeniser, model, debug_responses):
         self.tokeniser = tokeniser
         self.model = model
         self.debug_responses = debug_responses
         self.calibrator_model = None
+
+    def get_name(self):
+        return self.__class__.__name__
 
     @abstractmethod
     def calibrate(self, **kwargs):
@@ -24,6 +36,14 @@ class Calibrator(ABC):
 
     @abstractmethod
     def test(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def save(self, filepath):
+        pass
+
+    @abstractmethod
+    def load(self, filepath):
         pass
 
 
@@ -43,12 +63,12 @@ class TemperatureScalingVariant(Calibrator):
                 x = torch.max(x, dim=1).values
             return x  # [confs]
 
-    def calibrate(self, all_tokens, all_logits, correct, batch_size, **kwargs):
-        calibration_dset = TokenLogitsDataset(all_logits, all_tokens, correct)
+    def calibrate(self, calib_tokens, calib_logits, correct, batch_size, **kwargs):
+        calibration_dset = TokenLogitsDataset(calib_logits, calib_tokens, correct)
         calibration_dl = DataLoader(calibration_dset,
                                     batch_size=batch_size,
                                     collate_fn=TokenLogitsDataset.collate_fn)
-        # Optimise model.
+        # Optimise llm.
         self.calibrator_model = TemperatureScalingVariant.TSModel().cuda()
         loss_fn = nn.MSELoss().cuda()
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=0.01)
@@ -73,7 +93,6 @@ class TemperatureScalingVariant(Calibrator):
                 optimiser.step()
                 total_loss_last_epoch += loss.item()
         self.calibrator_model.eval()
-        return self.calibrator_model
 
     def test(self, test_tokens, test_logits, correct, **kwargs):
         test_dset = TokenLogitsDataset(test_logits, test_tokens, correct)
@@ -89,6 +108,14 @@ class TemperatureScalingVariant(Calibrator):
                 out = torch.mean(token_confs)
                 confs_after_calibration.append(out)
         return torch.Tensor(confs_after_calibration)
+
+    def save(self, filepath):
+        torch.save(self.calibrator_model.state_dict(), filepath)
+
+    def load(self, filepath):
+        self.calibrator_model = TemperatureScalingVariant.TSModel()
+        self.calibrator_model.load_state_dict(torch.load(filepath))
+        self.calibrator_model.eval()
 
 
 class StopwordRemover(Calibrator):

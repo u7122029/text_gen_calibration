@@ -76,19 +76,15 @@ class CompiledMetrics:
         }
         torch.save(out, filename)
 
+    @classmethod
+    def load(cls, filename):
+        d = torch.load(filename)
+        return cls(d["confs_before"], d["confs_after"], d["correct"])
 
-def show_results(filepath: Path):
-    results_dict = torch.load(str(filepath))
 
-    calibrator_name = results_dict["calibrator_name"]
-    model_name = results_dict["model_name"]
-
-    calib_metrics = CompiledMetrics(results_dict["calib_confs_original"],
-                                    results_dict["calib_confs_calibrated"],
-                                    results_dict["calib_correct"])
-    test_metrics = CompiledMetrics(results_dict["test_confs_original"],
-                                   results_dict["test_confs_calibrated"],
-                                   results_dict["test_correct"])
+def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_name: str):
+    calib_metrics = CompiledMetrics.load(calib_path)
+    test_metrics = CompiledMetrics.load(test_path)
 
     print(f"Model Name: {model_name}")
     print(f"Calibrator Name: {calibrator_name}")
@@ -99,6 +95,7 @@ def show_results(filepath: Path):
     print("-" * terminal_size)
     print("Test Set Results:")
     test_metrics.display()
+
 
 # HuggingFaceH4/zephyr-7b-beta
 # mistralai/Mistral-7B-Instruct-v0.2
@@ -113,7 +110,7 @@ def show_results(filepath: Path):
 # NousResearch/Hermes-2-Pro-Mistral-7B
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
-         calibrator_type="TemperatureScalingVariant",
+         calibrator_name="TemperatureScalingVariant",
          model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          batch_size=4,
@@ -124,47 +121,42 @@ def main(prompt_type: str="CoT",
     #if prompt_type not in prompt_dict:
     #    raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
-    if calibrator_type not in calibrator_dict:
-        raise ValueError(f"calibrator_type '{calibrator_type}' not in {calibrator_dict.keys()}")
+    if calibrator_name not in calibrator_dict:
+        raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
 
     # Get token.
     with open("token.txt") as f:
         token = f.read().strip()
         ic(token)
 
-    p = Path("results") / dataset_name / calibrator_type / model_name / prompt_type
-    p.parent.mkdir(parents=True, exist_ok=True)
-    file_path = Path(f"{str(p)}.pt")
-    if file_path.exists() and not retrain_calibrator:
-        show_results(file_path)
-        quit()
-
     dataset = get_dataset(dataset_name)
+
+    # TODO: Generalise to any input formatter
     input_formatter = GSMCoT(model_name, dataset, token, calib_dset_size, test_dset_size)
-    calib_confs_original, calib_confs_calibrated, calib_correct = input_formatter.train_calibrator(
-        calibrator_dict[calibrator_type],
-        batch_size=batch_size,
-        recompute_logits=recompute_logits
-    )
-    test_confs_original, test_confs_calibrated, test_correct = input_formatter.test_calibrator(
-        calibrator_dict[calibrator_type]
+
+    p = input_formatter.target_dir / calibrator_name
+    calib_path = Path(str(p / "calib_results.pt"))
+    test_path = Path(str(p / "test_results.pt"))
+    if calib_path.exists() and test_path.exists() and not retrain_calibrator:
+        show_results(calib_path, test_path, model_name, calibrator_name)
+        return
+
+    (calib_confs_before,
+     calib_confs_after,
+     calib_correct,
+     test_confs_before,
+     test_confs_after,
+     test_correct) = input_formatter.run_calibration_pipeline(
+        calibrator_dict[calibrator_name],
+        batch_size
     )
 
-    compiled = {
-        "calib_confs_original": calib_confs_original,
-        "calib_confs_calibrated": calib_confs_calibrated,
-        "calib_correct": calib_correct,
-        "test_confs_original": test_confs_original,
-        "test_confs_calibrated": test_confs_calibrated,
-        "test_correct": test_correct,
-        "model_name": model_name,
-        "calibrator_name": calibrator_type,
-        "prompt_type": prompt_type,
-        #"calibrator_params": None if calibrator is None else calibrator.state_dict()
-    }
+    calib_set_results = CompiledMetrics(calib_confs_before, calib_confs_after, calib_correct)
+    test_set_results = CompiledMetrics(test_confs_before, test_confs_after, test_correct)
 
-    torch.save(compiled, f"{str(p)}.pt")
-    show_results(file_path)
+    calib_set_results.save(str(p / "calib_results.pt"))
+    test_set_results.save(str(p / "test_results.pt"))
+    show_results(calib_path, test_path, model_name, calibrator_name)
 
 
 if __name__ == "__main__":
