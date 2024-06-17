@@ -98,7 +98,7 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 
 
 # HuggingFaceH4/zephyr-7b-beta
-# mistralai/Mistral-7B-Instruct-v0.2
+# mistralai/Mistral-7B-Instruct-v0.3
 # zhengr/MixTAO-7Bx2-MoE-v8.1 cannot use
 # google/gemma-1.1-7b-it
 # google/gemma-1.1-2b-it
@@ -111,7 +111,7 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_name="TemperatureScalingVariant",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="mistralai/Mistral-7B-Instruct-v0.3",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
