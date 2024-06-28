@@ -111,7 +111,7 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_name="TemperatureScalingVariant",
-         model_name="mistralai/Mistral-7B-Instruct-v0.3",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
