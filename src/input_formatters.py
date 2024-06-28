@@ -28,7 +28,9 @@ class CoTFormat(Enum):
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
             "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
             "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
-            "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT
+            "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
+            "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
+            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT
         }
         return name_dict[name]
 
