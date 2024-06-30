@@ -114,6 +114,33 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         return torch.Tensor(confs_after_calibration)
 
 
+class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
+    """
+    Uses a model that contains as many temperature parameters as the vocabulary size.
+    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
+    Each logit vector is a probability distribution. So in reality, any token can be picked.
+    """
+    class LTModel(nn.Module):
+        def __init__(self, vocab_size):
+            super().__init__()
+            self.vocab_size = vocab_size
+            self.linear_weight = nn.Parameter(torch.ones(1))
+            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
+
+        def forward(self, x, tokens=None):
+            x = x / self.linear_weight + self.linear_bias # elementwise multiplication.
+            x = torch.softmax(x, dim=1)
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
+            return x  # [confs]
+
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, debug_responses)
+        self.calibrator_model = TemperatureWithLinearity.LTModel(tokeniser.vocab_size)
+
+
 class LinearScaler(LogitTokenToConfidenceCalibrator):
     """
     Uses a model that contains as many temperature parameters as the vocabulary size.
@@ -124,8 +151,8 @@ class LinearScaler(LogitTokenToConfidenceCalibrator):
         def __init__(self, vocab_size):
             super().__init__()
             self.vocab_size = vocab_size
-            self.linear_weights = nn.Parameter(torch.rand(self.vocab_size))
-            self.linear_bias = nn.Parameter(torch.rand(self.vocab_size))
+            self.linear_weights = nn.Parameter(torch.ones(self.vocab_size))
+            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
 
         def forward(self, x, tokens=None):
             x = self.linear_weights * x + self.linear_bias # elementwise multiplication.
@@ -218,7 +245,7 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
             if len(self.layers) > 0:
                 t = self.layers[-1](t)
 
-            t = torch.clip(torch.abs(t), 1e-8, 1e8)
+            t = nn.functional.softplus(t)
 
             x = inp / t
             x = torch.softmax(x, dim=1)
@@ -233,6 +260,12 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser, model, debug_responses)
         self.calibrator_model = PTSVariant.PTSModel(tokeniser.vocab_size)
+
+
+class LinearTemperatureScaling(PTSVariant):
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, debug_responses)
+        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size, nlayers=1, top_k_logits=tokeniser.vocab_size)
 
 
 class StopwordRemover(Calibrator):
@@ -615,3 +648,10 @@ def dset_class_predicate(x):
 
 classes = inspect.getmembers(sys.modules[__name__], dset_class_predicate)
 calibrator_dict: dict[str, Calibrator.__class__] = {x: y for x, y in classes}
+
+if __name__ == "__main__":
+    class FakeTokeniser:
+        def __init__(self):
+            self.vocab_size = 100
+    x = TemperatureWithLinearity(FakeTokeniser(), None)
+    print(x.calibrator_model.state_dict())
