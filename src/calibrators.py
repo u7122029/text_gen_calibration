@@ -10,6 +10,7 @@ import numpy as np
 from torch import nn, optim
 from utils import TokenLogitsDataset
 import warnings
+from torch.nn.functional import relu
 
 
 class Calibrator(ABC):
@@ -160,59 +161,78 @@ class TemperatureScalingVariant(LogitTokenToConfidenceCalibrator):
         super().__init__(tokeniser, model, debug_responses)
         self.calibrator_model = TemperatureScalingVariant.TSModel()
 
-    """def calibrate(self, calib_tokens, calib_logits, correct, batch_size, **kwargs):
-        calibration_dset = TokenLogitsDataset(calib_logits, calib_tokens, correct)
-        calibration_dl = DataLoader(calibration_dset,
-                                    batch_size=batch_size,
-                                    collate_fn=TokenLogitsDataset.collate_fn)
-        # Optimise llm.
-        self.calibrator_model = TemperatureScalingVariant.TSModel().cuda()
-        loss_fn = nn.MSELoss().cuda()
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=0.01)
 
-        print("Training Calibrator")
-        self.calibrator_model.train()
-        total_loss_last_epoch = None
-        epochs = 20
-        for epoch_idx in range(epochs):
-            pbar = tqdm(calibration_dl,
-                        desc=f"Epoch {epoch_idx+1}/{epochs}",
-                        postfix={"total_loss_last_epoch": total_loss_last_epoch})
-            total_loss_last_epoch = 0
-            for logits_batch, _, is_correct_batch in pbar:
-                logits_batch = logits_batch.to("cuda")
-                is_correct_batch = is_correct_batch.to("cuda")
+class PTSVariant(LogitTokenToConfidenceCalibrator):
+    class PTSModel(nn.Module):
+        def __init__(
+                self,
+                length_logits,
+                nlayers=2,
+                n_nodes=50,
+                top_k_logits=100
+        ):
+            """
+            Args:
+                length_logits (int): length of logits vector
+                epochs (int): number of epochs for PTS model tuning
+                lr (float): learning rate of PTS model
+                weight_decay (float): lambda for weight decay in loss function
+                batch_size (int): batch_size for tuning
+                n_layers (int): number of layers of PTS model
+                n_nodes (int): number of nodes of each hidden layer
+                top_k_logits (int): top k logits used for tuning
+            """
+            super().__init__()
+            assert nlayers >= 0
 
-                optimiser.zero_grad()
-                out_token_confs = self.calibrator_model(logits_batch)
-                loss = loss_fn(out_token_confs, is_correct_batch)
-                loss.backward()
-                optimiser.step()
-                total_loss_last_epoch += loss.item()
-        self.calibrator_model.eval()
+            self.nlayers = nlayers
+            self.n_nodes = n_nodes
+            self.length_logits = length_logits
+            self.top_k_logits = top_k_logits
 
-    def test(self, test_tokens, test_logits, correct, **kwargs):
-        test_dset = TokenLogitsDataset(test_logits, test_tokens, correct)
+            # Build model
+            self.layers = []
+            if self.nlayers == 0:
+                self.layers.append(nn.Linear(in_features=self.top_k_logits, out_features=1))
+            else:
+                self.layers.append(nn.Linear(in_features=self.top_k_logits, out_features=self.n_nodes))
 
-        # Get results.
-        print("Getting Results")
-        confs_after_calibration = []
-        with torch.no_grad():
-            for logits, tokens, _ in test_dset:
-                logits = logits.cuda()
-                tokens = tokens.cuda()
-                token_confs = self.calibrator_model(logits, tokens).cpu()
-                out = torch.mean(token_confs)
-                confs_after_calibration.append(out)
-        return torch.Tensor(confs_after_calibration)
+            for _ in range(self.nlayers - 1):
+                self.layers.append(nn.Linear(in_features=self.n_nodes, out_features=self.n_nodes))
 
-    def save(self, filepath):
-        torch.save(self.calibrator_model.state_dict(), filepath)
+            if self.nlayers > 0:
+                self.layers.append(nn.Linear(in_features=self.n_nodes, out_features=1))
 
-    def load(self, filepath):
-        self.calibrator_model = TemperatureScalingVariant.TSModel()
-        self.calibrator_model.load_state_dict(torch.load(filepath))
-        self.calibrator_model.eval()"""
+            self.layers = nn.ModuleList(self.layers)
+
+        def forward(self, inp, tokens=None):
+            t = torch.topk(inp, self.top_k_logits, dim=1).values
+            t = self.layers[0](t)
+            if len(self.layers) > 0:
+                t = relu(t)
+
+            for layer_idx in range(1, len(self.layers) - 1):
+                t = self.layers[layer_idx](t)
+                t = relu(t)
+
+            if len(self.layers) > 0:
+                t = self.layers[-1](t)
+
+            t = torch.clip(torch.abs(t), 1e-8, 1e8)
+
+            x = inp / t
+            x = torch.softmax(x, dim=1)
+
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
+
+            return x
+
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, debug_responses)
+        self.calibrator_model = PTSVariant.PTSModel(tokeniser.vocab_size)
 
 
 class StopwordRemover(Calibrator):
@@ -480,7 +500,7 @@ class GSDCalibrator(Calibrator):
         return all_answers, all_confs
 
 
-class WATCCalibrator(Calibrator, ABC):
+class WATCCalibrator(Calibrator):
     def __init__(self, tokeniser, model, calibrator_model, debug_responses):
         super().__init__(tokeniser, model, debug_responses)
         self.calibrator_model = calibrator_model

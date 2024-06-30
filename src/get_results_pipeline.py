@@ -110,8 +110,8 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # NousResearch/Hermes-2-Pro-Mistral-7B
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
-         calibrator_name="LinearScaler",
-         model_name="google/gemma-2-9b-it",
+         calibrator_name="PTSVariant",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
