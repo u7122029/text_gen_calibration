@@ -135,13 +135,13 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
          calibrator_name="PTSVariant",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="HuggingFaceH4/zephyr-7b-beta",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
          test_dset_size=300,
          recompute_logits=False,
-         retrain_calibrator=False):
+         retrain_calibrator=True):
     #if prompt_type not in prompt_dict:
     #    raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
 
@@ -172,7 +172,8 @@ def main(prompt_type: str="CoT",
      test_confs_after,
      test_correct) = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
-        batch_size
+        batch_size,
+        recalibrate=retrain_calibrator
     )
 
     calib_set_results = CompiledMetrics(calib_confs_before, calib_confs_after, calib_correct)
