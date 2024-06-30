@@ -1,4 +1,5 @@
 from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
+from torchmetrics import Metric
 from torcheval.metrics.functional import binary_auprc
 
 import torch
@@ -15,6 +16,25 @@ import os
 torch.manual_seed(0)
 
 
+class BrierScore(Metric):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_state("preds", default=torch.Tensor([]), dist_reduce_fx="sum")
+        self.add_state("targets", default=torch.Tensor([]), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, targets: torch.Tensor) -> None:
+        if preds.shape != targets.shape:
+            raise ValueError("preds and target must have the same shape")
+
+        self.preds = torch.cat([self.preds, preds])
+        self.targets = torch.cat([self.targets, targets])
+        self.total += targets.numel()
+
+    def compute(self) -> torch.Tensor:
+        return torch.sum((self.preds - self.targets) ** 2) / self.total
+
+
 class CompiledMetrics:
     def __init__(self, confs_before, confs_after, correct, n_bins=15):
         assert len(confs_before) == len(confs_after), "confidences before and after are not the same length."
@@ -26,6 +46,7 @@ class CompiledMetrics:
 
         self.__ece_metric = BinaryCalibrationError(n_bins=n_bins)
         self.__auroc_metric = BinaryAUROC()
+        self.__brier_metric = BrierScore()
 
         self.ece_before = self.__ece_metric(self.confs_before, self.correct).item()
         self.ece_after = self.__ece_metric(self.confs_after, self.correct).item()
@@ -35,6 +56,9 @@ class CompiledMetrics:
 
         self.auprc_before = binary_auprc(self.confs_before, self.correct).item()
         self.auprc_after = binary_auprc(self.confs_after, self.correct).item()
+
+        self.brier_before = self.__brier_metric(self.confs_before, self.correct).item()
+        self.brier_after = self.__brier_metric(self.confs_after, self.correct).item()
 
         self.accuracy = torch.mean(self.correct.float()).item()
 
@@ -55,9 +79,9 @@ class CompiledMetrics:
         print(f"Accuracy: {self.accuracy}")
         print("\nBasic Metrics:")
         table = [
-            ["Category",          "ECE",            "AUROC",           "AUPRC"],
-            ["Before Calibration", self.ece_before, self.auroc_before, self.auprc_before],
-            ["After Calibration",  self.ece_after, self.auroc_after, self.auprc_after]
+            ["Category",           "ECE",           "Brier",           "AUROC",           "AUPRC"],
+            ["Before Calibration", self.ece_before, self.brier_before, self.auroc_before, self.auprc_before],
+            ["After Calibration",  self.ece_after,  self.brier_after,  self.auroc_after,  self.auprc_after]
         ]
         print(tabulate(table[1:], headers=table[0], tablefmt="github"))
         print("\nChanges in Confidences:")
