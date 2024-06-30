@@ -168,8 +168,8 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
                 self,
                 length_logits,
                 nlayers=2,
-                n_nodes=50,
-                top_k_logits=100
+                n_nodes=75,
+                top_k_logits=150
         ):
             """
             Args:
@@ -206,7 +206,7 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
             self.layers = nn.ModuleList(self.layers)
 
         def forward(self, inp, tokens=None):
-            t = torch.topk(inp, self.top_k_logits, dim=1).values
+            t = torch.sort(torch.topk(inp, self.top_k_logits, dim=1).values, dim=1, descending=True)
             t = self.layers[0](t)
             if len(self.layers) > 0:
                 t = relu(t)
