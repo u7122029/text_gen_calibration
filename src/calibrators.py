@@ -8,7 +8,7 @@ from nltk import corpus
 import pandas as pd
 import numpy as np
 from torch import nn, optim
-from utils import TokenLogitsDataset
+from utils import TokenLogitsDataset, AbsModule, DEVICE, TLTokenFrequencyDataset
 import warnings
 from torch.nn.functional import relu
 
@@ -55,7 +55,174 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         self.calibrator_model = calibrator_model
         self.tuned = False
 
-    def calibrate(self, calib_tokens, calib_logits, correct, batch_size, **kwargs):
+    def get_dataset(self, tokens, logits, correct, **kwargs):
+        return TokenLogitsDataset(logits, tokens, correct)
+
+    def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
+        postfix["total_loss_last_epoch"] = 0
+        for logits_batch, _, is_correct_batch in pbar:
+            logits_batch = logits_batch.to(DEVICE)
+            is_correct_batch = is_correct_batch.to(DEVICE)
+
+            optimiser.zero_grad()
+            out_token_confs = self.calibrator_model(logits_batch)
+            loss = loss_fn(out_token_confs, is_correct_batch)
+            loss.backward()
+            optimiser.step()
+            postfix["total_loss_last_epoch"] += loss.item()
+
+    def calibrate(self,
+                  calib_tokens,
+                  calib_logits,
+                  correct,
+                  batch_size,
+                  epochs=30,
+                  lr=0.01,
+                  **kwargs):
+        """
+        Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
+        this function if you want to use a different dataset.
+        :param calib_tokens:
+        :param calib_logits:
+        :param correct:
+        :param batch_size:
+        :param epochs:
+        :param lr:
+        :param kwargs:
+        :return:
+        """
+        # Assume calib_logits has shape [dset_length, response_length, vocab_size]
+        calibration_dset = self.get_dataset(calib_tokens, calib_logits, correct)
+        calibration_dl = DataLoader(calibration_dset,
+                                    batch_size=batch_size,
+                                    collate_fn=calibration_dset.__class__.collate_fn,
+                                    shuffle=True)
+        # Optimise llm.
+        self.calibrator_model = self.calibrator_model.to(DEVICE)
+        loss_fn = nn.MSELoss().to(DEVICE) # calibration aware loss with l2 norm squared.
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
+
+        print("Training Calibrator")
+        self.calibrator_model.train()
+
+        postfix = {}
+        for epoch_idx in range(epochs):
+            pbar = tqdm(calibration_dl,
+                        desc=f"Epoch {epoch_idx + 1}/{epochs}",
+                        postfix=postfix)
+
+            self.calibration_step(pbar, postfix, optimiser, loss_fn)
+        self.calibrator_model.eval()
+        self.tuned = True
+
+    def load(self, filepath):
+        self.calibrator_model.load_state_dict(torch.load(filepath))
+        self.calibrator_model.eval()
+
+    def save(self, filepath):
+        torch.save(self.calibrator_model.state_dict(), filepath)
+
+    def test_loop(self, test_dset):
+        confs_after_calibration = []
+        for logits, tokens, _ in tqdm(test_dset):
+            logits = logits.to(DEVICE)
+            tokens = tokens.to(DEVICE)
+            token_confs = self.calibrator_model(logits, tokens).cpu()
+            out = torch.mean(token_confs)
+            confs_after_calibration.append(out)
+        return confs_after_calibration
+
+    def test(self, test_tokens, test_logits, correct, **kwargs):
+        print("In test function")
+        print(test_tokens[0].shape)
+        print(test_logits[0].shape)
+        if not self.tuned:
+            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
+        print("getting dataset")
+        test_dset = self.get_dataset(test_tokens, test_logits, correct)
+
+        self.calibrator_model = self.calibrator_model.to(DEVICE)
+        with torch.no_grad():
+            confs_after_calibration = self.test_loop(test_dset)
+        return torch.Tensor(confs_after_calibration)
+
+
+class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
+    """
+    Uses a model that contains as many temperature parameters as the vocabulary size.
+    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
+    Each logit vector is a probability distribution. So in reality, any token can be picked.
+    """
+    class LTModel(nn.Module):
+        def __init__(self, vocab_size):
+            super().__init__()
+            self.vocab_size = vocab_size
+            self.linear_weight = nn.Parameter(torch.ones(1))
+            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
+
+        def forward(self, x, tokens=None):
+            x = x / self.linear_weight + self.linear_bias # elementwise multiplication.
+            x = torch.softmax(x, dim=1)
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
+            return x  # [confs]
+
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser,
+                         model,
+                         TemperatureWithLinearity.LTModel(tokeniser.vocab_size),
+                         debug_responses)
+
+
+class LinearScaler(LogitTokenToConfidenceCalibrator):
+    """
+    Uses a model that contains as many temperature parameters as the vocabulary size.
+    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
+    Each logit vector is a probability distribution. So in reality, any token can be picked.
+    """
+    class LinearModel(nn.Module):
+        def __init__(self, vocab_size):
+            super().__init__()
+            self.vocab_size = vocab_size
+            self.linear_weights = nn.Parameter(torch.ones(self.vocab_size))
+            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
+
+        def forward(self, x, tokens=None):
+            x = self.linear_weights * x + self.linear_bias # elementwise multiplication.
+            x = torch.softmax(x, dim=1)
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
+            return x  # [confs]
+
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, LinearScaler.LinearModel(tokeniser.vocab_size), debug_responses)
+
+
+class TemperatureScalingVariant(LogitTokenToConfidenceCalibrator):
+    class TSModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+
+        def forward(self, x, tokens=None):
+            # x.shape: [logit_vec, vocab size]
+            x = x / self.temperature
+            x = torch.softmax(x, dim=1)
+            if tokens is not None:
+                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+            else:
+                x = torch.max(x, dim=1).values
+            return x  # [confs]
+
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, TemperatureScalingVariant.TSModel(), debug_responses)
+
+
+    """def calibrate(self, calib_tokens, calib_logits, correct, batch_size, **kwargs):
         # Assume calib_logits has shape [dset_length, response_length, vocab_size]
         calibration_dset = TokenLogitsDataset(calib_logits, calib_tokens, correct)
         calibration_dl = DataLoader(calibration_dset,
@@ -86,107 +253,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
                 optimiser.step()
                 total_loss_last_epoch += loss.item()
         self.calibrator_model.eval()
-        self.tuned = True
-
-    def load(self, filepath):
-        self.calibrator_model = TemperatureScalingVariant.TSModel()
-        self.calibrator_model.load_state_dict(torch.load(filepath))
-        self.calibrator_model.eval()
-
-    def save(self, filepath):
-        torch.save(self.calibrator_model.state_dict(), filepath)
-
-    def test(self, test_tokens, test_logits, correct, **kwargs):
-        if not self.tuned:
-            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-        test_dset = TokenLogitsDataset(test_logits, test_tokens, correct)
-
-        # Get results.
-        print("Getting Results")
-        confs_after_calibration = []
-        with torch.no_grad():
-            for logits, tokens, _ in test_dset:
-                logits = logits.cuda()
-                tokens = tokens.cuda()
-                token_confs = self.calibrator_model(logits, tokens).cpu()
-                out = torch.mean(token_confs)
-                confs_after_calibration.append(out)
-        return torch.Tensor(confs_after_calibration)
-
-
-class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
-    """
-    Uses a model that contains as many temperature parameters as the vocabulary size.
-    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
-    Each logit vector is a probability distribution. So in reality, any token can be picked.
-    """
-    class LTModel(nn.Module):
-        def __init__(self, vocab_size):
-            super().__init__()
-            self.vocab_size = vocab_size
-            self.linear_weight = nn.Parameter(torch.ones(1))
-            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
-
-        def forward(self, x, tokens=None):
-            x = x / self.linear_weight + self.linear_bias # elementwise multiplication.
-            x = torch.softmax(x, dim=1)
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-            return x  # [confs]
-
-    def __init__(self, tokeniser, model, debug_responses=False):
-        super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = TemperatureWithLinearity.LTModel(tokeniser.vocab_size)
-
-
-class LinearScaler(LogitTokenToConfidenceCalibrator):
-    """
-    Uses a model that contains as many temperature parameters as the vocabulary size.
-    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
-    Each logit vector is a probability distribution. So in reality, any token can be picked.
-    """
-    class LinearModel(nn.Module):
-        def __init__(self, vocab_size):
-            super().__init__()
-            self.vocab_size = vocab_size
-            self.linear_weights = nn.Parameter(torch.ones(self.vocab_size))
-            self.linear_bias = nn.Parameter(torch.zeros(self.vocab_size))
-
-        def forward(self, x, tokens=None):
-            x = self.linear_weights * x + self.linear_bias # elementwise multiplication.
-            x = torch.softmax(x, dim=1)
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-            return x  # [confs]
-
-    def __init__(self, tokeniser, model, debug_responses=False):
-        super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = LinearScaler.LinearModel(tokeniser.vocab_size)
-
-
-class TemperatureScalingVariant(LogitTokenToConfidenceCalibrator):
-    class TSModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
-
-        def forward(self, x, tokens=None):
-            # x.shape: [logit_vec, vocab size]
-            x = x / self.temperature
-            x = torch.softmax(x, dim=1)
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-            return x  # [confs]
-
-    def __init__(self, tokeniser, model, debug_responses=False):
-        super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = TemperatureScalingVariant.TSModel()
+        self.tuned = True"""
 
 
 class PTSVariant(LogitTokenToConfidenceCalibrator):
@@ -194,7 +261,7 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
         def __init__(
                 self,
                 length_logits,
-                nlayers=2,
+                nlayers=1,
                 n_nodes=75,
                 top_k_logits=150
         ):
@@ -223,29 +290,21 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
                 self.layers.append(nn.Linear(in_features=self.top_k_logits, out_features=1))
             else:
                 self.layers.append(nn.Linear(in_features=self.top_k_logits, out_features=self.n_nodes))
+                self.layers.append(nn.ReLU())
 
             for _ in range(self.nlayers - 1):
                 self.layers.append(nn.Linear(in_features=self.n_nodes, out_features=self.n_nodes))
+                self.layers.append(nn.ReLU())
 
             if self.nlayers > 0:
                 self.layers.append(nn.Linear(in_features=self.n_nodes, out_features=1))
 
-            self.layers = nn.ModuleList(self.layers)
+            self.layers.append(AbsModule())
+            self.layers = nn.Sequential(*self.layers)
 
         def forward(self, inp, tokens=None):
             t, _ = torch.sort(torch.topk(inp, self.top_k_logits, dim=1).values, dim=1, descending=True)
-            t = self.layers[0](t)
-            if len(self.layers) > 0:
-                t = relu(t)
-
-            for layer_idx in range(1, len(self.layers) - 1):
-                t = self.layers[layer_idx](t)
-                t = relu(t)
-
-            if len(self.layers) > 0:
-                t = self.layers[-1](t)
-
-            t = nn.functional.softplus(t)
+            t = torch.clip(self.layers(t), min=1e-8, max=1e+8)
 
             x = inp / t
             x = torch.softmax(x, dim=1)
@@ -258,14 +317,26 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
             return x
 
     def __init__(self, tokeniser, model, debug_responses=False):
-        super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = PTSVariant.PTSModel(tokeniser.vocab_size)
+        super().__init__(tokeniser,
+                         model,
+                         PTSVariant.PTSModel(tokeniser.vocab_size),
+                         debug_responses)
 
 
 class LinearTemperatureScaling(PTSVariant):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size, nlayers=1, top_k_logits=tokeniser.vocab_size)
+        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size,
+                                                                  nlayers=0,
+                                                                  top_k_logits=tokeniser.vocab_size)
+
+
+class PTSBase(PTSVariant):
+    def __init__(self, tokeniser, model, debug_responses=False):
+        super().__init__(tokeniser, model, debug_responses)
+        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size,
+                                                                  nlayers=1,
+                                                                  top_k_logits=tokeniser.vocab_size)
 
 
 class StopwordRemover(Calibrator):
@@ -352,11 +423,78 @@ class StopwordRemover(Calibrator):
         return all_preds, confs_before_calib, confs_after_calib, None
 
 
+class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
+    class TFIDFModel(nn.Module):
+        """
+        Takes a batch of logits with the respective tf-idf scores, computes the temperature, and applies this to the logits.
+        """
+        def __init__(self, vocab_size):
+            super().__init__()
+            self.vocab_size = vocab_size
+            self.intermediate_nodes = vocab_size // 200
+            self.logits_linear = nn.Linear(in_features=vocab_size, out_features=self.intermediate_nodes, bias=False)
+            self.rtf_linear = nn.Linear(in_features=vocab_size, out_features=self.intermediate_nodes, bias=False)
+            self.combine_linear = nn.Linear(in_features=self.intermediate_nodes, out_features=1)
+
+        def forward(self, logits, rtf_scores, tokens=None):
+            p1s = [self.logits_linear(k) for k in logits]
+            p2s = self.rtf_linear(rtf_scores)
+            ts = [torch.clip(self.combine_linear(relu(p1 + p2)), min=1e-8, max=1e+8) for p1, p2 in zip(p1s, p2s)]
+
+            x = [torch.softmax(logits_group / t, dim=1) for logits_group, t in zip(logits, ts)]
+
+            if tokens is not None:
+                x = torch.cat([torch.take_along_dim(k, token_seq.unsqueeze(1), dim=1).squeeze(1) for k, token_seq in zip(x, tokens)])
+            else:
+                x = torch.cat(x, dim=0)
+                x = torch.max(x, dim=1).values
+
+            assert x.dim() == 1
+            return x
+
+    def __init__(self, tokeniser, model, debug_responses):
+        super().__init__(tokeniser, model, TokenFrequencyPTSv1.TFIDFModel(tokeniser.vocab_size), debug_responses)
+
+    def get_dataset(self, calib_tokens, calib_logits, correct, **kwargs):
+        print("Here")
+        return TLTokenFrequencyDataset(calib_logits, calib_tokens, correct)
+
+    def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
+        postfix["total_loss_last_epoch"] = 0
+        for logits_batch, _, is_correct_batch, rtf_batch in pbar:
+            logits_batch = [x.to(DEVICE) for x in logits_batch]
+            is_correct_batch = is_correct_batch.to(DEVICE)
+            rtf_batch = rtf_batch.to(DEVICE)
+
+            optimiser.zero_grad()
+            out_token_confs = self.calibrator_model(logits_batch, rtf_batch)
+            loss = loss_fn(out_token_confs, is_correct_batch)
+            loss.backward()
+            optimiser.step()
+            postfix["total_loss_last_epoch"] += loss.item()
+
+    def test_loop(self, test_dset):
+        print("in this test loop")
+        confs_after_calibration = []
+        for logits, tokens, _, rtf_scores in tqdm(test_dset):
+            logits = [logits.to(DEVICE)]
+            tokens = [tokens.to(DEVICE)]
+            rtf_scores = rtf_scores.to(DEVICE)
+
+            token_confs = self.calibrator_model(logits, rtf_scores, tokens).cpu()
+            out = torch.mean(token_confs)
+            confs_after_calibration.append(out)
+        return confs_after_calibration
+
+
 class TopKTokenPoolingV1(Calibrator):
     def test(self, **kwargs):
         pass
 
     class TokenPoolingCalibrator:
+        """
+        Filter class
+        """
         def __init__(self, tokens_to_filter: torch.Tensor, eos_token: int, temp_tokeniser=None):
             self.tokens_to_filter = torch.ones(len(tokens_to_filter) + 1).int()
             self.tokens_to_filter[:-1] = tokens_to_filter
@@ -383,6 +521,9 @@ class TopKTokenPoolingV1(Calibrator):
         super().__init__(tokeniser, model, debug_responses)
 
     def calibrate(self, dataloader: DataLoader, formatter_cls, k=20, **kwargs):
+        """
+        Helps choose which tokens to filter.
+        """
         incorrect_pooled = {}  # token_idx -> list of confidences
         incorrect_token_responses = {}  # token_idx -> list of response numbers
 
@@ -653,5 +794,6 @@ if __name__ == "__main__":
     class FakeTokeniser:
         def __init__(self):
             self.vocab_size = 100
-    x = TemperatureWithLinearity(FakeTokeniser(), None)
+    x = PTSVariant(FakeTokeniser(), None)
     print(x.calibrator_model.state_dict())
+    print(x.calibrator_model)

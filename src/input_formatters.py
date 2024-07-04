@@ -100,12 +100,15 @@ class GSMCoT:
         :param recompute: whether to recompute the logits for both sets.
         :return:
         """
-
+        print("Getting Logits and Tokens")
         filepath = self.target_dir / f"logits.pt"
         if filepath.exists() and not recompute:
+            print(f"Found existing logits and tokens in {filepath}")
             d = torch.load(filepath)
+            print("Successfully loaded logits.")
             return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]
 
+        print("No existing logits and tokens found. Will now generate them.")
         self.load_llm()
         dl_calib = DataLoader(self.calib_dataset, batch_size=batch_size)
         dl_test = DataLoader(self.test_dataset, batch_size=batch_size)
@@ -126,12 +129,14 @@ class GSMCoT:
                                  calibrator_type: Type[Calibrator],
                                  batch_size=1,
                                  recompute_logits=False,
-                                 recalibrate=False):
+                                 recalibrate=False,
+                                 retest=False):
         # Try to get logits and tokens for both calib and test
         calib_logits, calib_tokens, test_logits, test_tokens = self.get_logits_and_tokens(batch_size,
                                                                                           recompute=recompute_logits)
 
         # Get answers and whether they are correct (calib).
+        print("Getting answers from calibration set.")
         calib_preds = []
         calib_confs_before = []
         for formatted, logits, tokens in zip(self.calib_dataset["formatted"], calib_logits, calib_tokens):
@@ -144,6 +149,7 @@ class GSMCoT:
         calib_correct = calib_preds == torch.Tensor(self.calib_dataset["answer"])
 
         # Get answers and whether they are correct (test).
+        print("Getting answers from test set.")
         test_preds = []
         test_confs_before = []
         for formatted, logits, tokens in zip(self.calib_dataset["formatted"], test_logits, test_tokens):
@@ -156,12 +162,14 @@ class GSMCoT:
         test_correct = test_preds == torch.Tensor(self.test_dataset["answer"])
 
         # perform calibration
+        print("Initialising calibrator")
         self.__calibrator = calibrator_type(self.tokeniser, self.llm, False)
 
         weights_path = self.target_dir / self.__calibrator.get_name()
         if (weights_path / "calib_weights.pt").exists() and not recalibrate:
             self.__calibrator.load(str(weights_path / "calib_weights.pt"))
         else:
+            print("Performing calibration of model.")
             weights_path.mkdir(parents=True, exist_ok=True)
             self.__calibrator.calibrate(calib_tokens=calib_tokens,
                                         calib_logits=calib_logits,
@@ -170,11 +178,13 @@ class GSMCoT:
             self.__calibrator.save(str(weights_path / "calib_weights.pt"))
 
         # test the calibrator.
+        print("Testing Calibrator on Calibration Dataset")
         calib_confs_after = self.__calibrator.test(test_tokens=calib_tokens,
                                                    test_logits=calib_logits,
                                                    correct=calib_correct,
                                                    batch_size=batch_size)
 
+        print("Testing Calibrator on Test Dataset")
         test_confs_after = self.__calibrator.test(test_tokens=test_tokens,
                                                   test_logits=test_logits,
                                                   correct=test_correct,
@@ -191,6 +201,7 @@ class GSMCoT:
         return self.target_dir / self.__calibrator.get_name()
 
     def __generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
+        
         all_logits = []
         all_tokens = []
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):

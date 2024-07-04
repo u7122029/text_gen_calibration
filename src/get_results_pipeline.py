@@ -134,16 +134,15 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # NousResearch/Hermes-2-Pro-Mistral-7B
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
-         calibrator_name="PTSVariant",
-         model_name="HuggingFaceH4/zephyr-7b-beta",
+         calibrator_name="TemperatureScalingVariant",
+         model_name="google/gemma-1.1-2b-it",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
          test_dset_size=300,
          recompute_logits=False,
-         retrain_calibrator=True):
-    #if prompt_type not in prompt_dict:
-    #    raise ValueError(f"prompt_type '{prompt_type}' not in {prompt_dict.keys()}")
+         retrain_calibrator=False,
+         retest_calibrator=True):
 
     if calibrator_name not in calibrator_dict:
         raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
@@ -173,7 +172,8 @@ def main(prompt_type: str="CoT",
      test_correct) = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
         batch_size,
-        recalibrate=retrain_calibrator
+        recalibrate=retrain_calibrator,
+        retest=retest_calibrator
     )
 
     calib_set_results = CompiledMetrics(calib_confs_before, calib_confs_after, calib_correct)
