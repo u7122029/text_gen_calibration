@@ -172,7 +172,7 @@ class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser,
                          model,
-                         TemperatureWithLinearity.LTModel(tokeniser.vocab_size),
+                         TemperatureWithLinearity.LTModel(len(tokeniser)),
                          debug_responses)
 
 
@@ -199,7 +199,7 @@ class LinearScaler(LogitTokenToConfidenceCalibrator):
             return x  # [confs]
 
     def __init__(self, tokeniser, model, debug_responses=False):
-        super().__init__(tokeniser, model, LinearScaler.LinearModel(tokeniser.vocab_size), debug_responses)
+        super().__init__(tokeniser, model, LinearScaler.LinearModel(len(tokeniser)), debug_responses)
 
 
 class TemperatureScalingVariant(LogitTokenToConfidenceCalibrator):
@@ -319,24 +319,24 @@ class PTSVariant(LogitTokenToConfidenceCalibrator):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser,
                          model,
-                         PTSVariant.PTSModel(tokeniser.vocab_size),
+                         PTSVariant.PTSModel(len(tokeniser)),
                          debug_responses)
 
 
 class LinearTemperatureScaling(PTSVariant):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size,
+        self.calibrator_model = LinearTemperatureScaling.PTSModel(len(tokeniser),
                                                                   nlayers=0,
-                                                                  top_k_logits=tokeniser.vocab_size)
+                                                                  top_k_logits=len(tokeniser))
 
 
 class PTSBase(PTSVariant):
     def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser, model, debug_responses)
-        self.calibrator_model = LinearTemperatureScaling.PTSModel(tokeniser.vocab_size,
+        self.calibrator_model = LinearTemperatureScaling.PTSModel(len(tokeniser),
                                                                   nlayers=1,
-                                                                  top_k_logits=tokeniser.vocab_size)
+                                                                  top_k_logits=len(tokeniser))
 
 
 class StopwordRemover(Calibrator):
@@ -453,7 +453,7 @@ class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
             return x
 
     def __init__(self, tokeniser, model, debug_responses):
-        super().__init__(tokeniser, model, TokenFrequencyPTSv1.TFIDFModel(tokeniser.vocab_size), debug_responses)
+        super().__init__(tokeniser, model, TokenFrequencyPTSv1.TFIDFModel(len(tokeniser)), debug_responses)
 
     def get_dataset(self, calib_tokens, calib_logits, correct, **kwargs):
         print("Here")
