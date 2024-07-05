@@ -2,14 +2,17 @@ import torch
 from torch import nn
 import re
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from enum import Enum
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 from pathlib import Path
-from utils import RESULTS_PATH
+
+from data_formats import get_dataset
+from utils import RESULTS_PATH, TextGenLLMBundle, class_predicate
 from calibrators import Calibrator
 from typing import Type, Optional
+import inspect
+import sys
+from abc import ABC, abstractmethod
 
 
 class CoTFormat(Enum):
@@ -37,19 +40,26 @@ class CoTFormat(Enum):
         return name_dict[name]
 
 
-class GSMCoT:
-    def __init__(self, llm_name, dataset, token, calib_dset_size, test_dset_size=None):
-        self.llm_name = llm_name
-        self.token = token
-        self.task_name = "GSM"
-        self.dataset = dataset
+class InputFormatter(ABC):
+    """
+    TODO: Determine methods that should be common across all subclasses.
+    """
+    @abstractmethod
+    def __init__(self):
+        """
+        Abstract constructor to ensure that this class cannot be instantiated.
+        """
+        pass
 
-        # tokeniser is needed for dataset transformation.
-        self.tokeniser = AutoTokenizer.from_pretrained(self.llm_name, token=token, padding_side="left")
-        self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
+
+class GSMCoT(InputFormatter):
+    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size, test_dset_size=None):
+        self.llm_bundle = llm_bundle
+        self.task_name = "GSM"
+        self.dataset = get_dataset("GSM")
         self.__calibrator: Optional[Calibrator] = None
 
-        self.target_dir = Path(RESULTS_PATH) / self.llm_name / self.task_name
+        self.target_dir = Path(RESULTS_PATH) / self.llm_bundle.llm_name / self.task_name
         self.target_dir.mkdir(parents=True, exist_ok=True)
 
         indices = torch.randperm(len(self.dataset))
@@ -70,7 +80,7 @@ class GSMCoT:
                             "**Final Answer:** <A single number>")
 
         # Format the datasets
-        cf = CoTFormat.from_model_name(llm_name)
+        cf = CoTFormat.from_model_name(self.llm_bundle.llm_name)
         if cf == CoTFormat.SYSTEM_USER_CHAT:
             format_func = self.__system_user_chat_format
         elif cf == CoTFormat.USER_CHAT:
@@ -82,13 +92,6 @@ class GSMCoT:
 
         self.calib_dataset = self.calib_dataset.map(format_func, batched=True)
         self.test_dataset = self.test_dataset.map(format_func, batched=True)
-        self.llm = None
-
-    def load_llm(self):
-        self.llm = AutoModelForCausalLM.from_pretrained(self.llm_name,
-                                                        device_map="auto",
-                                                        torch_dtype=torch.float16,
-                                                        token=self.token)
 
     def get_name(self):
         return self.__class__.__name__
@@ -110,12 +113,14 @@ class GSMCoT:
             return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]
 
         print("No existing logits and tokens found. Will now generate them.")
-        self.load_llm()
+        self.llm_bundle.load_model()
         dl_calib = DataLoader(self.calib_dataset, batch_size=batch_size)
         dl_test = DataLoader(self.test_dataset, batch_size=batch_size)
 
-        calib_logits, calib_tokens = self.__generate_over_dataloader(dl_calib, desc="Get Logits + Tokens (Calib)")
-        test_logits, test_tokens = self.__generate_over_dataloader(dl_test, desc="Get Logits + Tokens (Test)")
+        calib_logits, calib_tokens = self.llm_bundle.generate_over_dataloader(dl_calib,
+                                                                              desc="Get Logits + Tokens (Calib)")
+        test_logits, test_tokens = self.llm_bundle.generate_over_dataloader(dl_test,
+                                                                            desc="Get Logits + Tokens (Test)")
 
         out_dict = {
             "all_logits_calib": calib_logits,
@@ -130,8 +135,7 @@ class GSMCoT:
                                  calibrator_type: Type[Calibrator],
                                  batch_size=1,
                                  recompute_logits=False,
-                                 recalibrate=False,
-                                 retest=False):
+                                 recalibrate=False):
         # Try to get logits and tokens for both calib and test
         calib_logits, calib_tokens, test_logits, test_tokens = self.get_logits_and_tokens(batch_size,
                                                                                           recompute=recompute_logits)
@@ -164,7 +168,7 @@ class GSMCoT:
 
         # perform calibration
         print("Initialising calibrator")
-        self.__calibrator = calibrator_type(self.tokeniser, self.llm)
+        self.__calibrator = calibrator_type(self.llm_bundle)
 
         weights_path = self.target_dir / self.__calibrator.get_name()
         if (weights_path / "calib_weights.pt").exists() and not recalibrate:
@@ -195,41 +199,11 @@ class GSMCoT:
 
     def get_calibrator_model(self):
         if self.__calibrator is None: return None
-        return nn.Sequential(self.llm, self.__calibrator.calibrator_model)
+        return nn.Sequential(self.llm_bundle.llm_model, self.__calibrator.calibrator_model)
 
     def get_results_path(self):
         if self.__calibrator is None: return None
         return self.target_dir / self.__calibrator.get_name()
-
-    def __generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
-        
-        all_logits = []
-        all_tokens = []
-        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
-            formatted = batch["formatted"]
-
-            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-            generated = self.llm.generate(**inputs,
-                                          max_new_tokens=max_new_tokens,
-                                          output_logits=True,
-                                          return_dict_in_generate=True,
-                                          pad_token_id=self.tokeniser.eos_token_id)
-            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
-
-            # get the tokens, then remove the ones that made up the input.
-            sequences = generated.sequences.cpu()
-            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
-
-            for logits, response in zip(model_logits, responses):
-                eos_mask = response != self.tokeniser.eos_token_id
-
-                processed_logits = logits[eos_mask]
-                processed_response = response[eos_mask]
-
-                all_logits.append(processed_logits)
-                all_tokens.append(processed_response)
-
-        return all_logits, all_tokens
 
     def __process_generated_output(self, logits, tokens):
         """
@@ -240,13 +214,7 @@ class GSMCoT:
         """
         prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
         tokens = tokens.cpu()
-        decoded_response = self.tokeniser.decode(tokens)
-
-        """eos_mask = tokens != self.tokeniser.eos_token_id
-
-        processed_logits = logits[eos_mask]
-        processed_response = tokens[eos_mask]
-        prob_vecs_no_eos = prob_vecs[eos_mask]"""
+        decoded_response = self.llm_bundle.tokeniser.decode(tokens)
 
         token_confidences = torch.take_along_dim(prob_vecs,
                                                  tokens.unsqueeze(1), dim=1).squeeze(1)
@@ -266,11 +234,12 @@ class GSMCoT:
         questions = x['question']
         formatted = []
         for question in questions:
-            formatted_q = self.tokeniser.apply_chat_template([{"role": "system", "content": self.system_text},
-                                                              {"role": "user", "content": f"**Question:** {question}"}],
-                                                             tokenize=False,
-                                                             add_generation_prompt=True,
-                                                             return_tensors="pt")
+            formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                [{"role": "system", "content": self.system_text},
+                 {"role": "user", "content": f"**Question:** {question}"}],
+                tokenize=False,
+                add_generation_prompt=True,
+                return_tensors="pt")
             formatted.append(formatted_q)
         return {"formatted": formatted}
 
@@ -278,7 +247,7 @@ class GSMCoT:
         questions = x['question']
         formatted = []
         for question in questions:
-            formatted_q = self.tokeniser.apply_chat_template(
+            formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "user", "content": f"{self.system_text}\n\n**Question:** {question}"}],
                 tokenize=False,
                 add_generation_prompt=True,
@@ -294,3 +263,7 @@ class GSMCoT:
             formatted_q = f"{self.system_text}\n\n**Question:** {question}\n"
             formatted.append(formatted_q)
         return {"formatted": formatted}
+
+
+classes = inspect.getmembers(sys.modules[__name__], class_predicate(InputFormatter))
+input_formatter_dict: dict[str, InputFormatter.__class__] = {x: y for x, y in classes}

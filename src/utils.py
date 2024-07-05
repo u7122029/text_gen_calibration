@@ -3,9 +3,75 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 from pathlib import Path
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import inspect
 
 RESULTS_PATH = "results"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+class TextGenLLMBundle:
+    def __init__(self, llm_name: str):
+        self.llm_name = llm_name
+
+        # Get token.
+        with open("token.txt") as f:
+            self.token = f.read().strip()
+
+        self.tokeniser = AutoTokenizer.from_pretrained(self.llm_name,
+                                                       token=self.token,
+                                                       padding_side="left")
+        self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
+        self.llm_model = None
+
+    def load_model(self):
+        """
+        Calls the function to load the model into the program. This is a whole separate method because a user might only
+        need the tokeniser.
+        :return:
+        """
+        self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                              device_map="auto",
+                                                              torch_dtype=torch.float16,
+                                                              token=self.token)
+
+    def is_model_loaded(self):
+        return self.llm_model is not None
+
+    def vocab_size(self):
+        if self.llm_name in {"microsoft/Phi-3-mini-4k-instruct"}:
+            return self.tokeniser.vocab_size
+        return len(self.tokeniser)
+
+    def generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
+
+        all_logits = []
+        all_tokens = []
+        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
+            formatted = batch["formatted"]
+
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.llm_model.generate(**inputs,
+                                          max_new_tokens=max_new_tokens,
+                                          output_logits=True,
+                                          return_dict_in_generate=True,
+                                          pad_token_id=self.tokeniser.eos_token_id)
+            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+
+            # get the tokens, then remove the ones that made up the input.
+            sequences = generated.sequences.cpu()
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+
+            for logits, response in zip(model_logits, responses):
+                eos_mask = response != self.tokeniser.eos_token_id
+
+                processed_logits = logits[eos_mask]
+                processed_response = response[eos_mask]
+
+                all_logits.append(processed_logits)
+                all_tokens.append(processed_response)
+
+        return all_logits, all_tokens
 
 
 class AbsModule(nn.Module):
@@ -58,19 +124,6 @@ class TokenLogitsDataset(Dataset):
 
 
 class TLTokenFrequencyDataset(TokenLogitsDataset):
-    #def __init__(self, logits, tokens, correct):
-    #    super().__init__(logits, tokens, correct)
-    # num_responses = len(self.tokens)
-
-    # Construct term-document frequency matrix
-    """term_doc_freqs = torch.zeros(num_responses, self.vocab_size, dtype=torch.uint16)
-    for response_idx, token_response in enumerate(self.tokens):
-
-        token_counts = torch.bincount(token_response)
-        term_doc_freqs[response_idx, :len(token_counts)] += token_counts
-
-    self.relative_tfs = (term_doc_freqs / torch.sum(term_doc_freqs, dim=1, keepdim=True))"""
-
     def __getitem__(self, item):
         tokens = self.tokens[item]
         relative_tfs = torch.zeros(self.vocab_size)
@@ -93,3 +146,19 @@ class TLTokenFrequencyDataset(TokenLogitsDataset):
         return logits, tokens, torch.cat(correct_vecs), torch.stack(relative_tfs)
 
 
+def get_class_bases(x):
+    bases = set()
+    for base in x.__bases__:
+        bases.add(base)
+        bases = bases.union(get_class_bases(base))
+    return bases
+
+
+def class_predicate(cls):
+    def predicate_func(x):
+        if not inspect.isclass(x): return False
+
+        class_bases = get_class_bases(x)
+        return cls in class_bases
+
+    return predicate_func

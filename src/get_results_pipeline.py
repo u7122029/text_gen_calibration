@@ -5,13 +5,13 @@ from torcheval.metrics.functional import binary_auprc
 import torch
 
 import fire
-from icecream import ic
 from calibrators import calibrator_dict
 from pathlib import Path
 from tabulate import tabulate
-from input_formatters import GSMCoT
+from input_formatters import input_formatter_dict
 from data_formats import get_dataset
 import os
+from utils import TextGenLLMBundle
 
 torch.manual_seed(0)
 
@@ -79,16 +79,17 @@ class CompiledMetrics:
         print(f"Accuracy: {self.accuracy}")
         print("\nBasic Metrics:")
         table = [
-            ["Category",           "ECE",           "Brier",           "AUROC",           "AUPRC"],
+            ["Category", "ECE", "Brier", "AUROC", "AUPRC"],
             ["Before Calibration", self.ece_before, self.brier_before, self.auroc_before, self.auprc_before],
-            ["After Calibration",  self.ece_after,  self.brier_after,  self.auroc_after,  self.auprc_after]
+            ["After Calibration", self.ece_after, self.brier_after, self.auroc_after, self.auprc_after]
         ]
         print(tabulate(table[1:], headers=table[0], tablefmt="github"))
         print("\nChanges in Confidences:")
         table1 = [
-            ["Category",     "All Preds",                "Correct Preds",               "Incorrect Preds"],
-            ["Mean Change",  self.all_mean_conf_change,  self.correct_mean_conf_change,  self.incorrect_mean_conf_change],
-            ["Total Change", self.all_total_conf_change, self.correct_total_conf_change, self.incorrect_total_conf_change]
+            ["Category", "All Preds", "Correct Preds", "Incorrect Preds"],
+            ["Mean Change", self.all_mean_conf_change, self.correct_mean_conf_change, self.incorrect_mean_conf_change],
+            ["Total Change", self.all_total_conf_change, self.correct_total_conf_change,
+             self.incorrect_total_conf_change]
         ]
         print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))
 
@@ -133,29 +134,20 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
-def main(prompt_type: str="CoT",
-         dataset_name: str="GSM",
+def main(input_formatter: str="GSMCoT",
          calibrator_name="TokenFrequencyPTSv1",
-         model_name="microsoft/Phi-3-mini-4k-instruct",
-         debug_responses=True,
+         model_name="google/gemma-1.1-2b-it",
          batch_size=4,
          calib_dset_size=300,
          test_dset_size=300,
          recompute_logits=False,
          retrain_calibrator=True):
-
     if calibrator_name not in calibrator_dict:
         raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
 
-    # Get token.
-    with open("token.txt") as f:
-        token = f.read().strip()
-        ic(token)
-
-    dataset = get_dataset(dataset_name)
-
-    # TODO: Generalise to any input formatter
-    input_formatter = GSMCoT(model_name, dataset, token, calib_dset_size, test_dset_size)
+    llm_bundle = TextGenLLMBundle(model_name)
+    input_formatter_class = input_formatter_dict[input_formatter]
+    input_formatter = input_formatter_class(llm_bundle, calib_dset_size, test_dset_size)
 
     p = input_formatter.target_dir / calibrator_name
     calib_path = Path(str(p / "calib_results.pt"))
