@@ -9,7 +9,6 @@ from calibrators import calibrator_dict
 from pathlib import Path
 from tabulate import tabulate
 from input_formatters import input_formatter_dict
-from data_formats import get_dataset
 import os
 from utils import TextGenLLMBundle
 
@@ -135,7 +134,7 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
 def main(input_formatter: str="GSMCoT",
-         calibrator_name="TokenFrequencyPTSv1",
+         calibrator_name="PTS_1L",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
          calib_dset_size=300,

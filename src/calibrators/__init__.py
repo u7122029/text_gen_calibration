@@ -8,140 +8,11 @@ from nltk import corpus
 import pandas as pd
 import numpy as np
 from torch import nn, optim
-from utils import TokenLogitsDataset, AbsModule, DEVICE, TLTokenFrequencyDataset, class_predicate
-import warnings
+from utils import DEVICE, TLTokenFrequencyDataset, class_predicate
 from torch.nn.functional import relu
-
-
-class Calibrator(ABC):
-    """
-    To use a Calibrator, you must
-
-    1. Run the calibrate method to generate a new instance of the given calibrator, or load the calibrator llm weights to generate the calibrator llm.
-
-    2. Run the test method to test the calibrator on some data.
-
-    You may use the save method to save the parts of the calibrator that require persistence.
-    Note that the save method may not do anything at all if there is nothing to save.
-    """
-    def __init__(self, llm_bundle):
-        self.llm_bundle = llm_bundle
-        self.calibrator_model = None
-
-    def get_name(self):
-        return self.__class__.__name__
-
-    @abstractmethod
-    def calibrate(self, **kwargs):
-        pass
-
-    @abstractmethod
-    def test(self, **kwargs):
-        pass
-
-    @abstractmethod
-    def save(self, filepath):
-        pass
-
-    @abstractmethod
-    def load(self, filepath):
-        pass
-
-
-class LogitTokenToConfidenceCalibrator(Calibrator):
-    def __init__(self, llm_bundle, calibrator_model):
-        super().__init__(llm_bundle)
-        self.calibrator_model = calibrator_model.to(DEVICE)
-        self.tuned = False
-
-    def get_dataset(self, tokens, logits, correct, **kwargs):
-        return TokenLogitsDataset(logits, tokens, correct)
-
-    def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
-        postfix["total_loss_last_epoch"] = 0
-        for logits_batch, _, is_correct_batch in pbar:
-            logits_batch = logits_batch.to(DEVICE)
-            is_correct_batch = is_correct_batch.to(DEVICE)
-
-            optimiser.zero_grad()
-            out_token_confs = self.calibrator_model(logits_batch)
-            loss = loss_fn(out_token_confs, is_correct_batch)
-            loss.backward()
-            optimiser.step()
-            postfix["total_loss_last_epoch"] += loss.item()
-
-    def calibrate(self,
-                  calib_tokens,
-                  calib_logits,
-                  correct,
-                  batch_size,
-                  epochs=30,
-                  lr=0.01,
-                  **kwargs):
-        """
-        Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
-        this function if you want to use a different dataset.
-        :param calib_tokens:
-        :param calib_logits:
-        :param correct:
-        :param batch_size:
-        :param epochs:
-        :param lr:
-        :param kwargs:
-        :return:
-        """
-        # Assume calib_logits has shape [dset_length, response_length, vocab_size]
-        calibration_dset = self.get_dataset(calib_tokens, calib_logits, correct)
-        calibration_dl = DataLoader(calibration_dset,
-                                    batch_size=batch_size,
-                                    collate_fn=calibration_dset.__class__.collate_fn,
-                                    shuffle=True)
-        # Optimise llm.
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        loss_fn = nn.MSELoss().to(DEVICE) # calibration aware loss with l2 norm squared.
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
-
-        print("Training Calibrator")
-        self.calibrator_model.train()
-
-        postfix = {}
-        for epoch_idx in range(epochs):
-            pbar = tqdm(calibration_dl,
-                        desc=f"Epoch {epoch_idx + 1}/{epochs}",
-                        postfix=postfix)
-
-            self.calibration_step(pbar, postfix, optimiser, loss_fn)
-        self.calibrator_model.eval()
-        self.tuned = True
-
-    def load(self, filepath):
-        self.calibrator_model.load_state_dict(torch.load(filepath))
-        self.calibrator_model.eval()
-
-    def save(self, filepath):
-        torch.save(self.calibrator_model.state_dict(), filepath)
-
-    def test_loop(self, test_dset):
-        confs_after_calibration = []
-        for logits, tokens, _ in tqdm(test_dset):
-            logits = logits.to(DEVICE)
-            tokens = tokens.to(DEVICE)
-            token_confs = self.calibrator_model(logits, tokens).cpu()
-            out = torch.mean(token_confs)
-            confs_after_calibration.append(out)
-        return confs_after_calibration
-
-    def test(self, test_tokens, test_logits, correct, **kwargs):
-        print(test_tokens[0].shape)
-        print(test_logits[0].shape)
-        if not self.tuned:
-            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-        test_dset = self.get_dataset(test_tokens, test_logits, correct)
-
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        with torch.no_grad():
-            confs_after_calibration = self.test_loop(test_dset)
-        return torch.Tensor(confs_after_calibration)
+from .generic import LogitTokenToConfidenceCalibrator, Calibrator
+from .temperature_scaling import TemperatureScalingVariant
+from .pts import *
 
 
 class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
@@ -197,81 +68,6 @@ class LinearScaler(LogitTokenToConfidenceCalibrator):
         super().__init__(llm_bundle, LinearScaler.LinearModel(self.llm_bundle.vocab_size()))
 
 
-class TemperatureScalingVariant(LogitTokenToConfidenceCalibrator):
-    class TSModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.temperature = nn.Parameter(torch.ones(1) * 1.5)
-
-        def forward(self, x, tokens=None):
-            # x.shape: [logit_vec, vocab size]
-            x = x / self.temperature
-            x = torch.softmax(x, dim=1)
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-            return x  # [confs]
-
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle, TemperatureScalingVariant.TSModel())
-
-
-class PTSDefault(LogitTokenToConfidenceCalibrator, ABC):
-    class PTSModel(nn.Module):
-        def __init__(self, *layer_sizes):
-            """
-            Constructor for a generic Parametric Temperature Scaling Model.
-            :param layer_sizes:
-            """
-            print(layer_sizes)
-            assert len(layer_sizes) > 1
-            assert all([isinstance(x, int) for x in layer_sizes])
-            super().__init__()
-
-            #self.nlayers = nlayers
-            #self.n_nodes = n_nodes
-            #self.length_logits = length_logits
-            #self.top_k_logits = top_k_logits
-
-            # Build model
-            self.first_layer_size = layer_sizes[0]
-            self.layers = []
-            for i in range(len(layer_sizes) - 1):
-                self.layers.append(nn.Linear(in_features=layer_sizes[i], out_features=layer_sizes[i + 1]))
-                self.layers.append(nn.ReLU())
-            self.layers.append(nn.Linear(in_features=layer_sizes[-1], out_features=1))
-            self.layers.append(AbsModule())
-            self.layers = nn.Sequential(*self.layers)
-
-        def forward(self, inp, tokens=None):
-            t, _ = torch.sort(torch.topk(inp, self.first_layer_size, dim=1).values, dim=1, descending=True)
-            t = torch.clip(self.layers(t), min=1e-8, max=1e+8)
-
-            x = inp / t
-            x = torch.softmax(x, dim=1)
-
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-
-            return x
-
-    def __init__(self, llm_bundle, *layer_sizes, debug_responses=False):
-        if not layer_sizes:
-            layer_sizes = [llm_bundle.vocab_size(), llm_bundle.vocab_size() // 200]
-        calib_model = PTSDefault.PTSModel(*layer_sizes)
-        super().__init__(llm_bundle,
-                         calib_model,
-                         debug_responses)
-
-
-class LinearTemperatureScaling(PTSDefault):
-    def __init__(self, llm_bundle, debug_responses=False):
-        super().__init__(llm_bundle, llm_bundle.vocab_size(), debug_responses=debug_responses)
-
-
 class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
     class TFIDFModel(nn.Module):
         """
@@ -305,7 +101,6 @@ class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
         super().__init__(llm_bundle, TokenFrequencyPTSv1.TFIDFModel(llm_bundle.vocab_size()))
 
     def get_dataset(self, calib_tokens, calib_logits, correct, **kwargs):
-        print("Here")
         return TLTokenFrequencyDataset(calib_logits, calib_tokens, correct)
 
     def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
