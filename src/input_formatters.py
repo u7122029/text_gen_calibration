@@ -31,7 +31,8 @@ class CoTFormat(Enum):
             "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
             "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
             "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT
+            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT,
+            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
         }
         return name_dict[name]
 
@@ -163,7 +164,7 @@ class GSMCoT:
 
         # perform calibration
         print("Initialising calibrator")
-        self.__calibrator = calibrator_type(self.tokeniser, self.llm, False)
+        self.__calibrator = calibrator_type(self.tokeniser, self.llm)
 
         weights_path = self.target_dir / self.__calibrator.get_name()
         if (weights_path / "calib_weights.pt").exists() and not recalibrate:

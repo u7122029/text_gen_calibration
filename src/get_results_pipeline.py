@@ -132,17 +132,17 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # 01-ai/Yi-1.5-9B-Chat
 # NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
 # NousResearch/Hermes-2-Pro-Mistral-7B
+# microsoft/Phi-3-mini-4k-instruct
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
-         calibrator_name="TemperatureScalingVariant",
-         model_name="google/gemma-1.1-2b-it",
+         calibrator_name="PTSDefault",
+         model_name="microsoft/Phi-3-mini-4k-instruct",
          debug_responses=True,
          batch_size=4,
          calib_dset_size=300,
          test_dset_size=300,
          recompute_logits=False,
-         retrain_calibrator=False,
-         retest_calibrator=True):
+         retrain_calibrator=True):
 
     if calibrator_name not in calibrator_dict:
         raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
@@ -172,8 +172,7 @@ def main(prompt_type: str="CoT",
      test_correct) = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
         batch_size,
-        recalibrate=retrain_calibrator,
-        retest=retest_calibrator
+        recalibrate=retrain_calibrator
     )
 
     calib_set_results = CompiledMetrics(calib_confs_before, calib_confs_after, calib_correct)
