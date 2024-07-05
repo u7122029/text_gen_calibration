@@ -135,7 +135,7 @@ def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_
 # microsoft/Phi-3-mini-4k-instruct
 def main(prompt_type: str="CoT",
          dataset_name: str="GSM",
-         calibrator_name="PTSDefault",
+         calibrator_name="TokenFrequencyPTSv1",
          model_name="microsoft/Phi-3-mini-4k-instruct",
          debug_responses=True,
          batch_size=4,

@@ -342,7 +342,7 @@ class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
             assert x.dim() == 1
             return x
 
-    def __init__(self, tokeniser, model, debug_responses):
+    def __init__(self, tokeniser, model, debug_responses=False):
         super().__init__(tokeniser, model, TokenFrequencyPTSv1.TFIDFModel(len(tokeniser)), debug_responses)
 
     def get_dataset(self, calib_tokens, calib_logits, correct, **kwargs):
