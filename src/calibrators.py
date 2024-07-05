@@ -132,12 +132,10 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         return confs_after_calibration
 
     def test(self, test_tokens, test_logits, correct, **kwargs):
-        print("In test function")
         print(test_tokens[0].shape)
         print(test_logits[0].shape)
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-        print("getting dataset")
         test_dset = self.get_dataset(test_tokens, test_logits, correct)
 
         self.calibrator_model = self.calibrator_model.to(DEVICE)

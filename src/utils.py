@@ -40,8 +40,8 @@ class TextGenLLMBundle:
 
     def vocab_size(self):
         if self.llm_name in {"microsoft/Phi-3-mini-4k-instruct"}:
-            return self.tokeniser.vocab_size
-        return len(self.tokeniser)
+            return len(self.tokeniser)
+        return self.tokeniser.vocab_size
 
     def generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
 
