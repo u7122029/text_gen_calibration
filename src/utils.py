@@ -1,13 +1,32 @@
 from tqdm import tqdm
 import torch
 from torch import nn
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import inspect
+from datasets import Dataset
+
+QUALITATIVE_SCALE = {
+    "Very low": 0,
+    "Low": 0.3,
+    "Somewhat low": 0.45,
+    "Medium": 0.5,
+    "Somewhat high": 0.65,
+    "High": 0.7,
+    "Very high": 1,
+}
 
 RESULTS_PATH = "results"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+NUMERIC_CONF_PROMPT = "Provide your confidence in the above answer only as a percentage (0-100%).\n**Confidence:**"
+WORDED_CONF_PROMPT = (f"Provide your confidence in the above answer only as one of "
+                      f"{' / '.join([f'{exp}' for exp in QUALITATIVE_SCALE.keys()])}.\n**Confidence:**")
+COT_SYSTEM_PROMPT = ("You are a friendly chatbot that only outputs in the form:\n"
+                     "**Explanation:** <Your explanation>\n"
+                     "**Final Answer:** <A single number>")
+FINAL_ANSWER_FORMAT = "**Final Answer:** {answer}"
+QUESTION_FORMAT = "**Question:** {question}"
 
 
 class TextGenLLMBundle:
@@ -46,19 +65,37 @@ class TextGenLLMBundle:
             return manual_sizes[self.llm_name]
         return len(self.tokeniser)
 
-    def generate_over_dataloader(self, dl, max_new_tokens=550, desc=None):
+    def get_tokens_and_logits_from_dl(self, dset, batch_size=1, max_new_tokens=550, desc=None):
+        """
+        Generate the
 
-        all_logits = []
-        all_tokens = []
+        - Responses,
+        - Logits,
+        - Verbalised numerical/quantitative confidences,
+        - Verbalised worded/qualitative confidences.
+        Over a given dataloader.
+        :param dset:
+        :param batch_size:
+        :param max_new_tokens:
+        :param desc:
+        :return:
+        """
+        all_response_logits = []
+        all_response_tokens = []
+        #all_numeric_confs = []
+        #all_worded_confs = []
+        dl = DataLoader(dset, batch_size=batch_size)
+
+        # Logits and Output Tokens
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
             formatted = batch["formatted"]
 
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
             generated = self.llm_model.generate(**inputs,
-                                          max_new_tokens=max_new_tokens,
-                                          output_logits=True,
-                                          return_dict_in_generate=True,
-                                          pad_token_id=self.tokeniser.eos_token_id)
+                                                max_new_tokens=max_new_tokens,
+                                                output_logits=True,
+                                                return_dict_in_generate=True,
+                                                pad_token_id=self.tokeniser.eos_token_id)
             model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
 
             # get the tokens, then remove the ones that made up the input.
@@ -71,10 +108,72 @@ class TextGenLLMBundle:
                 processed_logits = logits[eos_mask]
                 processed_response = response[eos_mask]
 
-                all_logits.append(processed_logits)
-                all_tokens.append(processed_response)
+                all_response_logits.append(processed_logits)
+                all_response_tokens.append(processed_response)
 
-        return all_logits, all_tokens
+        #all_responses_decoded = self.tokeniser.batch_decode(all_response_tokens)
+        #numeric_conf_prompts = [f"{decoded_response}" for decoded_response in zip(all_responses_decoded)]
+
+        out_dict = {
+            "response_logits": all_response_logits,
+            "response_tokens": all_response_tokens
+        }
+        out_dset = Dataset.from_dict(out_dict)
+        out_dset.add_column("question", dset["question"])
+
+        return out_dset
+
+    def get_verbalised_confs_from_dl(self, dset, batch_size=1, max_new_tokens=20, desc=None):
+        """
+
+        :param dset:
+        :param batch_size:
+        :param max_new_tokens:
+        :param desc:
+        :return:
+        """
+        # TODO: FINISH THIS METHOD.
+        all_numeric_confs = []
+        all_worded_confs = []
+        dl = DataLoader(dset, batch_size=batch_size)
+
+        # Logits and Output Tokens
+        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
+            formatted = batch["formatted"]
+
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.llm_model.generate(**inputs,
+                                                max_new_tokens=max_new_tokens,
+                                                output_logits=True,
+                                                return_dict_in_generate=True,
+                                                pad_token_id=self.tokeniser.eos_token_id)
+            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+
+            # get the tokens, then remove the ones that made up the input.
+            sequences = generated.sequences.cpu()
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+
+            for logits, response in zip(model_logits, responses):
+                eos_mask = response != self.tokeniser.eos_token_id
+
+                processed_logits = logits[eos_mask]
+                processed_response = response[eos_mask]
+
+                all_response_logits.append(processed_logits)
+                all_response_tokens.append(processed_response)
+
+        # all_responses_decoded = self.tokeniser.batch_decode(all_response_tokens)
+        # numeric_conf_prompts = [f"{decoded_response}" for decoded_response in zip(all_responses_decoded)]
+
+        out_dict = {
+            "response_logits": all_response_logits,
+            "response_tokens": all_response_tokens
+        }
+        return Dataset.from_dict(out_dict)
+
+    def __del__(self):
+        # free up memory.
+        del self.tokeniser, self.llm_model
 
 
 class AbsModule(nn.Module):
@@ -82,7 +181,7 @@ class AbsModule(nn.Module):
         return torch.abs(x)
 
 
-class TokenLogitsDataset(Dataset):
+class TokenLogitsDataset(torch.utils.data.Dataset):
     def __init__(self, logits, tokens, correct):
         """
 

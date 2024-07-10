@@ -7,7 +7,14 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 
 from data_formats import get_dataset
-from utils import RESULTS_PATH, TextGenLLMBundle, class_predicate
+from utils import (RESULTS_PATH,
+                   TextGenLLMBundle,
+                   class_predicate,
+                   COT_SYSTEM_PROMPT,
+                   WORDED_CONF_PROMPT,
+                   NUMERIC_CONF_PROMPT,
+                   FINAL_ANSWER_FORMAT,
+                   QUESTION_FORMAT)
 from calibrators import Calibrator
 from typing import Type, Optional
 import inspect
@@ -16,10 +23,9 @@ from abc import ABC, abstractmethod
 
 
 class CoTFormat(Enum):
-    SYSTEM_USER_CHAT = 1
-    USER_CHAT = 2
-    NO_TEMPLATE = 3
-    DOLLY_15K = 4
+    SYSTEM_USER_CHAT = 0
+    USER_CHAT = 1
+    NO_TEMPLATE = 2
 
     @classmethod
     def from_model_name(cls, name):
@@ -53,7 +59,18 @@ class InputFormatter(ABC):
 
 
 class GSMCoT(InputFormatter):
+    """
+    The idea is that we will ask for the model's answer, and also ask for the model's verbalised confidence.
+    Both qualitative and quantitative
+    """
+
     def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size, test_dset_size=None):
+        """
+
+        :param llm_bundle:
+        :param calib_dset_size: Calibration set size.
+        :param test_dset_size: Test set size (if None, uses the rest of the dataset)
+        """
         self.llm_bundle = llm_bundle
         self.task_name = "GSM"
         self.dataset = get_dataset("GSM")
@@ -66,8 +83,10 @@ class GSMCoT(InputFormatter):
         calib_indices = indices[:calib_dset_size]
 
         if test_dset_size is not None:
-            assert calib_dset_size + test_dset_size <= len(indices), \
-                f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes exceed given dataset size."
+            assert (calib_dset_size + test_dset_size <= len(indices),
+                    f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes "
+                    f"exceed given dataset size.")
+
             test_indices = indices[calib_dset_size: calib_dset_size + test_dset_size]
         else:
             test_indices = indices[calib_dset_size:]
@@ -75,28 +94,26 @@ class GSMCoT(InputFormatter):
         self.calib_dataset = Dataset.from_pandas(self.dataset.iloc[calib_indices.tolist()])
         self.test_dataset = Dataset.from_pandas(self.dataset.iloc[test_indices.tolist()])
 
-        self.system_text = ("You are a friendly chatbot that only outputs in the form:\n"
-                            "**Explanation:** <Your explanation>\n"
-                            "**Final Answer:** <A single number>")
-
         # Format the datasets
         cf = CoTFormat.from_model_name(self.llm_bundle.llm_name)
-        if cf == CoTFormat.SYSTEM_USER_CHAT:
-            format_func = self.__system_user_chat_format
-        elif cf == CoTFormat.USER_CHAT:
-            format_func = self.__user_chat_format
-        elif cf == CoTFormat.NO_TEMPLATE:
-            format_func = self.__no_template_format
-        else:
-            raise Exception(f"Invalid enum value {cf}")
+        self.ff_list = [self.__suc_response_formats,
+                        self.__uc_response_formats,
+                        self.__nt_response_formats]
+        self.response_fmt, self.numeric_conf_fmt, self.worded_conf_fmt = self.ff_list[cf.value](
+            COT_SYSTEM_PROMPT,
+            WORDED_CONF_PROMPT,
+            NUMERIC_CONF_PROMPT,
+            QUESTION_FORMAT,
+            FINAL_ANSWER_FORMAT
+        )
 
-        self.calib_dataset = self.calib_dataset.map(format_func, batched=True)
-        self.test_dataset = self.test_dataset.map(format_func, batched=True)
+        self.calib_dataset = self.calib_dataset.map(self.response_fmt, batched=True)
+        self.test_dataset = self.test_dataset.map(self.response_fmt, batched=True)
 
     def get_name(self):
         return self.__class__.__name__
 
-    def get_logits_and_tokens(self, batch_size=1, recompute=False):
+    def get_calibration_and_test_data(self, batch_size=1, recompute=False):
         """
         Gets the logits and tokens from the llm over the calibration and test datasets.
         No EOS tokens are filtered at all.
@@ -104,32 +121,56 @@ class GSMCoT(InputFormatter):
         :param recompute: whether to recompute the logits for both sets.
         :return:
         """
-        print("Getting Logits and Tokens")
-        filepath = self.target_dir / f"logits.pt"
-        if filepath.exists() and not recompute:
+        print("Getting Calibration and Test data.")
+        calib_filepath = self.target_dir / f"calibration_data.hf"
+        test_filepath = self.target_dir / f"test_data.hf"
+        """if calib_filepath.exists() and test_filepath.exists() and not recompute:
             print(f"Found existing logits and tokens in {filepath}")
             d = torch.load(filepath)
             print("Successfully loaded logits.")
-            return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]
+            return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]"""
 
-        print("No existing logits and tokens found. Will now generate them.")
+        #print("No existing logits and tokens found. Will now generate them.")
         self.llm_bundle.load_model()
-        dl_calib = DataLoader(self.calib_dataset, batch_size=batch_size)
-        dl_test = DataLoader(self.test_dataset, batch_size=batch_size)
 
-        calib_logits, calib_tokens = self.llm_bundle.generate_over_dataloader(dl_calib,
-                                                                              desc="Get Logits + Tokens (Calib)")
-        test_logits, test_tokens = self.llm_bundle.generate_over_dataloader(dl_test,
-                                                                            desc="Get Logits + Tokens (Test)")
+        if calib_filepath.exists() and not recompute:
+            print(f"Found existing calibration data in {calib_filepath}")
+            calib_conf_dset = Dataset.from_file(str(calib_filepath))
+        else:
+            print(f"Calibration data at ({calib_filepath}) not found. Generating data from calibration dataset.")
+            calib_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dl(self.calib_dataset,
+                                                                           batch_size=batch_size,
+                                                                           desc="Get Logits + Tokens (Calib)")
+            calib_gen_dset = calib_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt, batched=True)
 
-        out_dict = {
+            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dl(calib_gen_dset,
+                                                                           batch_size=batch_size,
+                                                                           desc="Get Verbalised Confs (Calib)")
+            calib_conf_dset.save_to_disk(str(self.target_dir / "calibration_data.hf"))
+
+        if test_filepath.exists() and not recompute:
+            print(f"Found existing test data in {test_filepath}")
+            test_conf_dset = Dataset.from_file(str(test_filepath))
+        else:
+            print(f"Test data at ({test_filepath}) not found. Generating data from test dataset.")
+            test_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dl(self.test_dataset,
+                                                                          batch_size=batch_size,
+                                                                          desc="Get Logits + Tokens (Test)")
+            test_gen_dset = test_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt, batched=True)
+            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dl(test_gen_dset,
+                                                                          batch_size=batch_size,
+                                                                          desc="Get Verbalised Confs (Calib)")
+            test_conf_dset.save_to_disk(str(self.target_dir / "test_data.hf"))
+
+        """out_dict = {
             "all_logits_calib": calib_logits,
             "all_tokens_calib": calib_tokens,
             "all_logits_test": test_logits,
             "all_tokens_test": test_tokens
         }
-        torch.save(out_dict, str(filepath))
-        return calib_logits, calib_tokens, test_logits, test_tokens
+        torch.save(out_dict, str(filepath))"""
+
+        return calib_conf_dset, test_conf_dset
 
     def run_calibration_pipeline(self,
                                  calibrator_type: Type[Calibrator],
@@ -137,8 +178,8 @@ class GSMCoT(InputFormatter):
                                  recompute_logits=False,
                                  recalibrate=False):
         # Try to get logits and tokens for both calib and test
-        calib_logits, calib_tokens, test_logits, test_tokens = self.get_logits_and_tokens(batch_size,
-                                                                                          recompute=recompute_logits)
+        calib_data, test_data = self.get_calibration_and_test_data(batch_size,
+                                                                   recompute=recompute_logits)
 
         # Get answers and whether they are correct (calib).
         print("Getting answers from calibration set.")
@@ -230,40 +271,122 @@ class GSMCoT(InputFormatter):
 
         return final_answer, response_confidence
 
-    def __system_user_chat_format(self, x):
-        questions = x['question']
-        formatted = []
-        for question in questions:
-            formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                [{"role": "system", "content": self.system_text},
-                 {"role": "user", "content": f"**Question:** {question}"}],
-                tokenize=False,
-                add_generation_prompt=True,
-                return_tensors="pt")
-            formatted.append(formatted_q)
-        return {"formatted": formatted}
+    def __suc_response_formats(self,
+                               system_prompt: str,
+                               worded_conf_user_prompt: str,
+                               numeric_conf_user_prompt: str,
+                               question_prompt: str,
+                               answer_format: str):
+        def response_fmt(x):
+            questions = x['question']
+            formatted = []
+            for question in questions:
+                formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                    [{"role": "system", "content": system_prompt},
+                     {"role": "user", "content": question_prompt.format(question=question)}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    return_tensors="pt")
+                formatted.append(formatted_q)
+            return {"response_formatted": formatted}
 
-    def __user_chat_format(self, x):
-        questions = x['question']
-        formatted = []
-        for question in questions:
-            formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                [{"role": "user", "content": f"{self.system_text}\n\n**Question:** {question}"}],
-                tokenize=False,
-                add_generation_prompt=True,
-                return_tensors="pt"
-            )
-            formatted.append(formatted_q)
-        return {"formatted": formatted}
+        def choice_fmt(conf_user_prompt, feature_name):
+            def verb_conf_fmt(x):
+                questions = x['question']
+                answers = x["answers"]
+                formatted = []
+                for question, answer in zip(questions, answers):
+                    formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                        [{"role": "system", "content": f"{question_prompt.format(question=question)}\n"
+                                                       f"{answer_format.format(answer=answer)}"},
+                         {"role": "user", "content": conf_user_prompt}],
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        return_tensors="pt")
+                    formatted.append(formatted_q)
+                return {feature_name: formatted}
+            return verb_conf_fmt
+        return (response_fmt,
+                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
+                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
 
-    def __no_template_format(self, x):
-        questions = x['question']
-        formatted = []
-        for question in questions:
-            formatted_q = f"{self.system_text}\n\n**Question:** {question}\n"
-            formatted.append(formatted_q)
-        return {"formatted": formatted}
+    def __uc_response_formats(self,
+                              system_prompt: str,
+                              worded_conf_user_prompt: str,
+                              numeric_conf_user_prompt: str,
+                              question_prompt: str,
+                              answer_format: str):
+        def response_fmt(x):
+            questions = x['question']
+            formatted = []
+            for question in questions:
+                formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                    [{"role": "user",
+                      "content": f"{system_prompt}\n\n"
+                                 f"{question_prompt.format(question=question)}"}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    return_tensors="pt"
+                )
+                formatted.append(formatted_q)
+            return {"response_formatted": formatted}
+
+        def choice_fmt(conf_user_prompt, feature_name):
+            def verb_conf_fmt(x):
+                questions = x['question']
+                answers = x["answer"]
+                formatted = []
+                for question, answer in zip(questions, answers):
+                    formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                        [{"role": "user",
+                          "content": f"{question_prompt.format(question=question)}\n"
+                                     f"{answer_format.format(answer=answer)}\n\n"
+                                     f"{conf_user_prompt}"}],
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        return_tensors="pt"
+                    )
+                    formatted.append(formatted_q)
+                return {feature_name: formatted}
+            return verb_conf_fmt
+        return (response_fmt,
+                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
+                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
+
+    def __nt_response_formats(self,
+                              system_prompt: str,
+                              worded_conf_user_prompt: str,
+                              numeric_conf_user_prompt: str,
+                              question_prompt: str,
+                              answer_format: str):
+        def response_fmt(x):
+            questions = x['question']
+            formatted = []
+            for question in questions:
+                formatted_q = f"{system_prompt}\n\n{question_prompt.format(question=question)}"
+                formatted.append(formatted_q)
+            return {"response_formatted": formatted}
+
+        def choice_fmt(conf_user_prompt, feature_name):
+            def verb_conf_fmt(x):
+                questions = x['question']
+                answers = x["answer"]
+                formatted = []
+                for question, answer in zip(questions, answers):
+                    formatted_q = (f"{question_prompt.format(question=question)}\n"
+                                   f"{answer_format.format(answer=answer)}\n\n"
+                                   f"{conf_user_prompt}")
+                    formatted.append(formatted_q)
+                return {feature_name: formatted}
+            return verb_conf_fmt
+        return (response_fmt,
+                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
+                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
 
 
 classes = inspect.getmembers(sys.modules[__name__], class_predicate(InputFormatter))
 input_formatter_dict: dict[str, InputFormatter.__class__] = {x: y for x, y in classes}
+
+if __name__ == "__main__":
+    x = GSMCoT(TextGenLLMBundle("google/gemma-1.1-2b-it"), 100, 100)
+    print(x.calib_dataset[0].keys())
