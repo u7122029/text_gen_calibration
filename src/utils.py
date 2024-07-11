@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import List, Optional, Dict, Tuple
 
 from tqdm import tqdm

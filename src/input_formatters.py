@@ -16,7 +16,7 @@ from utils import (RESULTS_PATH,
                    FINAL_ANSWER_FORMAT,
                    QUESTION_FORMAT)
 from calibrators import Calibrator
-from typing import Type, Optional
+from typing import Type, Optional, Tuple
 import inspect
 import sys
 from abc import ABC, abstractmethod
@@ -177,13 +177,13 @@ class GSMCoT(InputFormatter):
                                  calibrator_type: Type[Calibrator],
                                  batch_size=1,
                                  recompute_logits=False,
-                                 recalibrate=False):
+                                 recalibrate=False) -> Tuple[Dataset, Dataset]:
         # Try to get logits and tokens for both calib and test
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
 
         # Get answers and whether they are correct (calib).
-        print("Getting answers from calibration set.")
+        """print("Getting answers from calibration set.")
         calib_preds = []
         calib_confs_before = []
         for logits, tokens in zip(calib_data["logits"],
@@ -211,39 +211,33 @@ class GSMCoT(InputFormatter):
         test_preds = torch.Tensor(test_preds)
         test_correct = test_preds == torch.Tensor(self.test_dataset["answer"])
         test_data.add_column("correct", test_correct)
-        test_data.add_column("logits_conf", test_confs_before)
+        test_data.add_column("logits_conf", test_confs_before)"""
 
-        # perform calibration
-        # TODO: make calibrator take entire datasets.
         print("Initialising calibrator")
         self.__calibrator = calibrator_type(self.llm_bundle)
 
+        # Perhaps check for weights in the calibrator itself?
+        # Some calibrators have no weights.
         weights_path = self.target_dir / self.__calibrator.get_name()
         if (weights_path / "calib_weights.pt").exists() and not recalibrate:
             self.__calibrator.load(str(weights_path / "calib_weights.pt"))
         else:
             print("Performing calibration of model.")
             weights_path.mkdir(parents=True, exist_ok=True)
-            self.__calibrator.calibrate(calib_tokens=calib_tokens,
-                                        calib_logits=calib_logits,
-                                        correct=calib_correct,
+            self.__calibrator.calibrate(calibration_dset=calib_data,
                                         batch_size=batch_size)
             self.__calibrator.save(str(weights_path / "calib_weights.pt"))
 
         # test the calibrator.
         print("Testing Calibrator on Calibration Dataset")
-        calib_confs_after = self.__calibrator.test(test_tokens=calib_tokens,
-                                                   test_logits=calib_logits,
-                                                   correct=calib_correct,
-                                                   batch_size=batch_size)
+        calib_results = self.__calibrator.test(test_dset=calib_data,
+                                               batch_size=batch_size)
 
         print("Testing Calibrator on Test Dataset")
-        test_confs_after = self.__calibrator.test(test_tokens=test_tokens,
-                                                  test_logits=test_logits,
-                                                  correct=test_correct,
-                                                  batch_size=batch_size)
+        test_results = self.__calibrator.test(test_dset=test_data,
+                                              batch_size=batch_size)
 
-        return calib_confs_before, calib_confs_after, calib_correct, test_confs_before, test_confs_after, test_correct
+        return calib_results, test_results
 
     def get_calibrator_model(self):
         if self.__calibrator is None: return None
@@ -253,13 +247,11 @@ class GSMCoT(InputFormatter):
         if self.__calibrator is None: return None
         return self.target_dir / self.__calibrator.get_name()
 
-    def __compute_answers_and_confidences(self, logits, tokens):
-        """
-        Compute the llm's answer and confidence.
-        :param logits: the generation logits for one prompt.
-        :param tokens: the tokens for one prompt.
-        :return:
-        """
+    """def __compute_answers_and_confidences(self, logits, tokens):
+        # Compute the llm's answer and confidence.
+        # :param logits: the generation logits for one prompt.
+        # :param tokens: the tokens for one prompt.
+        # :return:
         prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
         tokens = tokens.cpu()
         decoded_response = self.llm_bundle.tokeniser.decode(tokens)
@@ -276,7 +268,7 @@ class GSMCoT(InputFormatter):
         except:
             final_answer = -1
 
-        return final_answer, response_confidence
+        return final_answer, response_confidence"""
 
     def __suc_response_formats(self,
                                system_prompt: str,

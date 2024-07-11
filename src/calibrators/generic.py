@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
 import torch, warnings
+from datasets import Dataset
 
 
 class Calibrator(ABC):
@@ -25,11 +26,11 @@ class Calibrator(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def calibrate(self, **kwargs):
+    def calibrate(self, calibration_dset: Dataset, **kwargs):
         pass
 
     @abstractmethod
-    def test(self, **kwargs):
+    def test(self, test_dset: Dataset, **kwargs):
         pass
 
     @abstractmethod
@@ -64,27 +65,22 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
             postfix["total_loss_last_epoch"] += loss.item()
 
     def calibrate(self,
-                  calib_tokens,
-                  calib_logits,
-                  correct,
-                  batch_size,
+                  calibration_dset: Dataset,
+                  batch_size=1,
                   epochs=30,
                   lr=0.01,
                   **kwargs):
         """
         Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
         this function if you want to use a different dataset.
-        :param calib_tokens:
-        :param calib_logits:
-        :param correct:
         :param batch_size:
+        :param calibration_dset:
         :param epochs:
         :param lr:
         :param kwargs:
         :return:
         """
         # Assume calib_logits has shape [dset_length, response_length, vocab_size]
-        calibration_dset = self.get_dataset(calib_tokens, calib_logits, correct)
         calibration_dl = DataLoader(calibration_dset,
                                     batch_size=batch_size,
                                     collate_fn=calibration_dset.__class__.collate_fn,
