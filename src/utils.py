@@ -147,6 +147,7 @@ class TextGenLLMBundle:
         :param desc:
         :return:
         """
+        print("Getting logits and tokens.")
         all_response_logits = []
         all_response_tokens = []
         dl = DataLoader(dset, batch_size=batch_size)
@@ -180,10 +181,10 @@ class TextGenLLMBundle:
             "response_logits": all_response_logits,
             "response_tokens": all_response_tokens
         }
-        out_dset = Dataset.from_dict(out_dict)
-        out_dset.add_column("question", dset["question"])
+        for k in out_dict.keys():
+            dset = dset.add_column(k, out_dict[k])
 
-        return out_dset
+        return dset
 
     def get_verbalised_confs_from_dset(self, dset: Dataset, batch_size=1, max_new_tokens=30, desc=None):
         """
@@ -241,7 +242,44 @@ class TextGenLLMBundle:
             out_dict["worded_confs"].extend(w_confidences)
             out_dict["worded_successful"].extend(w_successful)
 
-        return Dataset.from_dict(out_dict)
+        for k in out_dict.keys():
+            dset = dset.add_column(k, out_dict[k])
+
+        return dset
+
+    def get_logits_confs_and_answers_from_dset(self, dset: Dataset):
+        """
+
+        :param dset:
+        :return:
+        """
+        all_preds = []
+        all_confs = []
+        for logits, tokens in zip(dset["logits"], dset["tokens"]):
+            prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
+            tokens = tokens.cpu()
+            decoded_response = self.tokeniser.decode(tokens)
+
+            token_confidences = torch.take_along_dim(prob_vecs,
+                                                     tokens.unsqueeze(1), dim=1).squeeze(1)
+            response_confidence = torch.mean(token_confidences).item()
+
+            # TODO: Perhaps make getting the model's answer part of the input formatter, and leave
+            #       the logit confidence to this class.
+            decoded_response = decoded_response.lower()
+            try:
+                s1 = decoded_response.split("**explanation:**")[1]
+                explanation, final_answer_raw = s1.split("**final answer:**")
+                final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
+            except:
+                final_answer = -1 # Indicates a failed response.
+
+            all_preds.append(final_answer)
+            all_confs.append(response_confidence)
+
+        dset.add_column("correct", (torch.Tensor(all_preds) == dset["answer"]).to(torch.uint8))
+        dset.add_column("logits_confs", torch.Tensor(all_confs))
+        return dset
 
     def __del__(self):
         # free up memory.

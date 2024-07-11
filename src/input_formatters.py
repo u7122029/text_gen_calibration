@@ -131,20 +131,24 @@ class GSMCoT(InputFormatter):
             print(f"Found existing calibration data in {calib_filepath}")
             calib_conf_dset = Dataset.from_file(str(calib_filepath))
         else:
-            print(f"Calibration data at ({calib_filepath}) not found. Generating data from calibration dataset.")
-            calib_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
-                                                                             batch_size=batch_size,
-                                                                             desc="Get Logits + Tokens (Calib)")
-            calib_gen_dset = calib_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
-                                                                                         batched=True)
+            print(f"Calibration data at ({calib_filepath}) not found.")
+            calib_conf_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
+                                                                              batch_size=batch_size,
+                                                                              desc="Get Logits + Tokens (Calib)")
 
-            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(calib_gen_dset,
+            calib_conf_dset = calib_conf_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
+                                                                                           batched=True)
+            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(calib_conf_dset,
                                                                              batch_size=batch_size,
                                                                              desc="Get Verbalised Confs (Calib)")
+
+            # Obtain answers and logits confidences.
+            calib_conf_dset = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_conf_dset)
             calib_conf_dset.remove_columns(["response_formatted",
                                             "numeric_conf_formatted",
                                             "worded_conf_formatted",
                                             "question"])
+
             calib_conf_dset.save_to_disk(str(self.target_dir / "calibration_data.hf"))
 
         if test_filepath.exists() and not recompute:
@@ -152,18 +156,19 @@ class GSMCoT(InputFormatter):
             test_conf_dset = Dataset.from_file(str(test_filepath))
         else:
             print(f"Test data at ({test_filepath}) not found. Generating data from test dataset.")
-            test_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
-                                                                            batch_size=batch_size,
-                                                                            desc="Get Logits + Tokens (Test)")
-            test_gen_dset = test_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
+            test_conf_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
+                                                                             batch_size=batch_size,
+                                                                             desc="Get Logits + Tokens (Test)")
+            test_conf_dset = test_conf_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
                                                                                        batched=True)
-            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(test_gen_dset,
+            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(test_conf_dset,
                                                                             batch_size=batch_size,
                                                                             desc="Get Verbalised Confs (Calib)")
-            test_gen_dset.remove_columns(["response_formatted",
-                                          "numeric_conf_formatted",
-                                          "worded_conf_formatted",
-                                          "question"])
+            test_conf_dset = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_conf_dset)
+            test_conf_dset.remove_columns(["response_formatted",
+                                           "numeric_conf_formatted",
+                                           "worded_conf_formatted",
+                                           "question"])
             test_conf_dset.save_to_disk(str(self.target_dir / "test_data.hf"))
 
         return calib_conf_dset, test_conf_dset
@@ -181,8 +186,7 @@ class GSMCoT(InputFormatter):
         print("Getting answers from calibration set.")
         calib_preds = []
         calib_confs_before = []
-        for formatted, logits, tokens in zip(self.calib_dataset["response_formatted"],
-                                             calib_data["logits"],
+        for logits, tokens in zip(calib_data["logits"],
                                              calib_data["tokens"]):
             final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
 
@@ -198,9 +202,7 @@ class GSMCoT(InputFormatter):
         print("Getting answers from test set.")
         test_preds = []
         test_confs_before = []
-        for formatted, logits, tokens in zip(self.calib_dataset["response_formatted"],
-                                             test_data["logits"],
-                                             test_data["tokens"]):
+        for logits, tokens in zip(test_data["logits"], test_data["tokens"]):
             final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
 
             test_preds.append(final_answer)
