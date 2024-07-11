@@ -1,3 +1,5 @@
+from typing import List, Optional, Dict, Tuple
+
 from tqdm import tqdm
 import torch
 from torch import nn
@@ -6,6 +8,8 @@ from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import inspect
 from datasets import Dataset
+import re
+from enum import Enum
 
 QUALITATIVE_SCALE = {
     "Very low": 0,
@@ -29,6 +33,68 @@ FINAL_ANSWER_FORMAT = "**Final Answer:** {answer}"
 QUESTION_FORMAT = "**Question:** {question}"
 
 
+class VerbalisedConfidence(Enum):
+    NUMERIC = 0
+    WORDED = 1
+
+
+def extract_verbalized_confidence(expressions: List[str],
+                                  mode: VerbalisedConfidence,
+                                  expression_mapping: Optional[Dict[str, float]] = None
+                                  ) -> Tuple[List[float], List[bool]]:
+    """
+    Extract the confidence scores from the verbalized confidence generated from a model.
+    Taken from https://github.com/parameterlab/apricot/blob/6aea8510ca0da04a27abbb4b5ba39f727c26c342/src/eval.py#L270
+
+    Parameters
+    ----------
+    expressions: List[str]
+        List of expressions containing verbalized confidence.
+    mode: str
+        Whether the confidence is "qualitative" or "quantitative". Defaults to the latter.
+    expression_mapping: Optional[Dict[str, float]]
+        If the mode is "qualitative", supply a dictionary that maps from confidence expression to numerical values.
+
+    Returns
+    -------
+    Tuple[List[float], List[bool]]
+        Extracted confidence scores, as well as list of boolean values indicating whether the extraction was successful.
+    """
+    assert isinstance(mode, VerbalisedConfidence), f"Mode has to be a VerbalisedConfidence, but {mode} found."
+    if expression_mapping is None:
+        expression_mapping = QUALITATIVE_SCALE
+
+    if mode == VerbalisedConfidence.WORDED:
+        assert (expression_mapping is not None), "'expression_mapping' has to be specified for qualitative mode."
+
+    confidences, successful = [], []
+
+    for expression in expressions:
+        if mode == VerbalisedConfidence.WORDED:
+            template = rf"({'|'.join(expression_mapping.keys())})"
+        else:
+            # With the template below, try to capture anything like: 95%, 95 %, 96.666, 100, etc.
+            template = r"\d{1,3}(?:\.\d+)?\s?\%?"
+
+        try:
+            res = re.search(template, expression).group(0)
+
+            if mode == VerbalisedConfidence.WORDED:
+                conf = expression_mapping[res]
+            else:
+                conf = float(res.replace("%", "")) / 100
+                if not (0 <= conf <= 1):
+                    successful.append(False)
+                    continue
+
+            successful.append(True)
+            confidences.append(conf)
+        except AttributeError:
+            successful.append(False)
+
+    return confidences, successful
+
+
 class TextGenLLMBundle:
     def __init__(self, llm_name: str):
         self.llm_name = llm_name
@@ -49,6 +115,7 @@ class TextGenLLMBundle:
         need the tokeniser.
         :return:
         """
+        print(f"Loading model {self.llm_name}")
         self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
@@ -82,13 +149,11 @@ class TextGenLLMBundle:
         """
         all_response_logits = []
         all_response_tokens = []
-        #all_numeric_confs = []
-        #all_worded_confs = []
         dl = DataLoader(dset, batch_size=batch_size)
 
         # Logits and Output Tokens
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
-            formatted = batch["formatted"]
+            formatted = batch["response_formatted"]
 
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
             generated = self.llm_model.generate(**inputs,
@@ -123,7 +188,7 @@ class TextGenLLMBundle:
 
         return out_dset
 
-    def get_verbalised_confs_from_dl(self, dset, batch_size=1, max_new_tokens=20, desc=None):
+    def get_verbalised_confs_from_dl(self, dset: Dataset, batch_size=1, max_new_tokens=30, desc=None):
         """
 
         :param dset:
@@ -132,43 +197,53 @@ class TextGenLLMBundle:
         :param desc:
         :return:
         """
-        # TODO: FINISH THIS METHOD.
-        all_numeric_confs = []
-        all_worded_confs = []
+        out_dict = {
+            "numeric_confs": [],
+            "numeric_successful": [],
+            "worded_confs": [],
+            "worded_successful": []
+        }
+
         dl = DataLoader(dset, batch_size=batch_size)
 
-        # Logits and Output Tokens
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
-            formatted = batch["formatted"]
+            numeric_formatted = batch["numeric_conf_formatted"]
+            worded_formatted = batch["worded_conf_formatted"]
 
-            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-            generated = self.llm_model.generate(**inputs,
-                                                max_new_tokens=max_new_tokens,
-                                                output_logits=True,
-                                                return_dict_in_generate=True,
-                                                pad_token_id=self.tokeniser.eos_token_id)
-            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+            inputs_numeric = self.tokeniser(numeric_formatted, return_tensors="pt", padding=True).to(DEVICE)
+            inputs_worded = self.tokeniser(worded_formatted, return_tensors="pt", padding=True).to(DEVICE)
+            numeric_generated = self.llm_model.generate(**inputs_numeric,
+                                                        max_new_tokens=max_new_tokens,
+                                                        return_dict_in_generate=True,
+                                                        pad_token_id=self.tokeniser.eos_token_id)
+            worded_generated = self.llm_model.generate(**inputs_worded,
+                                                       max_new_tokens=max_new_tokens,
+                                                       return_dict_in_generate=True,
+                                                       pad_token_id=self.tokeniser.eos_token_id)
 
             # get the tokens, then remove the ones that made up the input.
-            sequences = generated.sequences.cpu()
-            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+            numeric_sequences = numeric_generated.sequences.cpu()
+            worded_sequences = worded_generated.sequences.cpu()
 
-            for logits, response in zip(model_logits, responses):
-                eos_mask = response != self.tokeniser.eos_token_id
+            numeric_responses = self.tokeniser.batch_decode(
+                numeric_sequences[:, inputs_numeric.input_ids.shape[1]:],
+                skip_special_tokens=True
+            )
+            worded_responses = self.tokeniser.batch_decode(
+                worded_sequences[:, inputs_worded.input_ids.shape[1]:],
+                skip_special_tokens=True
+            )
 
-                processed_logits = logits[eos_mask]
-                processed_response = response[eos_mask]
+            n_confidences, n_successful = extract_verbalized_confidence(numeric_responses,
+                                                                        VerbalisedConfidence.NUMERIC)
+            w_confidences, w_successful = extract_verbalized_confidence(worded_responses,
+                                                                        VerbalisedConfidence.WORDED)
 
-                all_response_logits.append(processed_logits)
-                all_response_tokens.append(processed_response)
+            out_dict["numeric_confs"].extend(n_confidences)
+            out_dict["numeric_successful"].extend(n_successful)
+            out_dict["worded_confs"].extend(w_confidences)
+            out_dict["worded_successful"].extend(w_successful)
 
-        # all_responses_decoded = self.tokeniser.batch_decode(all_response_tokens)
-        # numeric_conf_prompts = [f"{decoded_response}" for decoded_response in zip(all_responses_decoded)]
-
-        out_dict = {
-            "response_logits": all_response_logits,
-            "response_tokens": all_response_tokens
-        }
         return Dataset.from_dict(out_dict)
 
     def __del__(self):

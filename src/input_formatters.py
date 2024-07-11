@@ -122,15 +122,9 @@ class GSMCoT(InputFormatter):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / f"calibration_data.hf"
-        test_filepath = self.target_dir / f"test_data.hf"
-        """if calib_filepath.exists() and test_filepath.exists() and not recompute:
-            print(f"Found existing logits and tokens in {filepath}")
-            d = torch.load(filepath)
-            print("Successfully loaded logits.")
-            return d["all_logits_calib"], d["all_tokens_calib"], d["all_logits_test"], d["all_tokens_test"]"""
+        calib_filepath = self.target_dir / "calibration_data.hf"
+        test_filepath = self.target_dir / "test_data.hf"
 
-        #print("No existing logits and tokens found. Will now generate them.")
         self.llm_bundle.load_model()
 
         if calib_filepath.exists() and not recompute:
@@ -161,14 +155,6 @@ class GSMCoT(InputFormatter):
                                                                           batch_size=batch_size,
                                                                           desc="Get Verbalised Confs (Calib)")
             test_conf_dset.save_to_disk(str(self.target_dir / "test_data.hf"))
-
-        """out_dict = {
-            "all_logits_calib": calib_logits,
-            "all_tokens_calib": calib_tokens,
-            "all_logits_test": test_logits,
-            "all_tokens_test": test_tokens
-        }
-        torch.save(out_dict, str(filepath))"""
 
         return calib_conf_dset, test_conf_dset
 
