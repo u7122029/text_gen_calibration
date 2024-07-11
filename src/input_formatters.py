@@ -132,14 +132,19 @@ class GSMCoT(InputFormatter):
             calib_conf_dset = Dataset.from_file(str(calib_filepath))
         else:
             print(f"Calibration data at ({calib_filepath}) not found. Generating data from calibration dataset.")
-            calib_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dl(self.calib_dataset,
-                                                                           batch_size=batch_size,
-                                                                           desc="Get Logits + Tokens (Calib)")
-            calib_gen_dset = calib_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt, batched=True)
+            calib_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
+                                                                             batch_size=batch_size,
+                                                                             desc="Get Logits + Tokens (Calib)")
+            calib_gen_dset = calib_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
+                                                                                         batched=True)
 
-            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dl(calib_gen_dset,
-                                                                           batch_size=batch_size,
-                                                                           desc="Get Verbalised Confs (Calib)")
+            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(calib_gen_dset,
+                                                                             batch_size=batch_size,
+                                                                             desc="Get Verbalised Confs (Calib)")
+            calib_conf_dset.remove_columns(["response_formatted",
+                                            "numeric_conf_formatted",
+                                            "worded_conf_formatted",
+                                            "question"])
             calib_conf_dset.save_to_disk(str(self.target_dir / "calibration_data.hf"))
 
         if test_filepath.exists() and not recompute:
@@ -147,13 +152,18 @@ class GSMCoT(InputFormatter):
             test_conf_dset = Dataset.from_file(str(test_filepath))
         else:
             print(f"Test data at ({test_filepath}) not found. Generating data from test dataset.")
-            test_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dl(self.test_dataset,
-                                                                          batch_size=batch_size,
-                                                                          desc="Get Logits + Tokens (Test)")
-            test_gen_dset = test_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt, batched=True)
-            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dl(test_gen_dset,
-                                                                          batch_size=batch_size,
-                                                                          desc="Get Verbalised Confs (Calib)")
+            test_gen_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
+                                                                            batch_size=batch_size,
+                                                                            desc="Get Logits + Tokens (Test)")
+            test_gen_dset = test_gen_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
+                                                                                       batched=True)
+            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(test_gen_dset,
+                                                                            batch_size=batch_size,
+                                                                            desc="Get Verbalised Confs (Calib)")
+            test_gen_dset.remove_columns(["response_formatted",
+                                          "numeric_conf_formatted",
+                                          "worded_conf_formatted",
+                                          "question"])
             test_conf_dset.save_to_disk(str(self.target_dir / "test_data.hf"))
 
         return calib_conf_dset, test_conf_dset
@@ -171,29 +181,38 @@ class GSMCoT(InputFormatter):
         print("Getting answers from calibration set.")
         calib_preds = []
         calib_confs_before = []
-        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], calib_logits, calib_tokens):
-            final_answer, confidence = self.__process_generated_output(logits, tokens)
+        for formatted, logits, tokens in zip(self.calib_dataset["response_formatted"],
+                                             calib_data["logits"],
+                                             calib_data["tokens"]):
+            final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
 
             calib_preds.append(final_answer)
             calib_confs_before.append(confidence)
         calib_confs_before = torch.Tensor(calib_confs_before)
         calib_preds = torch.Tensor(calib_preds)
         calib_correct = calib_preds == torch.Tensor(self.calib_dataset["answer"])
+        calib_data.add_column("correct", calib_correct)
+        calib_data.add_column("logits_conf", calib_confs_before)
 
         # Get answers and whether they are correct (test).
         print("Getting answers from test set.")
         test_preds = []
         test_confs_before = []
-        for formatted, logits, tokens in zip(self.calib_dataset["formatted"], test_logits, test_tokens):
-            final_answer, confidence = self.__process_generated_output(logits, tokens)
+        for formatted, logits, tokens in zip(self.calib_dataset["response_formatted"],
+                                             test_data["logits"],
+                                             test_data["tokens"]):
+            final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
 
             test_preds.append(final_answer)
             test_confs_before.append(confidence)
         test_confs_before = torch.Tensor(test_confs_before)
         test_preds = torch.Tensor(test_preds)
         test_correct = test_preds == torch.Tensor(self.test_dataset["answer"])
+        test_data.add_column("correct", test_correct)
+        test_data.add_column("logits_conf", test_confs_before)
 
         # perform calibration
+        # TODO: make calibrator take entire datasets.
         print("Initialising calibrator")
         self.__calibrator = calibrator_type(self.llm_bundle)
 
@@ -232,7 +251,7 @@ class GSMCoT(InputFormatter):
         if self.__calibrator is None: return None
         return self.target_dir / self.__calibrator.get_name()
 
-    def __process_generated_output(self, logits, tokens):
+    def __compute_answers_and_confidences(self, logits, tokens):
         """
         Compute the llm's answer and confidence.
         :param logits: the generation logits for one prompt.

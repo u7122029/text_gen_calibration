@@ -132,7 +132,7 @@ class TextGenLLMBundle:
             return manual_sizes[self.llm_name]
         return len(self.tokeniser)
 
-    def get_tokens_and_logits_from_dl(self, dset, batch_size=1, max_new_tokens=550, desc=None):
+    def get_tokens_and_logits_from_dset(self, dset, batch_size=1, max_new_tokens=550, desc=None):
         """
         Generate the
 
@@ -176,9 +176,6 @@ class TextGenLLMBundle:
                 all_response_logits.append(processed_logits)
                 all_response_tokens.append(processed_response)
 
-        #all_responses_decoded = self.tokeniser.batch_decode(all_response_tokens)
-        #numeric_conf_prompts = [f"{decoded_response}" for decoded_response in zip(all_responses_decoded)]
-
         out_dict = {
             "response_logits": all_response_logits,
             "response_tokens": all_response_tokens
@@ -188,7 +185,7 @@ class TextGenLLMBundle:
 
         return out_dset
 
-    def get_verbalised_confs_from_dl(self, dset: Dataset, batch_size=1, max_new_tokens=30, desc=None):
+    def get_verbalised_confs_from_dset(self, dset: Dataset, batch_size=1, max_new_tokens=30, desc=None):
         """
 
         :param dset:
