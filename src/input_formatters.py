@@ -199,6 +199,7 @@ class GSMCoT(InputFormatter):
         # Perhaps check for weights in the calibrator itself?
         # Some calibrators have no weights.
         weights_path = self.target_dir / self.__calibrator.get_name()
+        print(f"weights path is {weights_path}")
         if (weights_path / "calib_weights.pt").exists() and not recalibrate:
             self.__calibrator.load(str(weights_path / "calib_weights.pt"))
         else:

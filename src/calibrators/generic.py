@@ -143,6 +143,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
     def load(self, filepath):
         self.calibrator_model.load_state_dict(torch.load(filepath))
         self.calibrator_model.eval()
+        self.tuned = True
 
     def save(self, filepath):
         torch.save(self.calibrator_model.state_dict(), filepath)

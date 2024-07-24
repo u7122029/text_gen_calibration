@@ -243,6 +243,7 @@ class TextGenLLMBundle:
             out_dict["worded_confs"].extend(w_confidences)
             out_dict["worded_successful"].extend(w_successful)
 
+        out_dict = {k: torch.Tensor(v) for k, v in out_dict.items()}
         return out_dict
 
     def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict):

@@ -52,6 +52,9 @@ class DictDataset(Dataset):
     def __contains__(self, item):
         return item in self.data_dict
 
+    def keys(self):
+        return self.data_dict.keys()
+
 
 if __name__ == "__main__":
     import torch

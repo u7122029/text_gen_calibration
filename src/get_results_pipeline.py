@@ -8,6 +8,8 @@ import fire
 from calibrators import calibrator_dict
 from pathlib import Path
 from tabulate import tabulate
+
+from data import DictDataset
 from input_formatters import input_formatter_dict
 import os
 from utils import TextGenLLMBundle
@@ -35,7 +37,7 @@ class BrierScore(Metric):
 
 
 class CompiledMetrics:
-    def __init__(self, calib_data, n_bins=15):
+    def __init__(self, calib_data: DictDataset, n_bins=15):
         assert "logits_confs" in calib_data
         assert "correct" in calib_data
         assert "numeric_confs" in calib_data
@@ -44,21 +46,23 @@ class CompiledMetrics:
         assert "worded_successful" in calib_data
         assert "calibrated_confs" in calib_data
 
-        self.logits_confs = calib_data["logits_confs"]
-        self.calibrated_confs = calib_data["calibrated_confs"]
-        self.correct = calib_data["correct"]
+        self.logits_confs = torch.Tensor(calib_data.data_dict["logits_confs"])
+        self.calibrated_confs = torch.Tensor(calib_data.data_dict["calibrated_confs"])
+        self.correct = torch.Tensor(calib_data.data_dict["correct"])
 
         # construct verbalised confs
-        self.num_success_mask = calib_data["numeric_successful"]
-        self.worded_success_mask = calib_data["worded_successful"] & ~self.num_success_mask
+        self.num_success_mask = torch.Tensor(calib_data.data_dict["numeric_successful"]).bool()
+        self.worded_success_mask = torch.Tensor(calib_data.data_dict["worded_successful"]).bool() & ~self.num_success_mask
+        self.verbalised_success_mask = self.num_success_mask | self.worded_success_mask
 
-        self.verbalised_confs = calib_data["worded_confs"][self.worded_success_mask]
-        self.numeric_confs = calib_data["numeric_confs"][self.num_success_mask]
+        self.verbalised_confs = torch.Tensor(calib_data.data_dict["worded_confs"])[self.worded_success_mask]
+        self.numeric_confs = torch.Tensor(calib_data.data_dict["numeric_confs"])[self.num_success_mask]
+
         self.numeric_correct = self.correct[self.num_success_mask]
-        self.verbalised_correct = self.correct[self.worded_success_mask]
+        self.worded_correct = self.correct[self.worded_success_mask]
 
         self.verbalised_confs = torch.cat([self.verbalised_confs, self.numeric_confs])
-        self.verbalised_correct = torch.cat([self.verbalised_correct, self.numeric_correct])
+        self.verbalised_correct = torch.cat([self.worded_correct, self.numeric_correct])
         assert len(self.verbalised_confs) == len(self.verbalised_correct), "This shouldn't be triggered!"
 
         self.num_verbalised_successful = torch.sum(self.verbalised_correct.bool())
@@ -86,7 +90,7 @@ class CompiledMetrics:
         self.accuracy = torch.mean(self.correct.float()).item()
 
         self.logits_confs_diff = self.calibrated_confs - self.logits_confs
-        self.verbalised_confs_diff = self.calibrated_confs[self.worded_success_mask] - self.verbalised_confs
+        self.verbalised_confs_diff = self.calibrated_confs[self.verbalised_success_mask] - self.verbalised_confs
 
         self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
         self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct])
@@ -164,7 +168,7 @@ def main(input_formatter: str="GSMCoT",
          calib_dset_size=300,
          test_dset_size=300,
          recompute_logits=False,
-         retrain_calibrator=True):
+         retrain_calibrator=False):
     if calibrator_name not in calibrator_dict:
         raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
 
@@ -172,13 +176,15 @@ def main(input_formatter: str="GSMCoT",
     input_formatter_class = input_formatter_dict[input_formatter]
     input_formatter = input_formatter_class(llm_bundle, calib_dset_size, test_dset_size)
 
-    p = input_formatter.target_dir / calibrator_name
+    """p = input_formatter.target_dir / calibrator_name
     calib_path = Path(str(p / "calib_results.pt"))
     test_path = Path(str(p / "test_results.pt"))
+
     if calib_path.exists() and test_path.exists() and not retrain_calibrator:
-        # TODO: FIX THIS!
-        show_results(calib_path, test_path, model_name, calibrator_name)
-        return
+        calib_results = CompiledMetrics(DictDataset(torch.load(calib_path)))
+        test_results = CompiledMetrics(DictDataset(torch.load(test_path)))
+        show_results(calib_results, test_results, model_name, calibrator_name)
+        return"""
 
     calib_data, test_data = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
