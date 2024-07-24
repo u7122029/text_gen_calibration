@@ -8,7 +8,7 @@ from nltk import corpus
 import pandas as pd
 import numpy as np
 from torch import nn, optim
-from utils import DEVICE, TLTokenFrequencyDataset, class_predicate
+from utils import DEVICE, class_predicate
 from torch.nn.functional import relu
 from .generic import LogitTokenToConfidenceCalibrator, Calibrator
 from .temperature_scaling import TemperatureScalingVariant
@@ -99,9 +99,6 @@ class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
 
     def __init__(self, llm_bundle):
         super().__init__(llm_bundle, TokenFrequencyPTSv1.TFIDFModel(llm_bundle.vocab_size()))
-
-    def get_dataset(self, calib_tokens, calib_logits, correct, **kwargs):
-        return TLTokenFrequencyDataset(calib_logits, calib_tokens, correct)
 
     def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
         postfix["total_loss_last_epoch"] = 0

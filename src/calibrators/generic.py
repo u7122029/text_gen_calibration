@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Iterable, List
 
 from data import DictDataset
-from utils import DEVICE, TokenLogitsDataset
+from utils import DEVICE
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
@@ -62,9 +62,6 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         super().__init__(llm_bundle)
         self.calibrator_model = calibrator_model.to(DEVICE)
         self.tuned = False
-
-    def get_dataset(self, tokens, logits, correct, **kwargs):
-        return TokenLogitsDataset(logits, tokens, correct)
 
     def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
         postfix["total_loss_last_epoch"] = 0

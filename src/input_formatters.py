@@ -126,13 +126,12 @@ class GSMCoT(InputFormatter):
         calib_filepath = self.target_dir / "calibration_data.pt"
         test_filepath = self.target_dir / "test_data.pt"
 
-        self.llm_bundle.load_model()
-
         if calib_filepath.exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
             calib_conf_dset = torch.load(calib_filepath)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
+            self.llm_bundle.load_model()
             calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
                                                                                   batch_size=batch_size,
                                                                                   desc="Get Logits + Tokens (Calib)")
@@ -161,6 +160,7 @@ class GSMCoT(InputFormatter):
             test_conf_dset = torch.load(test_filepath)
         else:
             print(f"test data at ({test_filepath}) not found.")
+            self.llm_bundle.load_model()
             test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
                                                                                   batch_size=batch_size,
                                                                                   desc="Get Logits + Tokens (Test)")
@@ -194,6 +194,7 @@ class GSMCoT(InputFormatter):
         # Try to get logits and tokens for both calib and test
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
+
         self.__calibrator = calibrator_type(self.llm_bundle)
 
         # Perhaps check for weights in the calibrator itself?
@@ -204,6 +205,7 @@ class GSMCoT(InputFormatter):
             self.__calibrator.load(str(weights_path / "calib_weights.pt"))
         else:
             print("Performing calibration of model.")
+
             weights_path.mkdir(parents=True, exist_ok=True)
             self.__calibrator.calibrate(calibration_dset=calib_data,
                                         batch_size=batch_size)

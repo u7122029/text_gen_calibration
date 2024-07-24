@@ -114,6 +114,7 @@ class CompiledMetrics:
     def display(self):
         print(f"No. Samples: {len(self)}")
         print(f"Accuracy: {self.accuracy}")
+        print(f"Number of succeeded verbalised confidences: {self.num_verbalised_successful}")
         print("\nBasic Metrics:")
         table = [
             ["Category", "ECE", "Brier", "AUROC", "AUPRC"],
@@ -175,16 +176,6 @@ def main(input_formatter: str="GSMCoT",
     llm_bundle = TextGenLLMBundle(model_name)
     input_formatter_class = input_formatter_dict[input_formatter]
     input_formatter = input_formatter_class(llm_bundle, calib_dset_size, test_dset_size)
-
-    """p = input_formatter.target_dir / calibrator_name
-    calib_path = Path(str(p / "calib_results.pt"))
-    test_path = Path(str(p / "test_results.pt"))
-
-    if calib_path.exists() and test_path.exists() and not retrain_calibrator:
-        calib_results = CompiledMetrics(DictDataset(torch.load(calib_path)))
-        test_results = CompiledMetrics(DictDataset(torch.load(test_path)))
-        show_results(calib_results, test_results, model_name, calibrator_name)
-        return"""
 
     calib_data, test_data = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
