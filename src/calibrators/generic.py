@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Tuple, Iterable, List
+
+from data import DictDataset
 from utils import DEVICE, TokenLogitsDataset
 from torch.utils.data import DataLoader
 from torch import nn, optim
@@ -26,11 +29,11 @@ class Calibrator(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def calibrate(self, calibration_dset: Dataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, **kwargs):
         pass
 
     @abstractmethod
-    def test(self, test_dset: Dataset, **kwargs):
+    def test(self, test_dset: DictDataset, **kwargs):
         pass
 
     @abstractmethod
@@ -39,6 +42,18 @@ class Calibrator(ABC):
 
     @abstractmethod
     def load(self, filepath):
+        pass
+
+    @abstractmethod
+    def dset_columns(self) -> List[str]:
+        """
+        Selects the columns to be used for calibration.
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    def collate_fn(self, data_list):
         pass
 
 
@@ -53,9 +68,9 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
 
     def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
         postfix["total_loss_last_epoch"] = 0
-        for logits_batch, _, is_correct_batch in pbar:
-            logits_batch = logits_batch.to(DEVICE)
-            is_correct_batch = is_correct_batch.to(DEVICE)
+        for batch in pbar:
+            is_correct_batch = batch["correct"].to(DEVICE)
+            logits_batch = batch["logits"].to(DEVICE)
 
             optimiser.zero_grad()
             out_token_confs = self.calibrator_model(logits_batch)
@@ -64,8 +79,27 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 
+    def dset_columns(self) -> List[str]:
+        return ["logits", "tokens", "correct"]
+
+    def collate_fn(self, data_list):
+        out = {
+            "logits": [],
+            "tokens": [],
+            "correct": []
+        }
+        for d in data_list:
+            out["logits"].append(d["logits"])
+            out["tokens"].append(d["tokens"])
+            out["correct"].append(d["correct"].repeat(len(d["tokens"])))
+
+        out["logits"] = torch.cat(out["logits"], dim=0)
+        out["tokens"] = torch.cat(out["tokens"])
+        out["correct"] = torch.cat(out["correct"]).float()
+        return out
+
     def calibrate(self,
-                  calibration_dset: Dataset,
+                  calibration_dset: DictDataset,
                   batch_size=1,
                   epochs=30,
                   lr=0.01,
@@ -81,10 +115,12 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         :return:
         """
         # Assume calib_logits has shape [dset_length, response_length, vocab_size]
+        calibration_dset.restrict_keys(self.dset_columns())
         calibration_dl = DataLoader(calibration_dset,
+                                    collate_fn=self.collate_fn,
                                     batch_size=batch_size,
-                                    collate_fn=calibration_dset.__class__.collate_fn,
                                     shuffle=True)
+        print("Made dataloader.")
         # Optimise llm.
         self.calibrator_model = self.calibrator_model.to(DEVICE)
         loss_fn = nn.MSELoss().to(DEVICE) # calibration aware loss with l2 norm squared.
@@ -102,6 +138,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
             self.calibration_step(pbar, postfix, optimiser, loss_fn)
         self.calibrator_model.eval()
         self.tuned = True
+        calibration_dset.reset_keys()
 
     def load(self, filepath):
         self.calibrator_model.load_state_dict(torch.load(filepath))
@@ -112,22 +149,21 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
 
     def test_loop(self, test_dset):
         confs_after_calibration = []
-        for logits, tokens, _ in tqdm(test_dset):
-            logits = logits.to(DEVICE)
-            tokens = tokens.to(DEVICE)
+        for batch in tqdm(test_dset):
+            logits = batch["logits"].to(DEVICE)
+            tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
             out = torch.mean(token_confs)
             confs_after_calibration.append(out)
         return confs_after_calibration
 
-    def test(self, test_tokens, test_logits, correct, **kwargs):
-        print(test_tokens[0].shape)
-        print(test_logits[0].shape)
+    def test(self, test_dset: DictDataset, **kwargs):
+        test_dset.restrict_keys(self.dset_columns())
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-        test_dset = self.get_dataset(test_tokens, test_logits, correct)
 
         self.calibrator_model = self.calibrator_model.to(DEVICE)
         with torch.no_grad():
             confs_after_calibration = self.test_loop(test_dset)
+        test_dset.reset_keys()
         return torch.Tensor(confs_after_calibration)

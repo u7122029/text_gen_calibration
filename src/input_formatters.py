@@ -6,7 +6,7 @@ from enum import Enum
 from torch.utils.data import DataLoader
 from pathlib import Path
 
-from data_formats import get_dataset
+from data import get_dataset, DictDataset
 from utils import (RESULTS_PATH,
                    TextGenLLMBundle,
                    class_predicate,
@@ -50,6 +50,7 @@ class InputFormatter(ABC):
     """
     TODO: Determine methods that should be common across all subclasses.
     """
+
     @abstractmethod
     def __init__(self):
         """
@@ -122,98 +123,77 @@ class GSMCoT(InputFormatter):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calibration_data.hf"
-        test_filepath = self.target_dir / "test_data.hf"
+        calib_filepath = self.target_dir / "calibration_data.pt"
+        test_filepath = self.target_dir / "test_data.pt"
 
         self.llm_bundle.load_model()
 
         if calib_filepath.exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
-            calib_conf_dset = Dataset.from_file(str(calib_filepath))
+            calib_conf_dset = torch.load(calib_filepath)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
-            calib_conf_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
-                                                                              batch_size=batch_size,
-                                                                              desc="Get Logits + Tokens (Calib)")
+            calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
+                                                                                  batch_size=batch_size,
+                                                                                  desc="Get Logits + Tokens (Calib)")
+            calib_logits_tokens["answer"] = torch.Tensor(self.calib_dataset["answer"])
 
-            calib_conf_dset = calib_conf_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
-                                                                                           batched=True)
-            calib_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(calib_conf_dset,
-                                                                             batch_size=batch_size,
-                                                                             desc="Get Verbalised Confs (Calib)")
+            calib_verbalised_dset = (self.calib_dataset
+                                     .map(self.numeric_conf_fmt, batched=True)
+                                     .map(self.worded_conf_fmt, batched=True))
+            calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(calib_verbalised_dset,
+                                                                                    batch_size=batch_size,
+                                                                                    desc="Get Verbalised Confs (Calib)")
 
             # Obtain answers and logits confidences.
-            calib_conf_dset = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_conf_dset)
-            calib_conf_dset.remove_columns(["response_formatted",
-                                            "numeric_conf_formatted",
-                                            "worded_conf_formatted",
-                                            "question"])
+            calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens)
 
-            calib_conf_dset.save_to_disk(str(self.target_dir / "calibration_data.hf"))
+            calib_conf_dset = self.calib_dataset.remove_columns(["question", "response_formatted"]).to_dict()
+            calib_conf_dset.update(calib_logits_tokens)
+            calib_conf_dset.update(calib_verbalised_confs)
+            calib_conf_dset.update(calib_logit_confs_answers)
+
+            torch.save(calib_conf_dset, str(self.target_dir / "calibration_data.pt"))
+            print("calibration data done.")
 
         if test_filepath.exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
-            test_conf_dset = Dataset.from_file(str(test_filepath))
+            test_conf_dset = torch.load(test_filepath)
         else:
-            print(f"Test data at ({test_filepath}) not found. Generating data from test dataset.")
-            test_conf_dset = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
-                                                                             batch_size=batch_size,
-                                                                             desc="Get Logits + Tokens (Test)")
-            test_conf_dset = test_conf_dset.map(self.numeric_conf_fmt, batched=True).map(self.worded_conf_fmt,
-                                                                                       batched=True)
-            test_conf_dset = self.llm_bundle.get_verbalised_confs_from_dset(test_conf_dset,
-                                                                            batch_size=batch_size,
-                                                                            desc="Get Verbalised Confs (Calib)")
-            test_conf_dset = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_conf_dset)
-            test_conf_dset.remove_columns(["response_formatted",
-                                           "numeric_conf_formatted",
-                                           "worded_conf_formatted",
-                                           "question"])
-            test_conf_dset.save_to_disk(str(self.target_dir / "test_data.hf"))
+            print(f"test data at ({test_filepath}) not found.")
+            test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
+                                                                                  batch_size=batch_size,
+                                                                                  desc="Get Logits + Tokens (Test)")
+            test_logits_tokens["answer"] = torch.Tensor(self.test_dataset["answer"])
 
-        return calib_conf_dset, test_conf_dset
+            test_verbalised_dset = (self.test_dataset
+                                    .map(self.numeric_conf_fmt, batched=True)
+                                    .map(self.worded_conf_fmt, batched=True))
+            test_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(test_verbalised_dset,
+                                                                                   batch_size=batch_size,
+                                                                                   desc="Get Verbalised Confs (Test)")
+
+            # Obtain answers and logits confidences.
+            test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens)
+
+            test_conf_dset = self.test_dataset.remove_columns(["question", "response_formatted"]).to_dict()
+            test_conf_dset.update(test_logits_tokens)
+            test_conf_dset.update(test_verbalised_confs)
+            test_conf_dset.update(test_logit_confs_answers)
+
+            torch.save(test_conf_dset, str(self.target_dir / "test_data.pt"))
+            print("test data done.")
+
+        return DictDataset(calib_conf_dset), DictDataset(test_conf_dset)
 
     def run_calibration_pipeline(self,
                                  calibrator_type: Type[Calibrator],
                                  batch_size=1,
                                  recompute_logits=False,
-                                 recalibrate=False) -> Tuple[Dataset, Dataset]:
+                                 recalibrate=False) -> Tuple[DictDataset, DictDataset]:
         # Try to get logits and tokens for both calib and test
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
-
-        # Get answers and whether they are correct (calib).
-        """print("Getting answers from calibration set.")
-        calib_preds = []
-        calib_confs_before = []
-        for logits, tokens in zip(calib_data["logits"],
-                                             calib_data["tokens"]):
-            final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
-
-            calib_preds.append(final_answer)
-            calib_confs_before.append(confidence)
-        calib_confs_before = torch.Tensor(calib_confs_before)
-        calib_preds = torch.Tensor(calib_preds)
-        calib_correct = calib_preds == torch.Tensor(self.calib_dataset["answer"])
-        calib_data.add_column("correct", calib_correct)
-        calib_data.add_column("logits_conf", calib_confs_before)
-
-        # Get answers and whether they are correct (test).
-        print("Getting answers from test set.")
-        test_preds = []
-        test_confs_before = []
-        for logits, tokens in zip(test_data["logits"], test_data["tokens"]):
-            final_answer, confidence = self.__compute_answers_and_confidences(logits, tokens)
-
-            test_preds.append(final_answer)
-            test_confs_before.append(confidence)
-        test_confs_before = torch.Tensor(test_confs_before)
-        test_preds = torch.Tensor(test_preds)
-        test_correct = test_preds == torch.Tensor(self.test_dataset["answer"])
-        test_data.add_column("correct", test_correct)
-        test_data.add_column("logits_conf", test_confs_before)"""
-
-        print("Initialising calibrator")
         self.__calibrator = calibrator_type(self.llm_bundle)
 
         # Perhaps check for weights in the calibrator itself?
@@ -229,15 +209,28 @@ class GSMCoT(InputFormatter):
             self.__calibrator.save(str(weights_path / "calib_weights.pt"))
 
         # test the calibrator.
-        print("Testing Calibrator on Calibration Dataset")
-        calib_results = self.__calibrator.test(test_dset=calib_data,
-                                               batch_size=batch_size)
+        if (weights_path / "calib_results.pt").exists():
+            print(f"Found existing calibration results at {weights_path / 'calib_results.pt'}")
+            calib_confs = torch.load(weights_path / "calib_results.pt")
+        else:
+            print("Testing Calibrator on Calibration Dataset")
+            calib_confs = self.__calibrator.test(test_dset=calib_data,
+                                                 batch_size=batch_size)
+            torch.save(calib_confs, weights_path / "calib_results.pt")
 
-        print("Testing Calibrator on Test Dataset")
-        test_results = self.__calibrator.test(test_dset=test_data,
-                                              batch_size=batch_size)
+        if (weights_path / "test_results.pt").exists():
+            print(f"Found existing test results at {weights_path / 'test_results.pt'}")
+            test_confs = torch.load(weights_path / "test_results.pt")
+        else:
+            print("Testing Calibrator on Test Dataset")
+            test_confs = self.__calibrator.test(test_dset=test_data,
+                                                batch_size=batch_size)
+            torch.save(test_confs, weights_path / "test_results.pt")
 
-        return calib_results, test_results
+        calib_data.data_dict["calibrated_confs"] = calib_confs
+        test_data.data_dict["calibrated_confs"] = test_confs
+
+        return calib_data, test_data
 
     def get_calibrator_model(self):
         if self.__calibrator is None: return None
@@ -246,29 +239,6 @@ class GSMCoT(InputFormatter):
     def get_results_path(self):
         if self.__calibrator is None: return None
         return self.target_dir / self.__calibrator.get_name()
-
-    """def __compute_answers_and_confidences(self, logits, tokens):
-        # Compute the llm's answer and confidence.
-        # :param logits: the generation logits for one prompt.
-        # :param tokens: the tokens for one prompt.
-        # :return:
-        prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
-        tokens = tokens.cpu()
-        decoded_response = self.llm_bundle.tokeniser.decode(tokens)
-
-        token_confidences = torch.take_along_dim(prob_vecs,
-                                                 tokens.unsqueeze(1), dim=1).squeeze(1)
-        response_confidence = torch.mean(token_confidences).item()
-
-        decoded_response = decoded_response.lower()
-        try:
-            s1 = decoded_response.split("**explanation:**")[1]
-            explanation, final_answer_raw = s1.split("**final answer:**")
-            final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
-        except:
-            final_answer = -1
-
-        return final_answer, response_confidence"""
 
     def __suc_response_formats(self,
                                system_prompt: str,
@@ -304,7 +274,9 @@ class GSMCoT(InputFormatter):
                         return_tensors="pt")
                     formatted.append(formatted_q)
                 return {feature_name: formatted}
+
             return verb_conf_fmt
+
         return (response_fmt,
                 choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
                 choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
@@ -347,7 +319,9 @@ class GSMCoT(InputFormatter):
                     )
                     formatted.append(formatted_q)
                 return {feature_name: formatted}
+
             return verb_conf_fmt
+
         return (response_fmt,
                 choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
                 choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
@@ -377,7 +351,9 @@ class GSMCoT(InputFormatter):
                                    f"{conf_user_prompt}")
                     formatted.append(formatted_q)
                 return {feature_name: formatted}
+
             return verb_conf_fmt
+
         return (response_fmt,
                 choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
                 choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))

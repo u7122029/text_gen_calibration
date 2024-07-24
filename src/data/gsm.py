@@ -1,6 +1,6 @@
-from torch.utils.data import Dataset, DataLoader
-from datasets import load_dataset
 import re
+
+from datasets import load_dataset
 
 
 def get_gsm():
@@ -9,14 +9,3 @@ def get_gsm():
     raw_dataset["id"] = list(range(len(raw_dataset)))
 
     return raw_dataset
-
-
-def get_dataset(name):
-    out = None
-    if name == "GSM":
-        out = get_gsm()
-    return out
-
-
-if __name__ == "__main__":
-    get_dataset("GSM")

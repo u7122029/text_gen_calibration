@@ -9,6 +9,7 @@ from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import inspect
 from datasets import Dataset
+import datasets
 import re
 from enum import Enum
 
@@ -86,13 +87,16 @@ def extract_verbalized_confidence(expressions: List[str],
                 conf = float(res.replace("%", "")) / 100
                 if not (0 <= conf <= 1):
                     successful.append(False)
+                    confidences.append(-1)
                     continue
 
             successful.append(True)
             confidences.append(conf)
         except AttributeError:
             successful.append(False)
-
+            confidences.append(-1)
+    assert len(expressions) == len(confidences), f"length of expressions not equal to that of the outputted confidences ({len(expressions)} vs. {len(confidences)})"
+    assert len(successful) == len(confidences)
     return confidences, successful
 
 
@@ -133,7 +137,7 @@ class TextGenLLMBundle:
             return manual_sizes[self.llm_name]
         return len(self.tokeniser)
 
-    def get_tokens_and_logits_from_dset(self, dset, batch_size=1, max_new_tokens=550, desc=None):
+    def get_tokens_and_logits_from_dset(self, dset: datasets.Dataset, batch_size=1, max_new_tokens=550, desc=None):
         """
         Generate the
 
@@ -177,17 +181,13 @@ class TextGenLLMBundle:
 
                 all_response_logits.append(processed_logits)
                 all_response_tokens.append(processed_response)
+        out_dict = {}
+        out_dict.update({"logits": all_response_logits,
+                         "tokens": all_response_tokens})
 
-        out_dict = {
-            "response_logits": all_response_logits,
-            "response_tokens": all_response_tokens
-        }
-        for k in out_dict.keys():
-            dset = dset.add_column(k, out_dict[k])
+        return out_dict
 
-        return dset
-
-    def get_verbalised_confs_from_dset(self, dset: Dataset, batch_size=1, max_new_tokens=30, desc=None):
+    def get_verbalised_confs_from_dset(self, dset: datasets.Dataset, batch_size=1, max_new_tokens=30, desc=None):
         """
 
         :param dset:
@@ -243,20 +243,17 @@ class TextGenLLMBundle:
             out_dict["worded_confs"].extend(w_confidences)
             out_dict["worded_successful"].extend(w_successful)
 
-        for k in out_dict.keys():
-            dset = dset.add_column(k, out_dict[k])
+        return out_dict
 
-        return dset
-
-    def get_logits_confs_and_answers_from_dset(self, dset: Dataset):
+    def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict):
         """
 
-        :param dset:
+        :param logits_and_tokens:
         :return:
         """
         all_preds = []
         all_confs = []
-        for logits, tokens in zip(dset["logits"], dset["tokens"]):
+        for logits, tokens in zip(logits_and_tokens["logits"], logits_and_tokens["tokens"]):
             prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
             tokens = tokens.cpu()
             decoded_response = self.tokeniser.decode(tokens)
@@ -278,9 +275,9 @@ class TextGenLLMBundle:
             all_preds.append(final_answer)
             all_confs.append(response_confidence)
 
-        dset.add_column("correct", (torch.Tensor(all_preds) == dset["answer"]).to(torch.uint8))
-        dset.add_column("logits_confs", torch.Tensor(all_confs))
-        return dset
+        logits_and_tokens["correct"] = (torch.Tensor(all_preds) == logits_and_tokens["answer"]).to(torch.uint8)
+        logits_and_tokens["logits_confs"] = torch.Tensor(all_confs)
+        return logits_and_tokens
 
     def __del__(self):
         # free up memory.

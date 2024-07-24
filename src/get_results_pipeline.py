@@ -35,40 +35,74 @@ class BrierScore(Metric):
 
 
 class CompiledMetrics:
-    def __init__(self, confs_before, confs_after, correct, n_bins=15):
-        assert len(confs_before) == len(confs_after), "confidences before and after are not the same length."
-        assert len(confs_after) == len(correct), "correct is not the same length as confs_after and confs_before."
+    def __init__(self, calib_data, n_bins=15):
+        assert "logits_confs" in calib_data
+        assert "correct" in calib_data
+        assert "numeric_confs" in calib_data
+        assert "numeric_successful" in calib_data
+        assert "worded_confs" in calib_data
+        assert "worded_successful" in calib_data
+        assert "calibrated_confs" in calib_data
 
-        self.confs_before = confs_before
-        self.confs_after = confs_after
-        self.correct = correct
+        self.logits_confs = calib_data["logits_confs"]
+        self.calibrated_confs = calib_data["calibrated_confs"]
+        self.correct = calib_data["correct"]
+
+        # construct verbalised confs
+        self.num_success_mask = calib_data["numeric_successful"]
+        self.worded_success_mask = calib_data["worded_successful"] & ~self.num_success_mask
+
+        self.verbalised_confs = calib_data["worded_confs"][self.worded_success_mask]
+        self.numeric_confs = calib_data["numeric_confs"][self.num_success_mask]
+        self.numeric_correct = self.correct[self.num_success_mask]
+        self.verbalised_correct = self.correct[self.worded_success_mask]
+
+        self.verbalised_confs = torch.cat([self.verbalised_confs, self.numeric_confs])
+        self.verbalised_correct = torch.cat([self.verbalised_correct, self.numeric_correct])
+        assert len(self.verbalised_confs) == len(self.verbalised_correct), "This shouldn't be triggered!"
+
+        self.num_verbalised_successful = torch.sum(self.verbalised_correct.bool())
 
         self.__ece_metric = BinaryCalibrationError(n_bins=n_bins)
         self.__auroc_metric = BinaryAUROC()
         self.__brier_metric = BrierScore()
 
-        self.ece_before = self.__ece_metric(self.confs_before, self.correct).item()
-        self.ece_after = self.__ece_metric(self.confs_after, self.correct).item()
+        self.ece_logits = self.__ece_metric(self.logits_confs, self.correct).item()
+        self.ece_verbalised = self.__ece_metric(self.verbalised_confs, self.verbalised_correct).item()
+        self.ece_calibrated = self.__ece_metric(self.calibrated_confs, self.correct).item()
 
-        self.auroc_before = self.__auroc_metric(self.confs_before, self.correct).item()
-        self.auroc_after = self.__auroc_metric(self.confs_after, self.correct).item()
+        self.auroc_logits = self.__auroc_metric(self.logits_confs, self.correct).item()
+        self.auroc_verbalised = self.__auroc_metric(self.verbalised_confs, self.verbalised_correct).item()
+        self.auroc_calibrated = self.__auroc_metric(self.calibrated_confs, self.correct).item()
 
-        self.auprc_before = binary_auprc(self.confs_before, self.correct).item()
-        self.auprc_after = binary_auprc(self.confs_after, self.correct).item()
+        self.auprc_logits = binary_auprc(self.logits_confs, self.correct).item()
+        self.auprc_verbalised = binary_auprc(self.verbalised_confs, self.verbalised_correct).item()
+        self.auprc_calibrated = binary_auprc(self.calibrated_confs, self.correct).item()
 
-        self.brier_before = self.__brier_metric(self.confs_before, self.correct).item()
-        self.brier_after = self.__brier_metric(self.confs_after, self.correct).item()
+        self.brier_logits = self.__brier_metric(self.logits_confs, self.correct).item()
+        self.brier_verbalised = self.__brier_metric(self.verbalised_confs, self.verbalised_correct).item()
+        self.brier_calibrated = self.__brier_metric(self.calibrated_confs, self.correct).item()
 
         self.accuracy = torch.mean(self.correct.float()).item()
 
-        self.confs_diff = self.confs_after - self.confs_before
-        self.all_mean_conf_change = torch.mean(self.confs_diff)
-        self.correct_mean_conf_change = torch.mean(self.confs_diff[self.correct])
-        self.incorrect_mean_conf_change = torch.mean(self.confs_diff[~self.correct])
+        self.logits_confs_diff = self.calibrated_confs - self.logits_confs
+        self.verbalised_confs_diff = self.calibrated_confs[self.worded_success_mask] - self.verbalised_confs
 
-        self.all_total_conf_change = torch.sum(self.confs_diff)
-        self.correct_total_conf_change = torch.sum(self.confs_diff[self.correct])
-        self.incorrect_total_conf_change = torch.sum(self.confs_diff[~self.correct])
+        self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
+        self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct])
+        self.incorrect_logits_mean_conf_change = torch.mean(self.logits_confs_diff[~self.correct])
+
+        self.verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff)
+        self.correct_verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff[self.verbalised_correct])
+        self.incorrect_verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff[~self.verbalised_correct])
+
+        self.logits_total_conf_change = torch.sum(self.logits_confs_diff)
+        self.correct_logits_total_conf_change = torch.sum(self.logits_confs_diff[self.correct])
+        self.incorrect_logits_total_conf_change = torch.sum(self.logits_confs_diff[~self.correct])
+
+        self.verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff)
+        self.correct_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[self.verbalised_correct])
+        self.incorrect_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[~self.verbalised_correct])
 
     def __len__(self):
         return len(self.correct)
@@ -79,46 +113,36 @@ class CompiledMetrics:
         print("\nBasic Metrics:")
         table = [
             ["Category", "ECE", "Brier", "AUROC", "AUPRC"],
-            ["Before Calibration", self.ece_before, self.brier_before, self.auroc_before, self.auprc_before],
-            ["After Calibration", self.ece_after, self.brier_after, self.auroc_after, self.auprc_after]
+            ["Logit Confs", self.ece_logits, self.brier_logits, self.auroc_logits, self.auprc_logits],
+            ["Verbalised Confs", self.ece_verbalised, self.ece_verbalised, self.auroc_verbalised, self.auprc_verbalised],
+            ["After Calibration", self.ece_calibrated, self.brier_calibrated, self.auroc_calibrated, self.auprc_calibrated]
         ]
         print(tabulate(table[1:], headers=table[0], tablefmt="github"))
         print("\nChanges in Confidences:")
         table1 = [
             ["Category", "All Preds", "Correct Preds", "Incorrect Preds"],
-            ["Mean Change", self.all_mean_conf_change, self.correct_mean_conf_change, self.incorrect_mean_conf_change],
-            ["Total Change", self.all_total_conf_change, self.correct_total_conf_change,
-             self.incorrect_total_conf_change]
+            ["Mean Change (Logit Confs)", self.logits_mean_conf_change, self.correct_logits_mean_conf_change,
+             self.incorrect_logits_mean_conf_change],
+            ["Total Change (Logit Confs)", self.logits_total_conf_change, self.correct_logits_total_conf_change,
+             self.incorrect_logits_total_conf_change],
+            ["Mean Change (Verbalised Confs)", self.verbalised_mean_conf_change, self.correct_verbalised_mean_conf_change,
+            self.incorrect_verbalised_mean_conf_change],
+            ["Total Change (Verbalised Confs)", self.verbalised_total_conf_change, self.correct_verbalised_total_conf_change,
+             self.incorrect_verbalised_total_conf_change]
         ]
         print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))
 
-    def save(self, filename):
-        out = {
-            "confs_before": self.confs_before,
-            "confs_after": self.confs_after,
-            "correct": self.correct
-        }
-        torch.save(out, filename)
 
-    @classmethod
-    def load(cls, filename):
-        d = torch.load(filename)
-        return cls(d["confs_before"], d["confs_after"], d["correct"])
-
-
-def show_results(calib_path: Path, test_path: Path, model_name: str, calibrator_name: str):
-    calib_metrics = CompiledMetrics.load(calib_path)
-    test_metrics = CompiledMetrics.load(test_path)
-
+def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, model_name: str, calibrator_name: str):
     print(f"Model Name: {model_name}")
     print(f"Calibrator Name: {calibrator_name}")
     terminal_size = os.get_terminal_size().columns
     print("-" * terminal_size)
     print("Calibration Set Results:")
-    calib_metrics.display()
+    calib_results.display()
     print("-" * terminal_size)
     print("Test Set Results:")
-    test_metrics.display()
+    test_results.display()
 
 
 # HuggingFaceH4/zephyr-7b-beta
@@ -152,26 +176,20 @@ def main(input_formatter: str="GSMCoT",
     calib_path = Path(str(p / "calib_results.pt"))
     test_path = Path(str(p / "test_results.pt"))
     if calib_path.exists() and test_path.exists() and not retrain_calibrator:
+        # TODO: FIX THIS!
         show_results(calib_path, test_path, model_name, calibrator_name)
         return
 
-    (calib_confs_before,
-     calib_confs_after,
-     calib_correct,
-     test_confs_before,
-     test_confs_after,
-     test_correct) = input_formatter.run_calibration_pipeline(
+    calib_data, test_data = input_formatter.run_calibration_pipeline(
         calibrator_dict[calibrator_name],
         batch_size,
+        recompute_logits=recompute_logits,
         recalibrate=retrain_calibrator
     )
 
-    calib_set_results = CompiledMetrics(calib_confs_before, calib_confs_after, calib_correct)
-    test_set_results = CompiledMetrics(test_confs_before, test_confs_after, test_correct)
-
-    calib_set_results.save(str(p / "calib_results.pt"))
-    test_set_results.save(str(p / "test_results.pt"))
-    show_results(calib_path, test_path, model_name, calibrator_name)
+    calib_results = CompiledMetrics(calib_data)
+    test_results = CompiledMetrics(test_data)
+    show_results(calib_results, test_results, model_name, calibrator_name)
 
 
 if __name__ == "__main__":
