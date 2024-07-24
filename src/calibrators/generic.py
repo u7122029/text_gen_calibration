@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Iterable, List
 
 from data import DictDataset
-from utils import DEVICE
+from utils import DEVICE, TextGenLLMBundle
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
@@ -21,7 +21,7 @@ class Calibrator(ABC):
     You may use the save method to save the parts of the calibrator that require persistence.
     Note that the save method may not do anything at all if there is nothing to save.
     """
-    def __init__(self, llm_bundle):
+    def __init__(self, llm_bundle: TextGenLLMBundle):
         self.llm_bundle = llm_bundle
         self.calibrator_model = None
 
