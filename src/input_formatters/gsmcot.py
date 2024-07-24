@@ -1,53 +1,20 @@
-from abc import ABC, abstractmethod
-from enum import Enum
 from pathlib import Path
 from typing import Optional, Type, Tuple
 
 import torch
 from datasets import Dataset
-from torch import nn
 
 from calibrators import Calibrator
 from data import get_dataset, DictDataset
-from utils import TextGenLLMBundle, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, NUMERIC_CONF_PROMPT, \
-    QUESTION_FORMAT, FINAL_ANSWER_FORMAT
-
-
-class CoTFormat(Enum):
-    SYSTEM_USER_CHAT = 0
-    USER_CHAT = 1
-    NO_TEMPLATE = 2
-
-    @classmethod
-    def from_model_name(cls, name):
-        name_dict = {
-            "google/gemma-1.1-2b-it": cls.USER_CHAT,
-            "google/gemma-1.1-7b-it": cls.USER_CHAT,
-            "google/gemma-2-9b-it": cls.USER_CHAT,
-            "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
-            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
-            "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
-            "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
-            "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
-            "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
-            "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
-        }
-        return name_dict[name]
-
-
-class InputFormatter(ABC):
-    """
-    TODO: Determine methods that should be common across all subclasses.
-    """
-
-    @abstractmethod
-    def __init__(self):
-        """
-        Abstract constructor to ensure that this class cannot be instantiated.
-        """
-        pass
+from input_formatters import InputFormatter
+from input_formatters.generic import CoTFormat
+from utils import (TextGenLLMBundle,
+                   RESULTS_PATH,
+                   COT_SYSTEM_PROMPT,
+                   WORDED_CONF_PROMPT,
+                   NUMERIC_CONF_PROMPT,
+                   QUESTION_FORMAT,
+                   FINAL_ANSWER_FORMAT)
 
 
 class GSMCoT(InputFormatter):
@@ -64,11 +31,10 @@ class GSMCoT(InputFormatter):
         :param test_dset_size: Test set size (if None, uses the rest of the dataset)
         """
         self.llm_bundle = llm_bundle
-        self.task_name = "GSM"
         self.dataset = get_dataset("GSM")
         self.__calibrator: Optional[Calibrator] = None
 
-        self.target_dir = Path(RESULTS_PATH) / self.llm_bundle.llm_name / self.task_name
+        self.target_dir = Path(RESULTS_PATH) / self.llm_bundle.llm_name / self.__class__.__name__
         self.target_dir.mkdir(parents=True, exist_ok=True)
 
         indices = torch.randperm(len(self.dataset))
@@ -101,9 +67,6 @@ class GSMCoT(InputFormatter):
 
         self.calib_dataset = self.calib_dataset.map(self.response_fmt, batched=True)
         self.test_dataset = self.test_dataset.map(self.response_fmt, batched=True)
-
-    def get_name(self):
-        return self.__class__.__name__
 
     def get_calibration_and_test_data(self, batch_size=1, recompute=False):
         """
@@ -181,7 +144,8 @@ class GSMCoT(InputFormatter):
                                  calibrator_type: Type[Calibrator],
                                  batch_size=1,
                                  recompute_logits=False,
-                                 recalibrate=False) -> Tuple[DictDataset, DictDataset]:
+                                 recalibrate=False,
+                                 **kwargs) -> Tuple[DictDataset, DictDataset]:
         # Try to get logits and tokens for both calib and test
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
@@ -225,14 +189,6 @@ class GSMCoT(InputFormatter):
         test_data.data_dict["calibrated_confs"] = test_confs
 
         return calib_data, test_data
-
-    def get_calibrator_model(self):
-        if self.__calibrator is None: return None
-        return nn.Sequential(self.llm_bundle.llm_model, self.__calibrator.calibrator_model)
-
-    def get_results_path(self):
-        if self.__calibrator is None: return None
-        return self.target_dir / self.__calibrator.get_name()
 
     def __suc_response_formats(self,
                                system_prompt: str,

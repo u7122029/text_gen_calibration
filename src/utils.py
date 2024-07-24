@@ -129,9 +129,6 @@ class TextGenLLMBundle:
         else:
             print(f"Model {self.llm_name} already loaded.")
 
-    def is_model_loaded(self):
-        return self.llm_model is not None
-
     def vocab_size(self):
         manual_sizes = {
             "microsoft/Phi-3-mini-4k-instruct": 32064

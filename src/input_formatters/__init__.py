@@ -1,4 +1,5 @@
-from input_formatters.gsmcot import InputFormatter, GSMCoT
+from input_formatters.gsmcot import GSMCoT
+from input_formatters.generic import InputFormatter
 from utils import (TextGenLLMBundle,
                    class_predicate)
 import inspect
