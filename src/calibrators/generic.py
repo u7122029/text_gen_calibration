@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Iterable, List
 
 from data import DictDataset
-from utils import DEVICE, TextGenLLMBundle
+from utils import DEVICE, TextGenLLMBundle, dill_save, dill_load
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
@@ -137,7 +137,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         calibration_dset.reset_keys()
 
     def load(self, filepath):
-        self.calibrator_model.load_state_dict(torch.load(filepath)["state_dict"])
+        self.calibrator_model.load_state_dict(dill_load(filepath)["state_dict"])
         self.calibrator_model.eval()
         self.tuned = True
 
@@ -145,7 +145,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         if _other_entries is None:
             _other_entries = {}
         _other_entries.update({"state_dict": self.calibrator_model.state_dict()})
-        torch.save(_other_entries, filepath)
+        dill_save(_other_entries, filepath)
 
     def test_loop(self, test_dset):
         confs_after_calibration = []

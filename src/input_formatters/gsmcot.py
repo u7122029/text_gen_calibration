@@ -14,7 +14,7 @@ from utils import (TextGenLLMBundle,
                    WORDED_CONF_PROMPT,
                    NUMERIC_CONF_PROMPT,
                    QUESTION_FORMAT,
-                   FINAL_ANSWER_FORMAT)
+                   FINAL_ANSWER_FORMAT, dill_save, dill_load)
 
 
 class GSMCoT(InputFormatter):
@@ -77,12 +77,12 @@ class GSMCoT(InputFormatter):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calibration_data.pt"
-        test_filepath = self.target_dir / "test_data.pt"
+        calib_filepath = self.target_dir / "calibration_data.dill"
+        test_filepath = self.target_dir / "test_data.dill"
 
         if calib_filepath.exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
-            calib_conf_dset = torch.load(calib_filepath)
+            calib_conf_dset = dill_load(calib_filepath)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
             self.llm_bundle.load_model()
@@ -106,12 +106,12 @@ class GSMCoT(InputFormatter):
             calib_conf_dset.update(calib_verbalised_confs)
             calib_conf_dset.update(calib_logit_confs_answers)
 
-            torch.save(calib_conf_dset, str(self.target_dir / "calibration_data.pt"))
+            dill_save(calib_conf_dset, self.target_dir / "calibration_data.dill")
             print("calibration data done.")
 
         if test_filepath.exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
-            test_conf_dset = torch.load(test_filepath)
+            test_conf_dset = dill_load(test_filepath)
         else:
             print(f"test data at ({test_filepath}) not found.")
             self.llm_bundle.load_model()
@@ -135,7 +135,7 @@ class GSMCoT(InputFormatter):
             test_conf_dset.update(test_verbalised_confs)
             test_conf_dset.update(test_logit_confs_answers)
 
-            torch.save(test_conf_dset, str(self.target_dir / "test_data.pt"))
+            dill_save(test_conf_dset, self.target_dir / "test_data.dill")
             print("test data done.")
 
         return DictDataset(calib_conf_dset), DictDataset(test_conf_dset)
@@ -155,35 +155,37 @@ class GSMCoT(InputFormatter):
         # Perhaps check for weights in the calibrator itself?
         # Some calibrators have no weights.
         weights_path = self.target_dir / self.__calibrator.get_name()
-        print(f"weights path is {weights_path}")
-        if (weights_path / "calib_weights.pt").exists() and not recalibrate:
-            self.__calibrator.load(str(weights_path / "calib_weights.pt"))
+        cw_path = weights_path / "calib_weights.dill"
+        if cw_path.exists() and not recalibrate:
+            self.__calibrator.load(str(cw_path))
         else:
             print("Performing calibration of model.")
 
             weights_path.mkdir(parents=True, exist_ok=True)
             self.__calibrator.calibrate(calibration_dset=calib_data,
                                         batch_size=batch_size)
-            self.__calibrator.save(str(weights_path / "calib_weights.pt"))
+            self.__calibrator.save(str(cw_path))
 
         # test the calibrator.
-        if (weights_path / "calib_results.pt").exists():
-            print(f"Found existing calibration results at {weights_path / 'calib_results.pt'}")
-            calib_confs = torch.load(weights_path / "calib_results.pt")
+        cr_path = weights_path / "calib_results.dill"
+        if cr_path.exists():
+            print(f"Found existing calibration results at {cr_path}")
+            calib_confs = dill_load(cr_path)
         else:
             print("Testing Calibrator on Calibration Dataset")
             calib_confs = self.__calibrator.test(test_dset=calib_data,
                                                  batch_size=batch_size)
-            torch.save(calib_confs, weights_path / "calib_results.pt")
+            dill_save(calib_confs, cr_path)
 
-        if (weights_path / "test_results.pt").exists():
-            print(f"Found existing test results at {weights_path / 'test_results.pt'}")
-            test_confs = torch.load(weights_path / "test_results.pt")
+        tr_path = weights_path / "test_results.dill"
+        if tr_path.exists():
+            print(f"Found existing test results at {tr_path}")
+            test_confs = dill_load(tr_path)
         else:
             print("Testing Calibrator on Test Dataset")
             test_confs = self.__calibrator.test(test_dset=test_data,
                                                 batch_size=batch_size)
-            torch.save(test_confs, weights_path / "test_results.pt")
+            dill_save(test_confs, tr_path)
 
         calib_data.data_dict["calibrated_confs"] = calib_confs
         test_data.data_dict["calibrated_confs"] = test_confs

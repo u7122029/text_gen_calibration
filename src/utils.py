@@ -1,14 +1,13 @@
-from abc import ABC
-from typing import List, Optional, Dict, Tuple
+from os import PathLike
+from typing import List, Optional, Dict, Tuple, Any
+import dill
 
 from tqdm import tqdm
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import inspect
-from datasets import Dataset
 import datasets
 import re
 from enum import Enum
@@ -306,3 +305,14 @@ def class_predicate(cls):
         return cls in class_bases
 
     return predicate_func
+
+
+def dill_load(pth: PathLike) -> Any:
+    with open(pth, "rb") as f:
+        out = dill.load(f)
+    return out
+
+
+def dill_save(obj: Any, pth: PathLike):
+    with open(pth, "wb") as f:
+        dill.dump(obj, f)

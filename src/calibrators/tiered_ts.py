@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from data import DictDataset
 from .generic import Calibrator, LogitTokenToConfidenceCalibrator
-from utils import TextGenLLMBundle
+from utils import TextGenLLMBundle, dill_load
 
 
 class FrequencyTS(LogitTokenToConfidenceCalibrator):
@@ -123,7 +123,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
         return ["tokens", "logits", "correct"]
 
     def load(self, filepath):
-        d = torch.load(filepath)
+        d = dill_load(filepath)
         self.calibrator_model.set_tokens(d["top_token_ids"], d["bot_token_ids"])
         super().load(filepath)
 
