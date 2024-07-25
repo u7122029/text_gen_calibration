@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
 import torch, warnings
-from datasets import Dataset
 
 
 class Calibrator(ABC):
@@ -37,7 +36,7 @@ class Calibrator(ABC):
         pass
 
     @abstractmethod
-    def save(self, filepath):
+    def save(self, filepath, **kwargs):
         pass
 
     @abstractmethod
@@ -138,12 +137,15 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         calibration_dset.reset_keys()
 
     def load(self, filepath):
-        self.calibrator_model.load_state_dict(torch.load(filepath))
+        self.calibrator_model.load_state_dict(torch.load(filepath)["state_dict"])
         self.calibrator_model.eval()
         self.tuned = True
 
-    def save(self, filepath):
-        torch.save(self.calibrator_model.state_dict(), filepath)
+    def save(self, filepath, _other_entries=None):
+        if _other_entries is None:
+            _other_entries = {}
+        _other_entries.update({"state_dict": self.calibrator_model.state_dict()})
+        torch.save(_other_entries, filepath)
 
     def test_loop(self, test_dset):
         confs_after_calibration = []

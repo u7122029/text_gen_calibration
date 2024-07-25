@@ -1,6 +1,4 @@
-from abc import ABC, abstractmethod
 from tqdm import tqdm
-import torch
 from torch.utils.data import DataLoader
 from icecream import ic
 import inspect, sys
@@ -10,10 +8,11 @@ import numpy as np
 from torch import nn, optim
 from utils import DEVICE, class_predicate
 from torch.nn.functional import relu
+
 from .generic import LogitTokenToConfidenceCalibrator, Calibrator
 from .temperature_scaling import TemperatureScalingVariant
 from .pts import *
-
+from .tiered_ts import *
 
 class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
     """
