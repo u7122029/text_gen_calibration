@@ -1,4 +1,7 @@
+from os import PathLike
 from typing import Iterable
+
+import dill
 
 from data.gsm import get_gsm
 from torch.utils.data import DataLoader, Dataset
@@ -22,6 +25,12 @@ class DictDataset(Dataset):
 
         self.data_dict = data_dict
         self.get_keys = self.data_dict.keys()
+
+    @classmethod
+    def from_file(cls, path: PathLike):
+        with open(path, "rb") as f:
+            d = dill.load(f)
+        return cls(d)
 
     def restrict_keys(self, keys: Iterable[str]):
         assert all([x in self.data_dict for x in keys])
