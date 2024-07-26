@@ -60,7 +60,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
     def calibrate(self, calibration_dset: DictDataset, top_k=10, bot_k=10, **kwargs):
         _, _ = self.compute_scores_and_indices(calibration_dset, top_k, bot_k)
 
-        self.calibrator_model.set_tokens(self.top_token_ids[-self.top_k:], self.bot_token_ids[-self.bot_k:])
+        self.calibrator_model.set_tokens(self.top_token_ids[:self.top_k], self.bot_token_ids[:self.bot_k])
         super().calibrate(calibration_dset, **kwargs)
 
     def compute_scores_and_indices(self, calibration_dset: DictDataset, top_k=1, bot_k=1):
@@ -207,11 +207,11 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
             "bot_token_values": self.bot_token_values
         }
 
-    def compile_token_score(self):
+    """def compile_token_score(self):
         df = self.get_frequency_dict()
         df["top_token_ids"] = self.llm_bundle.tokeniser.batch_decode(df["top_token_ids"])
         df["bot_token_ids"] = self.llm_bundle.tokeniser.batch_decode(df["bot_token_ids"])
         del df["top_k"]
         del df["bot_k"]
         df = pd.DataFrame(df)
-        return df
+        return df"""
