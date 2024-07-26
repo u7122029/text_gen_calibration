@@ -17,7 +17,7 @@ def main(model_name: str="google/gemma-1.1-2b-it", input_formatter_name="GSMCoT"
     path = Path(RESULTS_PATH) / model_name / input_formatter_name
     calib_data = DictDataset.from_file(path / "calibration_data.dill")
     calibrator.compute_scores_and_indices(calib_data)
-    print(calibrator.compile_token_score().head(100))
+    print(calibrator.compile_token_score().head(500))
 
 
 if __name__ == "__main__":
