@@ -57,8 +57,8 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
 
         super().__init__(llm_bundle, FrequencyTS.TSModel())
 
-    def calibrate(self, calibration_dset: DictDataset, top_k=1, bot_k=1, **kwargs):
-        self.compute_scores_and_indices(calibration_dset, top_k, bot_k)
+    def calibrate(self, calibration_dset: DictDataset, top_k=10, bot_k=10, **kwargs):
+        _, _ = self.compute_scores_and_indices(calibration_dset, top_k, bot_k)
 
         self.calibrator_model.set_tokens(self.top_token_ids[-self.top_k:], self.bot_token_ids[-self.bot_k:])
         super().calibrate(calibration_dset, **kwargs)
@@ -100,7 +100,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
         for k, v in token_confs.items():
             v = torch.Tensor(v)
             n_response_occurrences = len(response_occurrences[k])
-            df_top["token_ids"].append(k)#[k] = len(v)
+            df_top["token_ids"].append(k)
             df_bot["token_ids"].append(k)
 
             m = torch.mean(v)
@@ -122,15 +122,16 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
         self.bot_token_ids = torch.as_tensor(df_bot["token_ids"].to_numpy())
         self.bot_token_values = torch.as_tensor(df_bot["token_values"].to_numpy())
 
+        return df_top, df_bot
+
     def compute_scores_and_indices1(self, calibration_dset: DictDataset, top_k=1, bot_k=1):
         self.top_k = top_k
         self.bot_k = bot_k
 
         # we first need to generate the frequency scores.
         vocab_size = self.llm_bundle.vocab_size()
-        token_frequencies = torch.zeros(vocab_size)  # how many times does the token appear in every response?
-        token_response_frequencies = torch.zeros(vocab_size)  # how many responses does the token appear at least once in?
-        #token_response_frequencies2 = torch.zeros(vocab_size)  # same as above, but takes squared values
+        token_frequencies = torch.zeros(vocab_size) # how many times does the token appear in every response?
+        token_response_frequencies = torch.zeros(vocab_size) # how many responses does the token appear at least once in?
         token_total_confs = torch.zeros(vocab_size)
         token_total_confs2 = torch.zeros(vocab_size)
 
@@ -170,22 +171,6 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
                             * token_response_frequencies / len(calibration_dset))
         self.bot_token_values, self.bot_token_ids = torch.sort(bot_token_scores, descending=True)
 
-    def collate_fn(self, data_list):
-        out = {
-            "logits": [],
-            "tokens": [],
-            "correct": []
-        }
-        for d in data_list:
-            out["logits"].append(d["logits"])
-            out["tokens"].append(d["tokens"])
-            out["correct"].append(d["correct"].repeat(len(d["tokens"])))
-
-        out["logits"] = torch.cat(out["logits"], dim=0)
-        out["tokens"] = torch.cat(out["tokens"])
-        out["correct"] = torch.cat(out["correct"]).float()
-        return out
-
     def dset_columns(self) -> List[str]:
         return ["tokens", "logits", "correct"]
 
@@ -198,7 +183,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
         self.bot_token_ids = d["bot_token_ids"]
         self.bot_token_values = d["bot_token_values"]
 
-        self.calibrator_model.set_tokens(self.top_token_ids[-self.top_k:], self.bot_token_ids[-self.bot_k:])
+        self.calibrator_model.set_tokens(self.top_token_ids[:self.top_k], self.bot_token_ids[:self.bot_k])
         super().load(filepath)
 
     def save(self, filepath, **kwargs):
