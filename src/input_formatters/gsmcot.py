@@ -130,7 +130,7 @@ class GSMCoT(InputFormatter):
             # Obtain answers and logits confidences.
             test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens)
 
-            test_conf_dset = self.test_dataset.remove_columns(["question", "response_formatted"]).to_dict()
+            test_conf_dset = self.test_dataset.remove_columns(["response_formatted"]).to_dict()
             test_conf_dset.update(test_logits_tokens)
             test_conf_dset.update(test_verbalised_confs)
             test_conf_dset.update(test_logit_confs_answers)
