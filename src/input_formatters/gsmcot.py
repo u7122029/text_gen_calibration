@@ -86,17 +86,19 @@ class GSMCoT(InputFormatter):
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
             self.llm_bundle.load_model()
-            calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
-                                                                                  batch_size=batch_size,
-                                                                                  desc="Get Logits + Tokens (Calib)")
+            with torch.no_grad():
+                calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
+                                                                                      batch_size=batch_size,
+                                                                                      desc="Get Logits + Tokens (Calib)")
             calib_logits_tokens["answer"] = torch.Tensor(self.calib_dataset["answer"])
 
             calib_verbalised_dset = (self.calib_dataset
                                      .map(self.numeric_conf_fmt, batched=True)
                                      .map(self.worded_conf_fmt, batched=True))
-            calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(calib_verbalised_dset,
-                                                                                    batch_size=batch_size,
-                                                                                    desc="Get Verbalised Confs (Calib)")
+            with torch.no_grad():
+                calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(calib_verbalised_dset,
+                                                                                        batch_size=batch_size,
+                                                                                        desc="Get Verbalised Confs (Calib)")
 
             # Obtain answers and logits confidences.
             calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens)
@@ -115,17 +117,19 @@ class GSMCoT(InputFormatter):
         else:
             print(f"test data at ({test_filepath}) not found.")
             self.llm_bundle.load_model()
-            test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
-                                                                                  batch_size=batch_size,
-                                                                                  desc="Get Logits + Tokens (Test)")
+            with torch.no_grad():
+                test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
+                                                                                     batch_size=batch_size,
+                                                                                     desc="Get Logits + Tokens (Test)")
             test_logits_tokens["answer"] = torch.Tensor(self.test_dataset["answer"])
 
             test_verbalised_dset = (self.test_dataset
                                     .map(self.numeric_conf_fmt, batched=True)
                                     .map(self.worded_conf_fmt, batched=True))
-            test_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(test_verbalised_dset,
-                                                                                   batch_size=batch_size,
-                                                                                   desc="Get Verbalised Confs (Test)")
+            with torch.no_grad():
+                test_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(test_verbalised_dset,
+                                                                                       batch_size=batch_size,
+                                                                                       desc="Get Verbalised Confs (Test)")
 
             # Obtain answers and logits confidences.
             test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens)

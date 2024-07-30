@@ -32,12 +32,10 @@ class DictDataset(Dataset):
             d = dill.load(f)
         return cls(d)
 
-    def restrict_keys(self, keys: Iterable[str]):
-        assert all([x in self.data_dict for x in keys])
-        self.get_keys = keys
-
-    def reset_keys(self):
-        self.get_keys = self.data_dict.keys()
+    def add_column(self, column_name: str, data):
+        assert isinstance(column_name, str)
+        assert len(data) == len(self.data_dict[self.ref_key])
+        self.data_dict[column_name] = data
 
     def __len__(self):
         return len(self.data_dict[self.ref_key])
@@ -63,6 +61,24 @@ class DictDataset(Dataset):
 
     def keys(self):
         return self.data_dict.keys()
+
+    def collate_fn(self, *keys, postprocess_fn=None):
+        """
+        Generates a collate function based on the keys provided.
+        Also allows postprocessing.
+        @param keys: The keys to include in the batch dictionary.
+        @param postprocess_fn: The postprocessing function. Should take in the batched dictionary and output a processed version.
+        @return: The batched dictionary.
+        """
+        def fn(data_list):
+            out_dict = {k: [] for k in keys}
+            for d in data_list:
+                for k in keys:
+                    out_dict[k].append(d[k])
+            if postprocess_fn is not None:
+                out_dict = postprocess_fn(out_dict)
+            return out_dict
+        return fn
 
 
 if __name__ == "__main__":

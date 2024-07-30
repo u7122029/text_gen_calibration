@@ -99,7 +99,7 @@ class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
     def __init__(self, llm_bundle):
         super().__init__(llm_bundle, TokenFrequencyPTSv1.TFIDFModel(llm_bundle.vocab_size()))
 
-    def calibration_step(self, pbar, postfix, optimiser, loss_fn, **kwargs):
+    def calibration_epoch(self, pbar, postfix, optimiser, loss_fn, **kwargs):
         postfix["total_loss_last_epoch"] = 0
         for logits_batch, _, is_correct_batch, rtf_batch in pbar:
             logits_batch = [x.to(DEVICE) for x in logits_batch]

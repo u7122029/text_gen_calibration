@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from os import PathLike
 from typing import List, Optional, Dict, Tuple, Any
 import dill
@@ -6,11 +7,13 @@ from tqdm import tqdm
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
 import inspect
 import datasets
 import re
 from enum import Enum
+
+from data import DictDataset
 
 QUALITATIVE_SCALE = {
     "Very low": 0,
@@ -99,7 +102,7 @@ def extract_verbalized_confidence(expressions: List[str],
     return confidences, successful
 
 
-class TextGenLLMBundle:
+class LLMBundle(Enum):
     def __init__(self, llm_name: str):
         self.llm_name = llm_name
 
@@ -110,23 +113,8 @@ class TextGenLLMBundle:
         self.tokeniser = AutoTokenizer.from_pretrained(self.llm_name,
                                                        token=self.token,
                                                        padding_side="left")
-        self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
         self.llm_model = None
-
-    def load_model(self):
-        """
-        Calls the function to load the model into the program. This is a whole separate method because a user might only
-        need the tokeniser.
-        :return:
-        """
-        if self.llm_model is None:
-            print(f"Loading model {self.llm_name}")
-            self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
-                                                                  device_map="auto",
-                                                                  torch_dtype=torch.float16,
-                                                                  token=self.token)
-        else:
-            print(f"Model {self.llm_name} already loaded.")
+        self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
 
     def vocab_size(self):
         manual_sizes = {
@@ -136,7 +124,36 @@ class TextGenLLMBundle:
             return manual_sizes[self.llm_name]
         return len(self.tokeniser)
 
-    def get_tokens_and_logits_from_dset(self, dset: datasets.Dataset, batch_size=1, max_new_tokens=550, desc=None):
+    @abstractmethod
+    def get_model(self):
+        pass
+
+    def load_model(self):
+        """
+        Calls the function to load the model into the program. This is a whole separate method because a user might only
+        need the tokeniser.
+        :return:
+        """
+        if self.llm_model is None:
+            print(f"Loading model {self.llm_name}")
+            self.get_model()
+        else:
+            print(f"Model {self.llm_name} already loaded.")
+
+    def __del__(self):
+        # free up memory.
+        del self.tokeniser, self.llm_model
+
+
+class TextGenLLMBundle(LLMBundle):
+    def get_model(self):
+
+        self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                              device_map="auto",
+                                                              torch_dtype=torch.float16,
+                                                              token=self.token)
+
+    def get_tokens_and_logits_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=550, desc=None):
         """
         Generate the
 
@@ -186,7 +203,7 @@ class TextGenLLMBundle:
 
         return out_dict
 
-    def get_verbalised_confs_from_dset(self, dset: datasets.Dataset, batch_size=1, max_new_tokens=30, desc=None):
+    def get_verbalised_confs_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=30, desc=None):
         """
 
         :param dset:
@@ -279,9 +296,45 @@ class TextGenLLMBundle:
         logits_and_tokens["logits_confs"] = torch.Tensor(all_confs)
         return logits_and_tokens
 
-    def __del__(self):
-        # free up memory.
-        del self.tokeniser, self.llm_model
+
+class TextClassificationLLMBundle(LLMBundle):
+    def get_model(self):
+        self.llm_model = AutoModelForSequenceClassification.from_pretrained(self.llm_name)
+
+    def get_logits_from_dset(self, dset: DictDataset, batch_size=1, desc=None):
+        all_response_logits = []
+        all_response_tokens = []
+        dl = DataLoader(dset, batch_size=batch_size)
+
+        # Logits and Output Tokens
+        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
+            formatted = batch["response_formatted"]
+
+            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
+            generated = self.llm_model.generate(**inputs,
+                                                max_new_tokens=max_new_tokens,
+                                                output_logits=True,
+                                                return_dict_in_generate=True,
+                                                pad_token_id=self.tokeniser.eos_token_id)
+            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+
+            # get the tokens, then remove the ones that made up the input.
+            sequences = generated.sequences.cpu()
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+
+            for logits, response in zip(model_logits, responses):
+                eos_mask = response != self.tokeniser.eos_token_id
+
+                processed_logits = logits[eos_mask]
+                processed_response = response[eos_mask]
+
+                all_response_logits.append(processed_logits)
+                all_response_tokens.append(processed_response)
+        out_dict = {}
+        out_dict.update({"logits": all_response_logits,
+                         "tokens": all_response_tokens})
+
+        return out_dict
 
 
 class AbsModule(nn.Module):
