@@ -15,7 +15,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    class TSModel(nn.Module):
+    class Tiered_TSModel(nn.Module):
         """
         Contains 3 temperature parameters.
         One determines the adjustment of the token ids that commonly occur with high confidence
@@ -55,7 +55,7 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
         self.bot_k = None
         self.top_token_values = self.top_token_ids = self.bot_token_values = self.bot_token_ids = None
 
-        super().__init__(llm_bundle, FrequencyTS.TSModel())
+        super().__init__(llm_bundle, FrequencyTS.Tiered_TSModel())
 
     def calibrate(self, calibration_dset: DictDataset, top_k=10, bot_k=10, **kwargs):
         _, _ = self.compute_scores_and_indices(calibration_dset, top_k, bot_k)

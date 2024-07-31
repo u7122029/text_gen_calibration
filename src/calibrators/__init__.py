@@ -5,12 +5,15 @@ import numpy as np
 from icecream import ic
 from nltk import corpus
 from torch.nn.functional import relu
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from torch import optim
 
-from utils import class_predicate
+from utils import class_predicate, DEVICE
 from .apricot import *
 from .generic import LogitTokenToConfidenceCalibrator, Calibrator
 from .pts import *
-from .temperature_scaling import TemperatureScalingVariant
+from .temperature_scaling import TemperatureScaling
 from .tiered_ts import *
 
 

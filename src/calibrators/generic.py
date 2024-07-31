@@ -45,20 +45,21 @@ class Calibrator(ABC):
 
 
 class LogitTokenToConfidenceCalibrator(Calibrator):
-    def __init__(self, llm_bundle, calibrator_model):
+    def __init__(self, llm_bundle, calibrator_model, label_key="correct"):
         super().__init__(llm_bundle)
         self.calibrator_model = calibrator_model.to(DEVICE)
+        self.label_key = label_key
         self.tuned = False
 
     def calibration_epoch(self, pbar, postfix, optimiser, loss_fn, **kwargs):
         postfix["total_loss_last_epoch"] = 0
         for batch in pbar:
-            is_correct_batch = batch["correct"].to(DEVICE)
+            label_batch = batch[self.label_key].to(DEVICE)
             logits_batch = batch["logits"].to(DEVICE)
 
             optimiser.zero_grad()
             out_token_confs = self.calibrator_model(logits_batch)
-            loss = loss_fn(out_token_confs, is_correct_batch)
+            loss = loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
@@ -66,20 +67,18 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
     def dset_columns(self) -> List[str]:
         return ["logits", "tokens", "correct"]
 
-    @staticmethod
-    def __collate_post_process(out_dict):
+    def __collate_post_process(self, out_dict: dict):
         out_dict["logits"] = torch.cat(out_dict["logits"], dim=0)
-        out_dict["correct"] = torch.cat(
-            [c.repeat(len(t)) for c, t in zip(out_dict["correct"], out_dict["tokens"])]).float()
+        out_dict[self.label_key] = torch.cat(
+            [c.repeat(len(t)) for c, t in zip(out_dict[self.label_key], out_dict["tokens"])]).float()
         out_dict["tokens"] = torch.cat(out_dict["tokens"])
-
-        return out_dict
 
     def calibrate(self,
                   calibration_dset: DictDataset,
                   batch_size=1,
                   epochs=30,
                   lr=0.01,
+                  _postprocess_fn=None,
                   **kwargs):
         """
         Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
@@ -91,10 +90,12 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
         :param kwargs:
         :return:
         """
-        # Assume calib_logits has shape [dset_length, response_length, vocab_size]
+        if _postprocess_fn is None:
+            _postprocess_fn = self.__collate_post_process
+
         calibration_dl = DataLoader(calibration_dset,
                                     collate_fn=calibration_dset.collate_fn(*self.dset_columns(),
-                                                                           postprocess_fn=self.__collate_post_process),
+                                                                           postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)
         print("Made dataloader.")
