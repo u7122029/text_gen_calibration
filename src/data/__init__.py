@@ -27,6 +27,10 @@ class DictDataset(Dataset):
         self.get_keys = self.data_dict.keys()
 
     @classmethod
+    def from_kwargs(cls, **kwargs):
+        return cls(kwargs)
+
+    @classmethod
     def from_file(cls, path: PathLike):
         with open(path, "rb") as f:
             d = dill.load(f)
@@ -40,8 +44,11 @@ class DictDataset(Dataset):
     def __len__(self):
         return len(self.data_dict[self.ref_key])
 
-    def __getitem__(self, idx):
-        return {k: self.data_dict[k][idx] for k in self.get_keys}
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            return self.data_dict[item]
+
+        return {k: self.data_dict[k][item] for k in self.get_keys}
 
     def __str__(self):
         keys_str = f"keys: {self.data_dict.keys()}"

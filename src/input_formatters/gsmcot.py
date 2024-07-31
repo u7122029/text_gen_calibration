@@ -103,7 +103,7 @@ class GSMCoT(InputFormatter):
             # Obtain answers and logits confidences.
             calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens)
 
-            calib_conf_dset = self.calib_dataset.remove_columns(["question", "response_formatted"]).to_dict()
+            calib_conf_dset = self.calib_dataset.remove_columns(["response_formatted"]).to_dict()
             calib_conf_dset.update(calib_logits_tokens)
             calib_conf_dset.update(calib_verbalised_confs)
             calib_conf_dset.update(calib_logit_confs_answers)

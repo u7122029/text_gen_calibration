@@ -69,8 +69,10 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
     @staticmethod
     def __collate_post_process(out_dict):
         out_dict["logits"] = torch.cat(out_dict["logits"], dim=0)
+        out_dict["correct"] = torch.cat(
+            [c.repeat(len(t)) for c, t in zip(out_dict["correct"], out_dict["tokens"])]).float()
         out_dict["tokens"] = torch.cat(out_dict["tokens"])
-        out_dict["correct"] = torch.cat(out_dict["correct"]).float()
+
         return out_dict
 
     def calibrate(self,

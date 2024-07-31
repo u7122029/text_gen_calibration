@@ -1,18 +1,18 @@
-from tqdm import tqdm
-from torch.utils.data import DataLoader
-from icecream import ic
-import inspect, sys
-from nltk import corpus
-import pandas as pd
+import inspect
+import sys
+
 import numpy as np
-from torch import nn, optim
-from utils import DEVICE, class_predicate
+from icecream import ic
+from nltk import corpus
 from torch.nn.functional import relu
 
+from utils import class_predicate
+from .apricot import *
 from .generic import LogitTokenToConfidenceCalibrator, Calibrator
-from .temperature_scaling import TemperatureScalingVariant
 from .pts import *
+from .temperature_scaling import TemperatureScalingVariant
 from .tiered_ts import *
+
 
 class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
     """

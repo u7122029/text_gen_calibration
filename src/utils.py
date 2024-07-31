@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from os import PathLike
 from typing import List, Optional, Dict, Tuple, Any
 import dill
@@ -102,7 +102,7 @@ def extract_verbalized_confidence(expressions: List[str],
     return confidences, successful
 
 
-class LLMBundle(Enum):
+class LLMBundle(ABC):
     def __init__(self, llm_name: str):
         self.llm_name = llm_name
 
@@ -147,7 +147,6 @@ class LLMBundle(Enum):
 
 class TextGenLLMBundle(LLMBundle):
     def get_model(self):
-
         self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
