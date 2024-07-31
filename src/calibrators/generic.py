@@ -64,14 +64,12 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 
-    def dset_columns(self) -> List[str]:
-        return ["logits", "tokens", "correct"]
-
     def __collate_post_process(self, out_dict: dict):
         out_dict["logits"] = torch.cat(out_dict["logits"], dim=0)
         out_dict[self.label_key] = torch.cat(
             [c.repeat(len(t)) for c, t in zip(out_dict[self.label_key], out_dict["tokens"])]).float()
         out_dict["tokens"] = torch.cat(out_dict["tokens"])
+        return out_dict
 
     def calibrate(self,
                   calibration_dset: DictDataset,
@@ -94,7 +92,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
             _postprocess_fn = self.__collate_post_process
 
         calibration_dl = DataLoader(calibration_dset,
-                                    collate_fn=calibration_dset.collate_fn(*self.dset_columns(),
+                                    collate_fn=calibration_dset.collate_fn("logits", "tokens", self.label_key,
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)
