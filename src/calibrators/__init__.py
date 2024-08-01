@@ -15,6 +15,7 @@ from .generic import LogitTokenToConfidenceCalibrator, Calibrator
 from .pts import *
 from .temperature_scaling import TemperatureScaling
 from .tiered_ts import *
+from .platt_scaling import *
 
 
 class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):

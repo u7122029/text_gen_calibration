@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Iterable, List
 
 from data import DictDataset
 from utils import DEVICE, LLMBundle, dill_save, dill_load
@@ -44,22 +43,29 @@ class Calibrator(ABC):
         pass
 
 
-class LogitTokenToConfidenceCalibrator(Calibrator):
-    def __init__(self, llm_bundle, calibrator_model, label_key="correct"):
+class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
+    @abstractmethod
+    def __init__(self, llm_bundle, calibrator_model, label_key="correct", loss_fn=None):
         super().__init__(llm_bundle)
+        if loss_fn is None:
+            self.loss_fn = nn.MSELoss() # calibration aware loss with l2 norm squared.
+        else:
+            self.loss_fn = loss_fn
+
         self.calibrator_model = calibrator_model.to(DEVICE)
         self.label_key = label_key
         self.tuned = False
 
-    def calibration_epoch(self, pbar, postfix, optimiser, loss_fn, **kwargs):
+    def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
         for batch in pbar:
             label_batch = batch[self.label_key].to(DEVICE)
             logits_batch = batch["logits"].to(DEVICE)
+            tokens_batch = batch["tokens"].to(DEVICE)
 
             optimiser.zero_grad()
-            out_token_confs = self.calibrator_model(logits_batch)
-            loss = loss_fn(out_token_confs, label_batch)
+            out_token_confs = self.calibrator_model(logits_batch, tokens_batch)
+            loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
@@ -96,10 +102,10 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)
-        print("Made dataloader.")
         # Optimise llm.
         self.calibrator_model = self.calibrator_model.to(DEVICE)
-        loss_fn = nn.MSELoss().to(DEVICE) # calibration aware loss with l2 norm squared.
+        self.loss_fn.to(DEVICE)
+
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
         print("Training Calibrator")
@@ -111,7 +117,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator):
                         desc=f"Epoch {epoch_idx + 1}/{epochs}",
                         postfix=postfix)
 
-            self.calibration_epoch(pbar, postfix, optimiser, loss_fn)
+            self.calibration_epoch(pbar, postfix, optimiser)
         self.calibrator_model.eval()
         self.tuned = True
 

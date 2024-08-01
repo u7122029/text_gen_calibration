@@ -26,24 +26,19 @@ class PTSBase(LogitTokenToConfidenceCalibrator, ABC):
             self.layers.append(AbsModule())
             self.layers = nn.Sequential(*self.layers)
 
-        def forward(self, inp, tokens=None):
+        def forward(self, inp, tokens):
             t, _ = torch.sort(torch.topk(inp, self.first_layer_size, dim=1).values, dim=1, descending=True)
             t = torch.clip(self.layers(t), min=1e-8, max=1e+8)
 
             x = inp / t
             x = torch.softmax(x, dim=1)
-
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
+            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
             return x
 
     @abstractmethod
     def __init__(self, llm_bundle, *layer_sizes):
         calib_model = PTSBase.PTSModel(*layer_sizes)
-        print(calib_model)
         super().__init__(llm_bundle,
                          calib_model)
 

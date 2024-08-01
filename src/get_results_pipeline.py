@@ -162,7 +162,7 @@ def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, 
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
 def main(input_formatter: str="GSMCoT",
-         calibrator_name="TemperatureScaling",
+         calibrator_name="PlattScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
          calib_dset_size=300,
