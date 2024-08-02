@@ -174,25 +174,25 @@ class GSMCoT(InputFormatter):
         cr_path = weights_path / "calib_results.dill"
         if cr_path.exists():
             print(f"Found existing calibration results at {cr_path}")
-            calib_confs = dill_load(cr_path)
+            calib_results = dill_load(cr_path)
         else:
             print("Testing Calibrator on Calibration Dataset")
-            calib_confs = self.__calibrator.test(test_dset=calib_data,
-                                                 batch_size=batch_size)
-            dill_save(calib_confs, cr_path)
+            calib_results = self.__calibrator.test(test_dset=calib_data,
+                                                   batch_size=batch_size)
+            dill_save(calib_results, cr_path)
 
         tr_path = weights_path / "test_results.dill"
         if tr_path.exists():
             print(f"Found existing test results at {tr_path}")
-            test_confs = dill_load(tr_path)
+            test_results = dill_load(tr_path)
         else:
             print("Testing Calibrator on Test Dataset")
-            test_confs = self.__calibrator.test(test_dset=test_data,
-                                                batch_size=batch_size)
-            dill_save(test_confs, tr_path)
+            test_results = self.__calibrator.test(test_dset=test_data,
+                                                  batch_size=batch_size)
+            dill_save(test_results, tr_path)
 
-        calib_data.data_dict["calibrated_confs"] = calib_confs
-        test_data.data_dict["calibrated_confs"] = test_confs
+        calib_data.extend(calib_results)
+        test_data.extend(test_results)
 
         return calib_data, test_data
 

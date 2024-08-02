@@ -17,7 +17,7 @@ class TSModel(nn.Module):
         return x  # [confs]
 
 
-class PlattScalerModel(nn.Module):
+class PlattScalerLogits(nn.Module):
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(1,1)
@@ -28,3 +28,14 @@ class PlattScalerModel(nn.Module):
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1)
         x = sigmoid(self.linear(x))
         return x.flatten()  # [confs]
+
+
+class PlattScalerConfs(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(1,1)
+
+    def forward(self, x):
+        # x.shape: [response_no (batch_size), confidence (1)]
+        x = sigmoid(self.linear(x))
+        return x.flatten()  # [calibrated_confs]

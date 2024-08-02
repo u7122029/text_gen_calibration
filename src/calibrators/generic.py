@@ -118,6 +118,8 @@ class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
                         postfix=postfix)
 
             self.calibration_epoch(pbar, postfix, optimiser)
+
+        calibration_dset.add_column("calibrated_successful", torch.ones(len(calibration_dset)).bool())
         self.calibrator_model.eval()
         self.tuned = True
 
@@ -149,4 +151,9 @@ class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
         self.calibrator_model = self.calibrator_model.to(DEVICE)
         with torch.no_grad():
             confs_after_calibration = self.test_loop(test_dset)
-        return torch.Tensor(confs_after_calibration)
+
+        out_dict = {
+            "calibrated_confs": torch.Tensor(confs_after_calibration),
+            "calibrated_successful": torch.ones(len(test_dset)).bool()
+        }
+        return out_dict

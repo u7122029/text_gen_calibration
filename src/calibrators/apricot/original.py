@@ -94,4 +94,9 @@ class APRICOT_Original(APRICOT):
         self.calibrator_model = self.calibrator_model.to(DEVICE)
         with torch.no_grad():
             confs_after_calibration = self.test_loop(test_dset)
-        return torch.Tensor(confs_after_calibration)
+
+        out_dict = {
+            "calibrated_confs": torch.Tensor(confs_after_calibration),
+            "calibrated_successful": torch.ones(len(confs_after_calibration)).bool()
+        }
+        return out_dict

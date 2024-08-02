@@ -41,6 +41,10 @@ class DictDataset(Dataset):
         assert len(data) == len(self.data_dict[self.ref_key])
         self.data_dict[column_name] = data
 
+    def extend(self, other: dict):
+        for k, v in other.items():
+            self.add_column(k, v)
+
     def __len__(self):
         return len(self.data_dict[self.ref_key])
 

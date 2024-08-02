@@ -44,27 +44,32 @@ class CompiledMetrics:
         assert "worded_confs" in calib_data
         assert "worded_successful" in calib_data
         assert "calibrated_confs" in calib_data
+        assert "calibrated_successful" in calib_data
 
-        self.logits_confs = torch.Tensor(calib_data.data_dict["logits_confs"])
-        self.calibrated_confs = torch.Tensor(calib_data.data_dict["calibrated_confs"])
-        self.correct = torch.Tensor(calib_data.data_dict["correct"]).bool()
+        self.logits_confs = torch.Tensor(calib_data["logits_confs"])
+        self.calibrated_confs = torch.Tensor(calib_data["calibrated_confs"])
+        self.correct = torch.Tensor(calib_data["correct"]).bool()
+
+        self.calibrated_successful = torch.Tensor(calib_data["calibrated_successful"]).bool()
+        self.calibrated_confs = self.calibrated_confs[self.calibrated_successful]
+        self.calibrated_correct = self.correct[self.calibrated_successful]
 
         # construct verbalised confs
-        self.num_success_mask = torch.Tensor(calib_data.data_dict["numeric_successful"]).bool()
-        self.worded_success_mask = torch.Tensor(calib_data.data_dict["worded_successful"]).bool() & ~self.num_success_mask
+        self.num_success_mask = torch.Tensor(calib_data["numeric_successful"]).bool()
+        self.worded_success_mask = torch.Tensor(calib_data["worded_successful"]).bool() & ~self.num_success_mask
         self.verbalised_success_mask = self.num_success_mask | self.worded_success_mask
 
-        self.verbalised_confs = torch.Tensor(calib_data.data_dict["worded_confs"])[self.worded_success_mask]
-        self.numeric_confs = torch.Tensor(calib_data.data_dict["numeric_confs"])[self.num_success_mask]
+        self.worded_confs = torch.Tensor(calib_data["worded_confs"])[self.worded_success_mask]
+        self.numeric_confs = torch.Tensor(calib_data["numeric_confs"])[self.num_success_mask]
 
         self.numeric_correct = self.correct[self.num_success_mask]
         self.worded_correct = self.correct[self.worded_success_mask]
 
-        self.verbalised_confs = torch.cat([self.verbalised_confs, self.numeric_confs])
+        self.verbalised_confs = torch.cat([self.worded_confs, self.numeric_confs])
         self.verbalised_correct = torch.cat([self.worded_correct, self.numeric_correct])
-        assert len(self.verbalised_confs) == len(self.verbalised_correct), "This shouldn't be triggered!"
+        assert len(self.verbalised_confs) == len(self.verbalised_correct)
 
-        self.num_verbalised_successful = torch.sum(self.verbalised_correct.bool())
+        self.num_verbalised_successful = len(self.verbalised_correct)
 
         self.__ece_metric = BinaryCalibrationError(n_bins=n_bins)
         self.__auroc_metric = BinaryAUROC()
@@ -72,36 +77,37 @@ class CompiledMetrics:
 
         self.ece_logits = self.__ece_metric(self.logits_confs, self.correct).item()
         self.ece_verbalised = self.__ece_metric(self.verbalised_confs, self.verbalised_correct).item()
-        self.ece_calibrated = self.__ece_metric(self.calibrated_confs, self.correct).item()
+        self.ece_calibrated = self.__ece_metric(self.calibrated_confs, self.calibrated_correct).item()
 
         self.auroc_logits = self.__auroc_metric(self.logits_confs, self.correct).item()
         self.auroc_verbalised = self.__auroc_metric(self.verbalised_confs, self.verbalised_correct).item()
-        self.auroc_calibrated = self.__auroc_metric(self.calibrated_confs, self.correct).item()
+        self.auroc_calibrated = self.__auroc_metric(self.calibrated_confs, self.calibrated_correct).item()
 
         self.auprc_logits = binary_auprc(self.logits_confs, self.correct).item()
         self.auprc_verbalised = binary_auprc(self.verbalised_confs, self.verbalised_correct).item()
-        self.auprc_calibrated = binary_auprc(self.calibrated_confs, self.correct).item()
+        self.auprc_calibrated = binary_auprc(self.calibrated_confs, self.calibrated_correct).item()
 
         self.brier_logits = self.__brier_metric(self.logits_confs, self.correct).item()
         self.brier_verbalised = self.__brier_metric(self.verbalised_confs, self.verbalised_correct).item()
-        self.brier_calibrated = self.__brier_metric(self.calibrated_confs, self.correct).item()
+        self.brier_calibrated = self.__brier_metric(self.calibrated_confs, self.calibrated_correct).item()
 
         self.accuracy = torch.mean(self.correct.float()).item()
 
-        self.logits_confs_diff = self.calibrated_confs - self.logits_confs
-        self.verbalised_confs_diff = self.calibrated_confs[self.verbalised_success_mask] - self.verbalised_confs
+        self.logits_confs_diff = self.calibrated_confs - self.logits_confs[self.calibrated_successful]
+        self.verbalised_confs_diff = (self.calibrated_confs[self.verbalised_success_mask[self.calibrated_successful]]
+                                      - self.verbalised_confs)
 
         self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
-        self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct])
-        self.incorrect_logits_mean_conf_change = torch.mean(self.logits_confs_diff[~self.correct])
+        self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct[self.calibrated_successful]])
+        self.incorrect_logits_mean_conf_change = torch.mean(self.logits_confs_diff[~self.correct[self.calibrated_successful]])
 
         self.verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff)
         self.correct_verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff[self.verbalised_correct])
         self.incorrect_verbalised_mean_conf_change = torch.mean(self.verbalised_confs_diff[~self.verbalised_correct])
 
         self.logits_total_conf_change = torch.sum(self.logits_confs_diff)
-        self.correct_logits_total_conf_change = torch.sum(self.logits_confs_diff[self.correct])
-        self.incorrect_logits_total_conf_change = torch.sum(self.logits_confs_diff[~self.correct])
+        self.correct_logits_total_conf_change = torch.sum(self.logits_confs_diff[self.correct[self.calibrated_successful]])
+        self.incorrect_logits_total_conf_change = torch.sum(self.logits_confs_diff[~self.correct[self.calibrated_successful]])
 
         self.verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff)
         self.correct_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[self.verbalised_correct])
@@ -162,7 +168,7 @@ def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, 
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
 def main(input_formatter: str="GSMCoT",
-         calibrator_name="PlattScaling",
+         calibrator_name="LogitsPlattScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
          calib_dset_size=300,
