@@ -6,10 +6,11 @@ import dill
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import inspect
 import re
 from enum import Enum
+import warnings
 
 from data import DictDataset
 
@@ -33,6 +34,13 @@ COT_SYSTEM_PROMPT = ("You are a friendly chatbot that only outputs in the form:\
                      "**Final Answer:** <A single number>")
 FINAL_ANSWER_FORMAT = "**Final Answer:** {answer}"
 QUESTION_FORMAT = "**Question:** {question}"
+
+try:
+    with open("hf_token.txt") as f:
+        HF_TOKEN = f.read().strip()
+except:
+    warnings.warn(f"Huggingface token from file hf_token.txt not found. Some models requiring such a token will not be"
+                  f"loaded.")
 
 
 class VerbalisedConfidence(Enum):
@@ -104,12 +112,8 @@ class LLMBundle(ABC):
     def __init__(self, llm_name: str):
         self.llm_name = llm_name
 
-        # Get token.
-        with open("token.txt") as f:
-            self.token = f.read().strip()
-
         self.tokeniser = AutoTokenizer.from_pretrained(self.llm_name,
-                                                       token=self.token,
+                                                       token=HF_TOKEN,
                                                        padding_side="left")
         self.llm_model = None
         self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
@@ -148,7 +152,7 @@ class TextGenLLMBundle(LLMBundle):
         self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
-                                                              token=self.token)
+                                                              token=HF_TOKEN)
 
     def get_tokens_and_logits_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=550, desc=None):
         """
@@ -292,46 +296,6 @@ class TextGenLLMBundle(LLMBundle):
         logits_and_tokens["correct"] = (torch.Tensor(all_preds) == logits_and_tokens["answer"]).to(torch.uint8)
         logits_and_tokens["logits_confs"] = torch.Tensor(all_confs)
         return logits_and_tokens
-
-
-class TextClassificationLLMBundle(LLMBundle):
-    def get_model(self):
-        self.llm_model = AutoModelForSequenceClassification.from_pretrained(self.llm_name)
-
-    def get_logits_from_dset(self, dset: DictDataset, batch_size=1, desc=None):
-        all_response_logits = []
-        all_response_tokens = []
-        dl = DataLoader(dset, batch_size=batch_size)
-
-        # Logits and Output Tokens
-        for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
-            formatted = batch["response_formatted"]
-
-            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-            generated = self.llm_model.generate(**inputs,
-                                                max_new_tokens=550,
-                                                output_logits=True,
-                                                return_dict_in_generate=True,
-                                                pad_token_id=self.tokeniser.eos_token_id)
-            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
-
-            # get the tokens, then remove the ones that made up the input.
-            sequences = generated.sequences.cpu()
-            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
-
-            for logits, response in zip(model_logits, responses):
-                eos_mask = response != self.tokeniser.eos_token_id
-
-                processed_logits = logits[eos_mask]
-                processed_response = response[eos_mask]
-
-                all_response_logits.append(processed_logits)
-                all_response_tokens.append(processed_response)
-        out_dict = {}
-        out_dict.update({"logits": all_response_logits,
-                         "tokens": all_response_tokens})
-
-        return out_dict
 
 
 def get_class_bases(x):

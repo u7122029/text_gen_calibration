@@ -94,13 +94,6 @@ class VCPlattScaling(Calibrator):
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 
-    """def __collate_post_process(self, out_dict: dict):
-        out_dict["logits"] = torch.cat(out_dict["logits"], dim=0)
-        out_dict[self.label_key] = torch.cat(
-            [c.repeat(len(t)) for c, t in zip(out_dict[self.label_key], out_dict["tokens"])]).float()
-        out_dict["tokens"] = torch.cat(out_dict["tokens"])
-        return out_dict"""
-
     def calibrate(self,
                   calibration_dset: DictDataset,
                   batch_size=1,

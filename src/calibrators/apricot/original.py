@@ -12,7 +12,7 @@ from data import DictDataset
 from utils import LLMBundle, DEVICE, dill_load, dill_save
 
 
-class APRICOT_Original(APRICOT):
+class APRICOT_Original(APRICOT): # TODO: MAYBE THIS SHOULD BE A CHILD CLASS OF TokenCalibrator AND APRICOT.
     """
     Uses the APRICOT method to determine the target confidences for each question in the calibration dataset.
     Then we train an LLM for sequence classification to ensure that each tokenised question with response attains a

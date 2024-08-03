@@ -5,17 +5,15 @@ import numpy as np
 from icecream import ic
 from nltk import corpus
 from torch.nn.functional import relu
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from torch import optim
 
-from utils import class_predicate, DEVICE
+from utils import class_predicate
 from .apricot import *
 from .generic import LogitCalibrator, Calibrator
 from .pts import *
 from .temperature_scaling import TemperatureScaling
 from .tiered_ts import *
 from .platt_scaling import *
+from .token_response_scaler import *
 
 
 class TemperatureWithLinearity(LogitCalibrator):
@@ -273,52 +271,6 @@ class TopKTokenPoolingV1(Calibrator):
         return all_preds, confs_before_calibration, confs_after_calibration, calibrator_model
 
 
-class GSDCalibrator(Calibrator):
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle)
-
-    def calibrate(self, dataloader: DataLoader, formatter_cls, num_trials_per_input=5):
-        # all_explanations = []
-        all_answers = []
-        all_confs = []
-        for items in tqdm(dataloader):
-            formatted = items["formatted"]
-            inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
-
-            compiled_answers = [{} for _ in range(dataloader.batch_size)]
-            for trial_idx in range(num_trials_per_input):
-                generated = self.model.generate(**inputs,
-                                                max_new_tokens=550,
-                                                output_logits=True,
-                                                return_dict_in_generate=True
-                                                )
-
-                outs = formatter_cls.process_responses(inputs, generated, self.tokeniser)
-                for idx, final_answer in enumerate(outs["final_answers"]):
-                    if final_answer not in compiled_answers[idx]:
-                        compiled_answers[idx][final_answer] = 1
-                        continue
-                    compiled_answers[idx][final_answer] += 1
-
-            #confs_and_answers = [sorted([(v / num_trials_per_input, k) for k, v in d.items()], reverse=True)
-            #                     for d in compiled_answers]
-            for d in compiled_answers:
-                d_tuples = sorted([(v / num_trials_per_input, k) for k, v in d.items()], reverse=True)
-                factors = torch.arange(len(d_tuples))
-                factors[1:] = -factors[1:]
-                factors = 2 ** factors
-                conf = torch.sum(torch.Tensor([x[0] for x in d_tuples]) * factors).item()
-                answer = d_tuples[0][1]
-
-                all_confs.append(conf)
-                all_answers.append(answer)
-
-            #all_explanations.extend(outs["explanations"])
-            #compiled_answers.extend(outs["final_answers"])
-            #compiled_confs.append(outs["confidences"])
-        return all_answers, all_confs
-
-
 class WATCCalibrator(Calibrator):
     def __init__(self, tokeniser, model, calibrator_model, debug_responses):
         super().__init__(tokeniser, model, debug_responses)
@@ -384,7 +336,7 @@ class WATCCalibrator(Calibrator):
         return all_preds, confs_before_calib, confs_after_calib, self.calibrator_model
 
 
-class ReLu_WATC(WATCCalibrator):
+"""class ReLu_WATC(WATCCalibrator):
     class ReLuCalibrator(nn.Module):
         def __init__(self, f=0.5, t=0.5):
             super().__init__()
@@ -397,10 +349,10 @@ class ReLu_WATC(WATCCalibrator):
             return confidences
 
     def __init__(self, tokeniser, model, debug_responses, f=0.5, t=0.5):
-        super().__init__(tokeniser, model, ReLu_WATC.ReLuCalibrator(f, t), debug_responses)
+        super().__init__(tokeniser, model, ReLu_WATC.ReLuCalibrator(f, t), debug_responses)"""
 
 
-class Step_WATC(WATCCalibrator):
+"""class Step_WATC(WATCCalibrator):
     class StepCalibrator(nn.Module):
         def __init__(self, t=0.5, f=0.5):
             super().__init__()
@@ -414,10 +366,13 @@ class Step_WATC(WATCCalibrator):
             return confidences
 
     def __init__(self, tokeniser, model, debug_responses, t=0.5, f=0.5):
-        super().__init__(tokeniser, model, Step_WATC.StepCalibrator(t, f), debug_responses)
+        super().__init__(tokeniser, model, Step_WATC.StepCalibrator(t, f), debug_responses)"""
 
 
 class StopwordRemover(Calibrator):
+    """
+    TODO: CAN INCLUDE THIS MODEL IN RESULTS TO EMPHASISE THAT REMOVING STOPWORDS DOES NOT HELP WITH CALIBRATION.
+    """
     def test(self, **kwargs):
         pass
 

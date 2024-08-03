@@ -23,7 +23,7 @@ def main(prompt_type: str="CoT",
     """
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
-    with open("token.txt") as f:
+    with open("hf_token.txt") as f:
         token = f.read().strip()
         ic(token)
 

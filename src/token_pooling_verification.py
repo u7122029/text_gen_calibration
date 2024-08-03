@@ -15,7 +15,7 @@ def main(prompt_type: str="CoT",
          model_name="google/gemma-1.1-2b-it"):
     ic(__version__)
     formatter_cls = prompt_dict[prompt_type]
-    with open("token.txt") as f:
+    with open("hf_token.txt") as f:
         token = f.read().strip()
         ic(token)
 

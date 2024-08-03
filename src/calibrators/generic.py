@@ -45,6 +45,9 @@ class Calibrator(ABC):
 
 
 class LogitCalibrator(Calibrator, ABC):
+    """
+    Calibrator Class that focuses on tuning response confidences based on the logits of the responses.
+    """
     @abstractmethod
     def __init__(self, llm_bundle, calibrator_model, label_key="correct", loss_fn=None):
         super().__init__(llm_bundle)
@@ -79,12 +82,12 @@ class LogitCalibrator(Calibrator, ABC):
                   _postprocess_fn=None,
                   **kwargs):
         """
-        Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
-        this function if you want to use a different dataset.
+        Tunes the calibrator model given a dictionary dataset.
         :param batch_size:
         :param calibration_dset:
         :param epochs:
         :param lr:
+        :param _postprocess_fn:
         :param kwargs:
         :return:
         """

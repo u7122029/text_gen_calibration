@@ -2,6 +2,10 @@ import torch
 from torch import nn
 from torch.nn.functional import sigmoid
 
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+from utils import DEVICE
+
 
 class AbsModule(nn.Module):
     def forward(self, x):
@@ -120,4 +124,20 @@ class PTSModel(nn.Module):
         return x
 
 
+class TokenCalibratorModel(nn.Module):
+    """
+    Uses a sequence classification model that takes a question + its response, then outputs the calibrated confidence.
+    """
+    def __init__(self, device=DEVICE):
+        super().__init__()
+        self.device = device
+        self.model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-v3-base")
+        self.tokeniser = AutoTokenizer.from_pretrained("microsoft/deberta-v3-base")
+
+    def forward(self, x):
+        # x is a list of string inputs.
+        x = self.tokeniser(x, return_tensors="pt", padding=True).to(self.device)
+        x = self.model(**x)
+        x = torch.softmax(x.logits, dim=-1)[:, 1]
+        return x # [confs]
 

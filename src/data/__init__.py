@@ -1,11 +1,9 @@
 from os import PathLike
-from typing import Iterable
 
 import dill
 
 from data.gsm import get_gsm
 from torch.utils.data import DataLoader, Dataset
-import torch
 
 
 def get_dataset(name):
