@@ -2,60 +2,25 @@ from typing import List
 
 import pandas as pd
 import torch
-from torch import nn
 
 from data import DictDataset
 from utils import dill_load
-from .generic import LogitTokenToConfidenceCalibrator
+from .generic import LogitCalibrator
+from .universal_calibration_models import TieredTSModel
 
 
-class FrequencyTS(LogitTokenToConfidenceCalibrator):
+class FrequencyTS(LogitCalibrator):
     """
     Calibrates a model by using token confidences across all responses.
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    class Tiered_TSModel(nn.Module):
-        """
-        Contains 3 temperature parameters.
-        One determines the adjustment of the token ids that commonly occur with high confidence
-        One determines the adjustment of the token ids that commonly occur with low confidence
-        The last is a general temperature that adjusts all the tokens after adjustment from the previous two temps.
-        """
-        def __init__(self):
-            super().__init__()
-            self.top_token_ids = None
-            self.bot_token_ids = None
-
-            self.top_temp = nn.Parameter(torch.tensor(1.0))
-            self.bot_temp = nn.Parameter(torch.tensor(1.0))
-            self.general_temp = nn.Parameter(torch.tensor(1.0))
-
-        def forward(self, x, tokens=None):
-            assert self.top_token_ids is not None
-            assert self.bot_token_ids is not None
-
-            # x.shape: [logit_vec, vocab size]
-            x[:,self.top_token_ids] = x[:,self.top_token_ids] / self.top_temp
-            x[:,self.bot_token_ids] = x[:,self.bot_token_ids] / self.bot_temp
-            x = x / self.general_temp
-            x = torch.softmax(x, dim=1)
-            if tokens is not None:
-                x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-            else:
-                x = torch.max(x, dim=1).values
-            return x  # [confs]
-
-        def set_tokens(self, top_token_ids: torch.Tensor, bot_token_ids: torch.Tensor):
-            self.top_token_ids = top_token_ids
-            self.bot_token_ids = bot_token_ids
-
     def __init__(self, llm_bundle):
         self.top_k = None
         self.bot_k = None
         self.top_token_values = self.top_token_ids = self.bot_token_values = self.bot_token_ids = None
 
-        super().__init__(llm_bundle, FrequencyTS.Tiered_TSModel())
+        super().__init__(llm_bundle, TieredTSModel())
 
     def calibrate(self, calibration_dset: DictDataset, top_k=10, bot_k=10, **kwargs):
         _, _ = self.compute_scores_and_indices(calibration_dset, top_k, bot_k)
@@ -206,12 +171,3 @@ class FrequencyTS(LogitTokenToConfidenceCalibrator):
             "bot_token_ids": self.bot_token_ids,
             "bot_token_values": self.bot_token_values
         }
-
-    """def compile_token_score(self):
-        df = self.get_frequency_dict()
-        df["top_token_ids"] = self.llm_bundle.tokeniser.batch_decode(df["top_token_ids"])
-        df["bot_token_ids"] = self.llm_bundle.tokeniser.batch_decode(df["bot_token_ids"])
-        del df["top_k"]
-        del df["bot_k"]
-        df = pd.DataFrame(df)
-        return df"""

@@ -45,7 +45,6 @@ class APRICOT(Calibrator, ABC):
             for item in embedded_batch:
                 embeddings.append(torch.Tensor(item))
         embeddings = torch.stack(embeddings, dim=0)
-        print(embeddings.shape)
 
         # Cluster the embeddings
         clusterer = HDBSCAN(min_cluster_size=3, min_samples=1, n_jobs=1)
@@ -68,8 +67,3 @@ class APRICOT(Calibrator, ABC):
         for i, sample in enumerate(calibration_dset):
             target_accuracies.append(label2target[cluster_labels[i]] if cluster_labels[i] > 0 else sample["correct"])
         return embeddings, torch.Tensor(target_accuracies)
-
-
-def temp_postprocess(out_dict):
-    out_dict["target_confs"] = torch.Tensor(out_dict["target_confs"])
-    return out_dict

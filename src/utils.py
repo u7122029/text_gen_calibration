@@ -5,11 +5,9 @@ import dill
 
 from tqdm import tqdm
 import torch
-from torch import nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
 import inspect
-import datasets
 import re
 from enum import Enum
 
@@ -311,7 +309,7 @@ class TextClassificationLLMBundle(LLMBundle):
 
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
             generated = self.llm_model.generate(**inputs,
-                                                max_new_tokens=max_new_tokens,
+                                                max_new_tokens=550,
                                                 output_logits=True,
                                                 return_dict_in_generate=True,
                                                 pad_token_id=self.tokeniser.eos_token_id)
@@ -334,11 +332,6 @@ class TextClassificationLLMBundle(LLMBundle):
                          "tokens": all_response_tokens})
 
         return out_dict
-
-
-class AbsModule(nn.Module):
-    def forward(self, x):
-        return torch.abs(x)
 
 
 def get_class_bases(x):

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from collate_postprocess_functions import logit_token_repeat_label_key
 from data import DictDataset
 from utils import DEVICE, LLMBundle, dill_save, dill_load
 from torch.utils.data import DataLoader
@@ -27,11 +28,11 @@ class Calibrator(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, **kwargs) -> None:
         pass
 
     @abstractmethod
-    def test(self, test_dset: DictDataset, **kwargs):
+    def test(self, test_dset: DictDataset, **kwargs) -> dict:
         pass
 
     @abstractmethod
@@ -43,7 +44,7 @@ class Calibrator(ABC):
         pass
 
 
-class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
+class LogitCalibrator(Calibrator, ABC):
     @abstractmethod
     def __init__(self, llm_bundle, calibrator_model, label_key="correct", loss_fn=None):
         super().__init__(llm_bundle)
@@ -70,13 +71,6 @@ class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 
-    def __collate_post_process(self, out_dict: dict):
-        out_dict["logits"] = torch.cat(out_dict["logits"], dim=0)
-        out_dict[self.label_key] = torch.cat(
-            [c.repeat(len(t)) for c, t in zip(out_dict[self.label_key], out_dict["tokens"])]).float()
-        out_dict["tokens"] = torch.cat(out_dict["tokens"])
-        return out_dict
-
     def calibrate(self,
                   calibration_dset: DictDataset,
                   batch_size=1,
@@ -95,7 +89,7 @@ class LogitTokenToConfidenceCalibrator(Calibrator, ABC):
         :return:
         """
         if _postprocess_fn is None:
-            _postprocess_fn = self.__collate_post_process
+            _postprocess_fn = logit_token_repeat_label_key(self.label_key)
 
         calibration_dl = DataLoader(calibration_dset,
                                     collate_fn=calibration_dset.collate_fn("logits", "tokens", self.label_key,

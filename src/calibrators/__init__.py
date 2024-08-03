@@ -11,14 +11,14 @@ from torch import optim
 
 from utils import class_predicate, DEVICE
 from .apricot import *
-from .generic import LogitTokenToConfidenceCalibrator, Calibrator
+from .generic import LogitCalibrator, Calibrator
 from .pts import *
 from .temperature_scaling import TemperatureScaling
 from .tiered_ts import *
 from .platt_scaling import *
 
 
-class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
+class TemperatureWithLinearity(LogitCalibrator):
     """
     Uses a model that contains as many temperature parameters as the vocabulary size.
     Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
@@ -45,7 +45,7 @@ class TemperatureWithLinearity(LogitTokenToConfidenceCalibrator):
                          TemperatureWithLinearity.LTModel(self.llm_bundle.vocab_size()))
 
 
-class LinearScaler(LogitTokenToConfidenceCalibrator):
+class LinearScaler(LogitCalibrator):
     """
     Uses a model that contains as many temperature parameters as the vocabulary size.
     Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
@@ -71,7 +71,7 @@ class LinearScaler(LogitTokenToConfidenceCalibrator):
         super().__init__(llm_bundle, LinearScaler.LinearModel(self.llm_bundle.vocab_size()))
 
 
-class TokenFrequencyPTSv1(LogitTokenToConfidenceCalibrator):
+class TokenFrequencyPTSv1(LogitCalibrator):
     class TFIDFModel(nn.Module):
         """
         Takes a batch of logits with the respective tf-idf scores, computes the temperature, and applies this to the logits.

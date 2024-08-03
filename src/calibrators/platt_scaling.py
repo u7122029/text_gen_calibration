@@ -7,13 +7,53 @@ from tqdm import tqdm
 
 from data import DictDataset
 from utils import DEVICE, dill_save, dill_load
-from .generic import LogitTokenToConfidenceCalibrator, Calibrator
+from .generic import LogitCalibrator, Calibrator
 from .universal_calibration_models import PlattScalerLogits, PlattScalerConfs
 
 
-class LogitsPlattScaling(LogitTokenToConfidenceCalibrator):
+class LogitConfsPlattScaling(LogitCalibrator):
+    """
+    For a single logit matrix, this calibrator takes the softmax, then the corresponding token confidences.
+    The calibrator will use platt scaling on each of these confidences before taking the mean of all of them which gives
+    the overall response confidence.
+    """
     def __init__(self, llm_bundle):
         super().__init__(llm_bundle, PlattScalerLogits())
+
+
+class MeanLogitConfsPlattScaling(LogitCalibrator):
+    """
+    Performs platt scaling after the mean token confidence has been taken for the response.
+    """
+    def __init__(self, llm_bundle):
+        super().__init__(llm_bundle, PlattScalerConfs())
+
+    def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
+        postfix["total_loss_last_epoch"] = 0
+        for batch in pbar:
+            label_batch = torch.Tensor(batch[self.label_key]).to(DEVICE)
+            logits_batch = [x.to(DEVICE) for x in batch["logits"]]
+            tokens_batch = [x.to(DEVICE) for x in batch["tokens"]]
+
+            optimiser.zero_grad()
+            out_token_confs = self.calibrator_model(logits_batch, tokens_batch)
+            loss = self.loss_fn(out_token_confs, label_batch)
+            loss.backward()
+            optimiser.step()
+            postfix["total_loss_last_epoch"] += loss.item()
+
+    def calibrate(self, *args, **kwargs):
+        kwargs["_postprocess_fn"] = lambda x: x
+        super().calibrate(*args, **kwargs)
+
+    def test_loop(self, test_dset):
+        confs_after_calibration = []
+        for batch in tqdm(test_dset):
+            logits = [batch["logits"].to(DEVICE)]
+            tokens = [batch["tokens"].to(DEVICE)]
+            out = self.calibrator_model(logits, tokens).cpu()
+            confs_after_calibration.extend(out)
+        return confs_after_calibration
 
 
 class VCPlattScaling(Calibrator):

@@ -7,7 +7,7 @@ from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from .base import APRICOT
-from .base import temp_postprocess
+from collate_postprocess_functions import postprocess_target_confs
 from data import DictDataset
 from utils import LLMBundle, DEVICE, dill_load, dill_save
 
@@ -33,7 +33,7 @@ class APRICOT_Original(APRICOT):
                         batch_size=batch_size,
                         shuffle=True,
                         collate_fn=calibration_dset.collate_fn("question", "tokens", "target_confs",
-                                                               postprocess_fn=temp_postprocess))
+                                                               postprocess_fn=postprocess_target_confs))
 
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=1e-3)
         criterion = nn.MSELoss().to(DEVICE)
