@@ -16,6 +16,6 @@ class APRICOT_TemperatureScaling(APRICOT, LogitCalibrator):
 
     def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=30, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, batch_size)
-        calibration_dset.add_column("target_confs", target_accuracies)
+        calibration_dset["target_confs"] = target_accuracies
         LogitCalibrator.calibrate(self, calibration_dset, batch_size, epochs, **kwargs)
 

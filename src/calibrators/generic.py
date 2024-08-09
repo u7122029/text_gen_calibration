@@ -116,7 +116,7 @@ class LogitCalibrator(Calibrator, ABC):
 
             self.calibration_epoch(pbar, postfix, optimiser)
 
-        calibration_dset.add_column("calibrated_successful", torch.ones(len(calibration_dset)).bool())
+        calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
         self.calibrator_model.eval()
         self.tuned = True
 
