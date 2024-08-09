@@ -167,7 +167,7 @@ def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, 
 # NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
-def main(input_formatter: str="GSMCoT",
+def main(input_formatter: str="MATHCoT",
          calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,

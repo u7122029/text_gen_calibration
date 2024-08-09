@@ -263,13 +263,14 @@ class TextGenLLMBundle(LLMBundle):
         out_dict = {k: torch.Tensor(v) for k, v in out_dict.items()}
         return out_dict
 
-    def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict):
+    def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict, correctness_func):
         """
 
         :param logits_and_tokens:
         :return:
         """
         all_preds = []
+        all_successful = []
         all_confs = []
         for logits, tokens in zip(logits_and_tokens["logits"], logits_and_tokens["tokens"]):
             prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
@@ -277,7 +278,8 @@ class TextGenLLMBundle(LLMBundle):
             decoded_response = self.tokeniser.decode(tokens)
 
             token_confidences = torch.take_along_dim(prob_vecs,
-                                                     tokens.unsqueeze(1), dim=1).squeeze(1)
+                                                     tokens.unsqueeze(1),
+                                                     dim=1).squeeze(1)
             response_confidence = torch.mean(token_confidences).item()
 
             # TODO: Perhaps make getting the model's answer part of the input formatter, and leave
@@ -286,15 +288,20 @@ class TextGenLLMBundle(LLMBundle):
             try:
                 s1 = decoded_response.split("**explanation:**")[1]
                 explanation, final_answer_raw = s1.split("**final answer:**")
-                final_answer = int(re.findall(r"\d+", final_answer_raw)[0])
+                final_answer = re.findall(r"\d+", final_answer_raw)[0]
+                successful = True
             except:
-                final_answer = -1 # Indicates a failed response.
+                final_answer = "-1" # Indicates a failed response.
+                successful = False
 
             all_preds.append(final_answer)
+            all_successful.append(successful)
             all_confs.append(response_confidence)
 
-        logits_and_tokens["correct"] = (torch.Tensor(all_preds) == logits_and_tokens["answer"]).to(torch.uint8)
+        # require logits_and_tokens["correct"] to be a torch tensor of type torch.uint8, each element in {0, 1}.
+        logits_and_tokens["correct"] = correctness_func(all_preds, logits_and_tokens["answer"])
         logits_and_tokens["logits_confs"] = torch.Tensor(all_confs)
+        logits_and_tokens["pred_successful"] = torch.Tensor(all_successful).bool()
         return logits_and_tokens
 
 

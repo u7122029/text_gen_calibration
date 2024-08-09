@@ -25,6 +25,14 @@ class InputFormatter(ABC):
                  test_dset_size: Optional[int] = None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
+
+        @param llm_bundle: The LLM bundle
+        @param dataset: The dataset
+        @param correctness_fn: Function to obtain the correctness of each (prediction, answer) pair.
+                               It is not the loss function.
+        @param calib_dset_size: The size of the calibration set.
+        @param test_dset_size: The size of the test set. If this is None, then all remaining samples of the provided dataset
+                               will be used in the test set.
         """
         self.llm_bundle = llm_bundle
         self.dataset = dataset
@@ -62,10 +70,17 @@ class InputFormatter(ABC):
                                  **kwargs) -> Tuple[DictDataset, DictDataset]:
         pass
 
+    @abstractmethod
+    def correctness(self, predictions: list[str], labels: list[str]):
+        pass
+
 
 class CoTInputFormatter(InputFormatter, ABC):
     @abstractmethod
-    def __init__(self, llm_bundle: TextGenLLMBundle, dataset: DictDataset, calib_dset_size, test_dset_size=None):
+    def __init__(self, llm_bundle: TextGenLLMBundle,
+                 dataset: DictDataset,
+                 calib_dset_size,
+                 test_dset_size=None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
         """
@@ -111,6 +126,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                                       batch_size=batch_size,
                                                                                       desc="Get Logits + Tokens (Calib)")
             calib_logits_tokens["answer"] = self.calib_dataset["answer"]
+            assert isinstance(calib_logits_tokens["answer"], list)
 
             (self.calib_dataset
              .update(self.numeric_conf_fmt(self.calib_dataset))
@@ -122,7 +138,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                                         desc="Get Verbalised Confs (Calib)")
 
             # Obtain answers and logits confidences.
-            calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens)
+            calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens,
+                                                                                               self.correctness)
 
             self.calib_dataset.remove_columns(["response_formatted",
                                                "numeric_conf_formatted",
@@ -145,7 +162,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                 test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
                                                                                      batch_size=batch_size,
                                                                                      desc="Get Logits + Tokens (Test)")
-            test_logits_tokens["answer"] = torch.Tensor(self.test_dataset["answer"])
+            test_logits_tokens["answer"] = self.test_dataset["answer"]
+            assert isinstance(test_logits_tokens["answer"], list)
 
             (self.test_dataset
              .update(self.numeric_conf_fmt(self.test_dataset))
@@ -156,7 +174,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                                        desc="Get Verbalised Confs (Test)")
 
             # Obtain answers and logits confidences.
-            test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens)
+            test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens,
+                                                                                              self.correctness)
 
             self.test_dataset.remove_columns(["response_formatted",
                                               "numeric_conf_formatted",

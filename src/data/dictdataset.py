@@ -7,16 +7,17 @@ from torch.utils.data import Dataset
 
 
 class DictDataset(Dataset):
+    """
+    Convert this to also extend from a dictionary.
+    """
     def __init__(self, data_dict: dict):
         assert len(data_dict.keys()) > 0
         self.ref_key = list(data_dict.keys())[0]
         for key in data_dict.keys():
-            print(data_dict[key])
             assert len(data_dict[key]) == len(data_dict[self.ref_key]), \
                 f"ref key {self.ref_key} has {len(data_dict[self.ref_key])}, but key {key} has {len(data_dict[key])}."
 
         self.data_dict = data_dict
-        #self.get_keys = self.data_dict.keys()
 
     @classmethod
     def from_kwargs(cls, **kwargs):
