@@ -1,3 +1,4 @@
+import torch
 from datasets import load_dataset
 from .dictdataset import DictDataset
 
@@ -40,5 +41,6 @@ def get_math():
     dataset["answer"] = [get_answer(x) for x in dataset["solution"]]
     del dataset["solution"]
     del dataset["level"]
+    dataset["id"] = torch.Tensor(range(len(dataset)))
 
     return dataset

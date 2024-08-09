@@ -8,8 +8,9 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
-from utils import TextGenLLMBundle, dill_load, dill_save, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, \
+from utils import dill_load, dill_save, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, \
     NUMERIC_CONF_PROMPT, QUESTION_FORMAT, FINAL_ANSWER_FORMAT
+from llm_models import TextGenLLMBundle
 
 
 class InputFormatter(ABC):
@@ -148,7 +149,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.calib_dataset.update(calib_verbalised_confs)
             self.calib_dataset.update(calib_logit_confs_answers)
 
-            dill_save(self.calib_dataset, self.target_dir / "calibration_data.dill")
+            self.calib_dataset.save(self.target_dir / "calibration_data.dill")
             print("calibration data done.")
 
         if test_filepath.exists() and not recompute:
@@ -184,7 +185,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.test_dataset.update(test_verbalised_confs)
             self.test_dataset.update(test_logit_confs_answers)
 
-            dill_save(self.test_dataset, self.target_dir / "test_data.dill")
+            self.test_dataset.save(self.target_dir / "test_data.dill")
             print("test data done.")
 
         return self.calib_dataset, self.test_dataset

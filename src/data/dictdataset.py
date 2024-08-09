@@ -5,13 +5,17 @@ import dill
 import torch
 from torch.utils.data import Dataset
 
+from utils import dill_save
+
 
 class DictDataset(Dataset):
     """
     Convert this to also extend from a dictionary.
     """
     def __init__(self, data_dict: dict):
+        assert isinstance(data_dict, dict)
         assert len(data_dict.keys()) > 0
+
         self.ref_key = list(data_dict.keys())[0]
         for key in data_dict.keys():
             assert len(data_dict[key]) == len(data_dict[self.ref_key]), \
@@ -28,6 +32,9 @@ class DictDataset(Dataset):
         with open(path, "rb") as f:
             d = dill.load(f)
         return cls(d)
+
+    def save(self, path: PathLike):
+        dill_save(self.data_dict, path)
 
     def update(self, other: dict):
         for k, v in other.items():

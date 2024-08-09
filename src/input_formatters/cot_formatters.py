@@ -3,7 +3,7 @@ from evaluate import load
 
 from data import get_dataset, DatasetType
 from .generic import CoTInputFormatter
-from utils import TextGenLLMBundle
+from llm_models import TextGenLLMBundle
 
 
 class GSMCoT(CoTInputFormatter):

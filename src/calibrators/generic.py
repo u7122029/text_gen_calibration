@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 from collate_postprocess_functions import logit_token_repeat_label_key
 from data import DictDataset
-from utils import DEVICE, LLMBundle, dill_save, dill_load
+from utils import DEVICE, dill_save, dill_load
+from llm_models import LLMBundle
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm

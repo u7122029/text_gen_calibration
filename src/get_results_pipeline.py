@@ -11,7 +11,7 @@ from tabulate import tabulate
 from data import DictDataset
 from input_formatters import input_formatter_dict
 import os
-from utils import TextGenLLMBundle
+from llm_models import TextGenLLMBundle
 
 torch.manual_seed(0)
 
@@ -167,12 +167,12 @@ def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, 
 # NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
 # NousResearch/Hermes-2-Pro-Mistral-7B
 # microsoft/Phi-3-mini-4k-instruct
-def main(input_formatter: str="MATHCoT",
+def main(input_formatter: str="GSMCoT",
          calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
-         calib_dset_size=300,
-         test_dset_size=300,
+         calib_dset_size=10,
+         test_dset_size=10,
          recompute_logits=False,
          retrain_calibrator=False):
     if calibrator_name not in calibrator_dict:

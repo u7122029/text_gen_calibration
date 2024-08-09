@@ -9,7 +9,8 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from .base import APRICOT
 from collate_postprocess_functions import postprocess_target_confs
 from data import DictDataset
-from utils import LLMBundle, DEVICE, dill_load, dill_save
+from utils import DEVICE, dill_load, dill_save
+from llm_models import LLMBundle
 
 
 class APRICOT_Original(APRICOT): # TODO: MAYBE THIS SHOULD BE A CHILD CLASS OF TokenCalibrator AND APRICOT.

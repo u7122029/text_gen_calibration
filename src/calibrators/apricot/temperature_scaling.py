@@ -1,6 +1,6 @@
 from data import DictDataset
 from .base import APRICOT
-from utils import LLMBundle
+from llm_models import LLMBundle
 from calibrators.universal_calibration_models import TSModel
 from calibrators.generic import LogitCalibrator
 
