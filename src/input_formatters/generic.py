@@ -369,17 +369,22 @@ class CoTFormat(Enum):
     @classmethod
     def from_model_name(cls, name):
         name_dict = {
-            "google/gemma-1.1-2b-it": cls.USER_CHAT,
-            "google/gemma-1.1-7b-it": cls.USER_CHAT,
+            "google/gemma-1.1-2b-it": cls.USER_CHAT, # legacy model already downloaded on home machine for quick testing.
+
+            # confirmed models.
+            "google/gemma-2-2b-it": cls.USER_CHAT,
             "google/gemma-2-9b-it": cls.USER_CHAT,
-            "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
             "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
-            "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
-            "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
-            "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
             "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
+            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT
+
+            # defunct models.
+            # "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
+            # "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
+            # "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
+            # "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
+            # "google/gemma-1.1-7b-it": cls.USER_CHAT,
+            # "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
         }
         return name_dict[name]

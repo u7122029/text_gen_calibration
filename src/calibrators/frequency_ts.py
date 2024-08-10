@@ -51,9 +51,6 @@ class FrequencyTS(LogitCalibrator):
                     response_occurrences[token] = set()
                 response_occurrences[token].add(i)
 
-        sf = lambda x: -2 * x + 1
-        f = lambda x: -1 / (x / 4 + 1) + 1
-
         df_top = {
             "token_ids": [],
             "token_values": [],
@@ -69,12 +66,12 @@ class FrequencyTS(LogitCalibrator):
             df_bot["token_ids"].append(k)
 
             m = torch.mean(v)
-            s = sf(torch.std(v, correction=0 if len(v) == 1 else 1))
-            fv = f(len(v))
+            s = torch.std(v, correction=0 if len(v) == 1 else 1)
+            fv = len(v)
             r = n_response_occurrences / len(calibration_dset)
 
-            df_top["token_values"].append((m * s * fv * r).item())
-            df_bot["token_values"].append(((1 - m) * s * fv * r).item())
+            df_top["token_values"].append(self.__compute_metric(m, s, fv, r).item())
+            df_bot["token_values"].append(self.__compute_metric((1 - m), s, fv, r).item())
 
         df_top["token_str"] = self.llm_bundle.tokeniser.batch_decode(df_top["token_ids"])
         df_bot["token_str"] = self.llm_bundle.tokeniser.batch_decode(df_bot["token_ids"])
@@ -89,55 +86,14 @@ class FrequencyTS(LogitCalibrator):
 
         return df_top, df_bot
 
-    def compute_scores_and_indices1(self, calibration_dset: DictDataset, top_k=1, bot_k=1):
-        self.top_k = top_k
-        self.bot_k = bot_k
-
-        # we first need to generate the frequency scores.
-        vocab_size = self.llm_bundle.vocab_size()
-        token_frequencies = torch.zeros(vocab_size) # how many times does the token appear in every response?
-        token_response_frequencies = torch.zeros(vocab_size) # how many responses does the token appear at least once in?
-        token_total_confs = torch.zeros(vocab_size)
-        token_total_confs2 = torch.zeros(vocab_size)
-
-        for item in calibration_dset:
-            tokens = item["tokens"].long()
-            token_counts = torch.bincount(tokens, minlength=vocab_size)
-            token_frequencies += token_counts
-            token_occurrences = (token_counts > 0).int()
-            token_response_frequencies += token_occurrences
-            #token_response_frequencies2 += token_occurrences ** 2
-
-            prob_vecs = torch.softmax(item["logits"], dim=1)
-            token_confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
-            token_total_confs = token_total_confs.scatter_add(0, tokens, token_confs)
-            token_total_confs2 = token_total_confs2.scatter_add(0, tokens, token_confs**2)
-
-        token_frequencies_nonzero = token_frequencies.clone()
-        token_frequencies_nonzero[token_frequencies_nonzero == 0] = 1
-
-        mean_token_confs = token_total_confs / token_frequencies_nonzero
-        std_token_frequencies = torch.sqrt(
-            (token_total_confs2 - 2 * token_total_confs * mean_token_confs + mean_token_confs ** 2)
-            / token_frequencies_nonzero
-        )
-
-        s = lambda x: -2 * x + 1
+    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+        sf = lambda x: -2 * x + 1
         f = lambda x: -1 / (x / 4 + 1) + 1
-        high_token_scores = (mean_token_confs
-                             * s(std_token_frequencies)
-                             * f(token_frequencies)
-                             * token_response_frequencies / len(calibration_dset))
-        self.top_token_values, self.top_token_ids = torch.sort(high_token_scores, descending=True)
 
-        bot_token_scores = ((1 - mean_token_confs)
-                            * s(std_token_frequencies)
-                            * f(token_frequencies)
-                            * token_response_frequencies / len(calibration_dset))
-        self.bot_token_values, self.bot_token_ids = torch.sort(bot_token_scores, descending=True)
+        sf_std = sf(std)
+        f_tf = f(token_frequency)
 
-    def dset_columns(self) -> List[str]:
-        return ["tokens", "logits", "correct"]
+        return mean * sf_std * f_tf * response_frequency_ratio
 
     def load(self, filepath):
         d = dill_load(filepath)
@@ -171,3 +127,42 @@ class FrequencyTS(LogitCalibrator):
             "bot_token_ids": self.bot_token_ids,
             "bot_token_values": self.bot_token_values
         }
+
+
+class FrequencyTSTopOnly(FrequencyTS):
+    def calibrate(self, calibration_dset: DictDataset, top_k=10, **kwargs):
+        kwargs["bot_k"] = 0
+        super().calibrate(calibration_dset, top_k, **kwargs)
+
+
+class FrequencyTSBotOnly(FrequencyTS):
+    def calibrate(self, calibration_dset: DictDataset, bot_k=10, **kwargs):
+        kwargs["top_k"] = 0
+        super().calibrate(calibration_dset, bot_k=bot_k, **kwargs)
+
+
+class FrequencyTSMeanOnly(FrequencyTS):
+    """
+    FrequencyTSModel that only considers the mean token confidence. Does not factor in anything else.
+    """
+    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+        return mean
+
+
+class FrequencyTSMeanStdOnly(FrequencyTS):
+    """
+    FrequencyTSModel that only considers the mean token confidence and their stds. Does not factor in anything else.
+    """
+    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+        sf = lambda x: -2 * x + 1
+        return mean * sf(std)
+
+
+class FrequencyTSNoRF(FrequencyTS):
+    """
+    FrequencyTSModel without response frequency ratio.
+    """
+    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+        sf = lambda x: -2 * x + 1
+        f = lambda x: -1 / (x / 4 + 1) + 1
+        return mean * sf(std) * f(token_frequency)

@@ -11,7 +11,7 @@ from .apricot import *
 from .generic import LogitCalibrator, Calibrator
 from .pts import *
 from .temperature_scaling import TemperatureScaling
-from .tiered_ts import *
+from .frequency_ts import *
 from .platt_scaling import *
 from .token_response_scaler import *
 
