@@ -112,81 +112,81 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calibration_data.dill"
-        test_filepath = self.target_dir / "test_data.dill"
+        calib_filepath = self.target_dir / "calib_data"
+        test_filepath = self.target_dir / "test_data"
 
         if calib_filepath.exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
-            calib_conf_dset = dill_load(calib_filepath)
+            calib_conf_dset = dill_load(calib_filepath / "data.dill")
             self.calib_dataset.update(calib_conf_dset)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
             self.llm_bundle.load_model()
             with torch.no_grad():
-                calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
-                                                                                      batch_size=batch_size,
-                                                                                      desc="Get Logits + Tokens (Calib)")
-            calib_logits_tokens["answer"] = self.calib_dataset["answer"]
-            assert isinstance(calib_logits_tokens["answer"], list)
+                self.calib_dataset = self.llm_bundle.get_eval_data_from_dset(self.calib_dataset,
+                                                                             calib_filepath,
+                                                                             self.correctness,
+                                                                             batch_size=batch_size,
+                                                                             desc="Get Logits + Tokens (Calib)")
 
             (self.calib_dataset
              .update(self.numeric_conf_fmt(self.calib_dataset))
              .update(self.worded_conf_fmt(self.calib_dataset)))
 
             with torch.no_grad():
-                calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(self.calib_dataset,
-                                                                                        batch_size=batch_size,
-                                                                                        desc="Get Verbalised Confs (Calib)")
+                self.calib_dataset = self.llm_bundle.get_verbalised_confs_from_dset(self.calib_dataset,
+                                                                                    batch_size=batch_size,
+                                                                                    desc="Get Verbalised Confs (Calib)")
 
             # Obtain answers and logits confidences.
-            calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens,
-                                                                                               self.correctness)
+            #calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(self.calib_dataset,
+            #                                                                                   self.correctness)
 
             self.calib_dataset.remove_columns(["response_formatted",
                                                "numeric_conf_formatted",
                                                "worded_conf_formatted"])
-            self.calib_dataset.update(calib_logits_tokens)
-            self.calib_dataset.update(calib_verbalised_confs)
-            self.calib_dataset.update(calib_logit_confs_answers)
+            #self.calib_dataset.update(calib_logit_confs_answers)
 
-            self.calib_dataset.save(self.target_dir / "calibration_data.dill")
-            print("calibration data done.")
+            self.calib_dataset.save(calib_filepath / "data.dill")
+            print("Calibration data done.")
 
         if test_filepath.exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
-            test_conf_dset = dill_load(test_filepath)
+            test_conf_dset = dill_load(test_filepath / "data.dill")
             self.test_dataset.update(test_conf_dset)
         else:
             print(f"test data at ({test_filepath}) not found.")
             self.llm_bundle.load_model()
             with torch.no_grad():
-                test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
-                                                                                     batch_size=batch_size,
-                                                                                     desc="Get Logits + Tokens (Test)")
-            test_logits_tokens["answer"] = self.test_dataset["answer"]
-            assert isinstance(test_logits_tokens["answer"], list)
+                self.test_dataset = self.llm_bundle.get_eval_data_from_dset(self.test_dataset,
+                                                                            test_filepath,
+                                                                            self.correctness,
+                                                                            batch_size=batch_size,
+                                                                            desc="Get Logits + Tokens (Test)")
+            #test_logits_tokens["answer"] = self.test_dataset["answer"]
+            #assert isinstance(test_logits_tokens["answer"], list)
 
             (self.test_dataset
              .update(self.numeric_conf_fmt(self.test_dataset))
              .update(self.worded_conf_fmt(self.test_dataset)))
             with torch.no_grad():
-                test_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(self.test_dataset,
-                                                                                       batch_size=batch_size,
-                                                                                       desc="Get Verbalised Confs (Test)")
+                self.test_dataset = self.llm_bundle.get_verbalised_confs_from_dset(self.test_dataset,
+                                                                                   batch_size=batch_size,
+                                                                                   desc="Get Verbalised Confs (Test)")
 
             # Obtain answers and logits confidences.
-            test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens,
-                                                                                              self.correctness)
+            #test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens,
+            #                                                                                  self.correctness)
 
             self.test_dataset.remove_columns(["response_formatted",
                                               "numeric_conf_formatted",
                                               "worded_conf_formatted"])
-            self.test_dataset.update(test_logits_tokens)
-            self.test_dataset.update(test_verbalised_confs)
-            self.test_dataset.update(test_logit_confs_answers)
+            #self.test_dataset.update(test_logits_tokens)
+            #self.test_dataset.update(test_verbalised_confs)
+            #self.test_dataset.update(test_logit_confs_answers)
 
-            self.test_dataset.save(self.target_dir / "test_data.dill")
-            print("test data done.")
+            self.test_dataset.save(test_filepath / "data.dill")
+            print("Test Data done.")
 
         return self.calib_dataset, self.test_dataset
 
@@ -207,14 +207,14 @@ class CoTInputFormatter(InputFormatter, ABC):
         weights_path = self.target_dir / self.__calibrator.get_name()
         cw_path = weights_path / "calib_weights.dill"
         if cw_path.exists() and not recalibrate:
-            self.__calibrator.load(str(cw_path))
+            self.__calibrator.load(cw_path)
         else:
             print("Performing calibration of model.")
 
             weights_path.mkdir(parents=True, exist_ok=True)
             self.__calibrator.calibrate(calibration_dset=calib_data,
                                         batch_size=batch_size)
-            self.__calibrator.save(str(cw_path))
+            self.__calibrator.save(cw_path)
 
         # test the calibrator.
         cr_path = weights_path / "calib_results.dill"

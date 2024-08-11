@@ -1,6 +1,7 @@
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
+from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
 import torch
@@ -10,7 +11,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from data import DictDataset
-from utils import QUALITATIVE_SCALE, HF_TOKEN, DEVICE
+from utils import QUALITATIVE_SCALE, HF_TOKEN, DEVICE, dill_save, dill_load
 
 
 class VerbalisedConfidence(Enum):
@@ -124,7 +125,13 @@ class TextGenLLMBundle(LLMBundle):
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
 
-    def get_tokens_and_logits_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=550, desc=None):
+    def get_eval_data_from_dset(self,
+                                dset: DictDataset,
+                                storage_root: Path,
+                                correctness_func,
+                                batch_size=1,
+                                max_new_tokens=550,
+                                desc=None) -> DictDataset:
         """
         Generate the
 
@@ -134,20 +141,26 @@ class TextGenLLMBundle(LLMBundle):
         - Verbalised worded/qualitative confidences.
         Over a given dataloader.
         :param dset:
+        :param storage_root:
+        :param correctness_func:
         :param batch_size:
         :param max_new_tokens:
         :param desc:
         :return:
         """
-        print("Getting logits and tokens.")
-        all_response_logits = []
-        all_response_tokens = []
+        print("Getting Evaluation Data.")
+        all_logits_paths = []
+        all_tokens_paths = []
+        all_logit_confs = []
+        all_preds_successful = []
+        all_preds = []
+
         dl = DataLoader(dset, batch_size=batch_size)
 
         # Logits and Output Tokens
+        file_idx = 0
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
             formatted = batch["response_formatted"]
-
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
             generated = self.llm_model.generate(**inputs,
                                                 max_new_tokens=max_new_tokens,
@@ -164,15 +177,49 @@ class TextGenLLMBundle(LLMBundle):
                 eos_mask = response != self.tokeniser.eos_token_id
 
                 processed_logits = logits[eos_mask]
-                processed_response = response[eos_mask]
+                tokens = response[eos_mask]
 
-                all_response_logits.append(processed_logits)
-                all_response_tokens.append(processed_response)
-        out_dict = {}
-        out_dict.update({"logits": all_response_logits,
-                         "tokens": all_response_tokens})
+                idx_name = str(file_idx).zfill(4)
+                logits_path = storage_root / idx_name / f"logits.dill"
+                dill_save(processed_logits, logits_path)
 
-        return out_dict
+                tokens_path = storage_root / idx_name / f"tokens.dill"
+                dill_save(tokens, tokens_path)
+
+                all_logits_paths.append(logits_path)
+                all_tokens_paths.append(tokens_path)
+                file_idx += 1
+
+                prob_vecs = torch.softmax(processed_logits, dim=1)  # response_idx, response length, vocab_size
+
+                decoded_response = self.tokeniser.decode(tokens)
+
+                token_confidences = torch.take_along_dim(prob_vecs,
+                                                         tokens.unsqueeze(1),
+                                                         dim=1).squeeze(1)
+                response_confidence = torch.mean(token_confidences).item()
+
+                decoded_response = decoded_response.lower()
+                try:
+                    s1 = decoded_response.split("**explanation:**")[1]
+                    explanation, final_answer_raw = s1.split("**final answer:**")
+                    final_answer = re.findall(r"\d+", final_answer_raw)[0]
+                    successful = True
+                except:
+                    final_answer = "-1"  # Indicates a failed response.
+                    successful = False
+
+                all_preds.append(final_answer)
+                all_preds_successful.append(successful)
+                all_logit_confs.append(response_confidence)
+
+        dset = dset.update({"logits": all_logits_paths,
+                            "logits_confs": all_logit_confs,
+                            "tokens": all_tokens_paths,
+                            "pred_successful": all_preds_successful,
+                            "correct": correctness_func(all_preds, dset["answer"])})
+
+        return dset
 
     def get_verbalised_confs_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=30, desc=None):
         """
@@ -190,7 +237,9 @@ class TextGenLLMBundle(LLMBundle):
             "worded_successful": []
         }
 
-        dl = DataLoader(dset, batch_size=batch_size)
+        dl = DataLoader(dset,
+                        batch_size=batch_size,
+                        collate_fn=dset.collate_fn("numeric_conf_formatted", "worded_conf_formatted"))
 
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
             numeric_formatted = batch["numeric_conf_formatted"]
@@ -233,11 +282,14 @@ class TextGenLLMBundle(LLMBundle):
         out_dict = {k: torch.Tensor(v) for k, v in out_dict.items()}
         out_dict["numeric_successful"] = out_dict["numeric_successful"].bool()
         out_dict["worded_successful"] = out_dict["worded_successful"].bool()
-        return out_dict
+
+        dset = dset.update(out_dict)
+        return dset
 
     def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict, correctness_func):
         """
-
+        Is this function really needed when I can do all this in the logits and tokens function?
+        @deprecated
         :param logits_and_tokens:
         :return:
         """

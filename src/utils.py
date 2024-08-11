@@ -1,4 +1,5 @@
 from os import PathLike
+from pathlib import Path
 from typing import Any
 import dill
 
@@ -61,6 +62,7 @@ def dill_load(pth: PathLike) -> Any:
     return out
 
 
-def dill_save(obj: Any, pth: PathLike):
+def dill_save(obj: Any, pth: Path):
+    pth.parent.mkdir(parents=True, exist_ok=True)
     with open(pth, "wb") as f:
         dill.dump(obj, f)

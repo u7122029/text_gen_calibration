@@ -1,11 +1,12 @@
 from os import PathLike
+from pathlib import Path
 from typing import Union, Iterable
 
 import dill
 import torch
 from torch.utils.data import Dataset
 
-from utils import dill_save
+from utils import dill_save, dill_load
 
 
 class DictDataset(Dataset):
@@ -60,18 +61,54 @@ class DictDataset(Dataset):
             return self.data_dict[item]
 
         if isinstance(item, list):
-            return DictDataset({k: [self.data_dict[k][x] for x in item] for k in self.keys()})
+            d = {}
+            for k, v in self.items():
+                if k not in d:
+                    d[k] = []
+
+                for x in item:
+                    elem = v[x]
+                    if isinstance(elem, Path):
+                        d[k].append(dill_load(elem))
+                        continue
+                    d[k].append(elem)
+            return DictDataset(d)
+            #return DictDataset({k: [self.data_dict[k][x] for x in item] for k in self.keys()})
 
         if isinstance(item, torch.Tensor):
             out_dict = {}
             for k, v in self.items():
                 if isinstance(v, torch.Tensor):
                     out_dict[k] = v[item]
-                else:
-                    out_dict[k] = [self.data_dict[k][x.item()] for x in item]
+                    continue
+
+                if k not in out_dict:
+                    out_dict[k] = []
+
+                for x in item:
+                    elem = v[x.item()]
+                    if isinstance(elem, Path):
+                        out_dict[k].append(dill_load(elem))
+                        continue
+                    out_dict[k].append(elem)
+
+                #out_dict[k] = [self.data_dict[k][x.item()] for x in item]
             return DictDataset(out_dict)
 
-        return {k: self.data_dict[k][item] for k in self.keys()}
+        # item is of type slice or int
+        out_dict = {}
+        for k, v in self.items():
+            out_dict[k] = v[item]
+
+            if isinstance(item, slice):
+                for idx, elem in enumerate(out_dict[k]):
+                    if isinstance(elem, Path):
+                        out_dict[k][idx] = dill_load(elem)
+            else:
+                if isinstance(out_dict[k], Path):
+                    out_dict[k] = dill_load(out_dict[k])
+
+        return out_dict #{k: self.data_dict[k][item] for k in self.keys()}
 
     def __setitem__(self, key: str, value):
         assert isinstance(key, str)
