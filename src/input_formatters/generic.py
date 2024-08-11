@@ -8,6 +8,7 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
+from data.folderdataset import FolderDataset
 from utils import dill_load, dill_save, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, \
     NUMERIC_CONF_PROMPT, QUESTION_FORMAT, FINAL_ANSWER_FORMAT
 from llm_models import TextGenLLMBundle
@@ -103,7 +104,36 @@ class CoTInputFormatter(InputFormatter, ABC):
         self.calib_dataset.update(self.response_fmt(self.calib_dataset))
         self.test_dataset.update(self.response_fmt(self.test_dataset))
 
-    def get_calibration_and_test_data(self, batch_size=1, recompute=False):
+    def __make_folderdset(self, dataset, filepath, batch_size):
+        self.llm_bundle.load_model()
+        with torch.no_grad():
+            calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(dataset,
+                                                                                  batch_size=batch_size,
+                                                                                  desc="Get Logits + Tokens")
+        calib_logits_tokens["answer"] = dataset["answer"]
+        assert isinstance(calib_logits_tokens["answer"], list)
+
+        dataset.update(self.numeric_conf_fmt(dataset)).update(self.worded_conf_fmt(dataset))
+
+        with torch.no_grad():
+            calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(dataset,
+                                                                                    batch_size=batch_size,
+                                                                                    desc="Get Verbalised Confs")
+
+        # Obtain answers and logits confidences.
+        calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens,
+                                                                                           self.correctness)
+
+        dataset.remove_columns(["response_formatted",
+                                "numeric_conf_formatted",
+                                "worded_conf_formatted"])
+        dataset.update(calib_logits_tokens)
+        dataset.update(calib_verbalised_confs)
+        dataset.update(calib_logit_confs_answers)
+
+        dataset.save_folderdset(filepath)
+
+    def get_calibration_and_test_data(self, batch_size=1, recompute=False) -> tuple[FolderDataset, FolderDataset]:
         """
         Gets the logits and tokens from the llm over the calibration and test datasets.
         No EOS tokens are filtered at all.
@@ -112,83 +142,26 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calibration_data.dill"
-        test_filepath = self.target_dir / "test_data.dill"
+        calib_filepath = self.target_dir / "calibration_data"
 
         if calib_filepath.exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
-            calib_conf_dset = dill_load(calib_filepath)
-            self.calib_dataset.update(calib_conf_dset)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
-            self.llm_bundle.load_model()
-            with torch.no_grad():
-                calib_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.calib_dataset,
-                                                                                      batch_size=batch_size,
-                                                                                      desc="Get Logits + Tokens (Calib)")
-            calib_logits_tokens["answer"] = self.calib_dataset["answer"]
-            assert isinstance(calib_logits_tokens["answer"], list)
+            self.__make_folderdset(self.calib_dataset, calib_filepath, batch_size)
+            print("Calibration data done.")
 
-            (self.calib_dataset
-             .update(self.numeric_conf_fmt(self.calib_dataset))
-             .update(self.worded_conf_fmt(self.calib_dataset)))
-
-            with torch.no_grad():
-                calib_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(self.calib_dataset,
-                                                                                        batch_size=batch_size,
-                                                                                        desc="Get Verbalised Confs (Calib)")
-
-            # Obtain answers and logits confidences.
-            calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(calib_logits_tokens,
-                                                                                               self.correctness)
-
-            self.calib_dataset.remove_columns(["response_formatted",
-                                               "numeric_conf_formatted",
-                                               "worded_conf_formatted"])
-            self.calib_dataset.update(calib_logits_tokens)
-            self.calib_dataset.update(calib_verbalised_confs)
-            self.calib_dataset.update(calib_logit_confs_answers)
-
-            self.calib_dataset.save(self.target_dir / "calibration_data.dill")
-            print("calibration data done.")
-
+        test_filepath = self.target_dir / "test_data"
         if test_filepath.exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
-            test_conf_dset = dill_load(test_filepath)
-            self.test_dataset.update(test_conf_dset)
         else:
             print(f"test data at ({test_filepath}) not found.")
-            self.llm_bundle.load_model()
-            with torch.no_grad():
-                test_logits_tokens = self.llm_bundle.get_tokens_and_logits_from_dset(self.test_dataset,
-                                                                                     batch_size=batch_size,
-                                                                                     desc="Get Logits + Tokens (Test)")
-            test_logits_tokens["answer"] = self.test_dataset["answer"]
-            assert isinstance(test_logits_tokens["answer"], list)
+            self.__make_folderdset(self.test_dataset, test_filepath, batch_size)
+            print("Test data done.")
 
-            (self.test_dataset
-             .update(self.numeric_conf_fmt(self.test_dataset))
-             .update(self.worded_conf_fmt(self.test_dataset)))
-            with torch.no_grad():
-                test_verbalised_confs = self.llm_bundle.get_verbalised_confs_from_dset(self.test_dataset,
-                                                                                       batch_size=batch_size,
-                                                                                       desc="Get Verbalised Confs (Test)")
-
-            # Obtain answers and logits confidences.
-            test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens,
-                                                                                              self.correctness)
-
-            self.test_dataset.remove_columns(["response_formatted",
-                                              "numeric_conf_formatted",
-                                              "worded_conf_formatted"])
-            self.test_dataset.update(test_logits_tokens)
-            self.test_dataset.update(test_verbalised_confs)
-            self.test_dataset.update(test_logit_confs_answers)
-
-            self.test_dataset.save(self.target_dir / "test_data.dill")
-            print("test data done.")
-
-        return self.calib_dataset, self.test_dataset
+        del self.calib_dataset
+        del self.test_dataset
+        return FolderDataset(calib_filepath), FolderDataset(test_filepath)
 
     def run_calibration_pipeline(self,
                                  calibrator_type: Type[Calibrator],
@@ -236,10 +209,18 @@ class CoTInputFormatter(InputFormatter, ABC):
             test_results = self.__calibrator.test(test_dset=test_data,
                                                   batch_size=batch_size)
             dill_save(test_results, tr_path)
-
-        calib_data.update(calib_results)
-        test_data.update(test_results)
-
+        calib_data = calib_data.to_dictdataset("logits_confs",
+                                               "correct",
+                                               "numeric_confs",
+                                               "numeric_successful",
+                                               "worded_confs",
+                                               "worded_successful").update(calib_results)
+        test_data = test_data.to_dictdataset("logits_confs",
+                                             "correct",
+                                             "numeric_confs",
+                                             "numeric_successful",
+                                             "worded_confs",
+                                             "worded_successful").update(test_results)
         return calib_data, test_data
 
     def __suc_response_formats(self,

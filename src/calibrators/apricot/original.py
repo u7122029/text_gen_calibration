@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from data.folderdataset import FolderDataset
 from .base import APRICOT
 from collate_postprocess_functions import postprocess_target_confs
 from data import DictDataset
@@ -26,9 +27,10 @@ class APRICOT_Original(APRICOT): # TODO: MAYBE THIS SHOULD BE A CHILD CLASS OF T
         self.calibrator_tokeniser = AutoTokenizer.from_pretrained(calib_model_name)
         self.tuned = False
 
-    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=30, **kwargs):
-        embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, batch_size)
-        calibration_dset["target_confs"] = target_accuracies
+    def calibrate(self, calibration_dset: FolderDataset, batch_size=1, epochs=30, **kwargs):
+        embeddings, target_confs = self.get_target_accuracies(calibration_dset, batch_size)
+        calibration_dset = calibration_dset.to_dictdataset("question", "tokens")
+        calibration_dset["target_confs"] = target_confs
 
         dl = DataLoader(calibration_dset,
                         batch_size=batch_size,

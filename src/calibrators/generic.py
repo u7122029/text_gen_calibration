@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from collate_postprocess_functions import logit_token_repeat_label_key
 from data import DictDataset
+from data.folderdataset import FolderDataset
 from utils import DEVICE, dill_save, dill_load
 from llm_models import LLMBundle
 from torch.utils.data import DataLoader
@@ -29,11 +30,11 @@ class Calibrator(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def calibrate(self, calibration_dset: DictDataset, **kwargs) -> None:
+    def calibrate(self, calibration_dset: FolderDataset, **kwargs) -> None:
         pass
 
     @abstractmethod
-    def test(self, test_dset: DictDataset, **kwargs) -> dict:
+    def test(self, test_dset: FolderDataset, **kwargs) -> dict:
         pass
 
     @abstractmethod
@@ -76,7 +77,7 @@ class LogitCalibrator(Calibrator, ABC):
             postfix["total_loss_last_epoch"] += loss.item()
 
     def calibrate(self,
-                  calibration_dset: DictDataset,
+                  calibration_dset: FolderDataset,
                   batch_size=1,
                   epochs=30,
                   lr=0.01,
@@ -117,9 +118,11 @@ class LogitCalibrator(Calibrator, ABC):
 
             self.calibration_epoch(pbar, postfix, optimiser)
 
-        calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
+        #calibrated_successful = torch.ones(len(calibration_dset)).bool()
         self.calibrator_model.eval()
         self.tuned = True
+
+        #return calibrated_successful
 
     def load(self, filepath):
         self.calibrator_model.load_state_dict(dill_load(filepath)["state_dict"])

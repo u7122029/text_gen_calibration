@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from calibrators.generic import Calibrator
 from data import DictDataset
+from data.folderdataset import FolderDataset
 from utils import DEVICE
 
 
@@ -20,7 +21,7 @@ class APRICOT(Calibrator, ABC):
 
     From here, this class can be extended via a child class to determine how these targets should be used.
     """
-    def get_target_accuracies(self, calibration_dset: DictDataset, batch_size=1, embed_model_name="all-mpnet-base-v2"):
+    def get_target_accuracies(self, calibration_dset: FolderDataset, batch_size=1, embed_model_name="all-mpnet-base-v2"):
         """
 
         @param calibration_dset:
@@ -55,9 +56,11 @@ class APRICOT(Calibrator, ABC):
         clusterer.fit(embeddings.numpy())
         cluster_labels = clusterer.labels_
 
+        calibration_dset = calibration_dset.to_dictdataset("correct")
+
         def temp_debug(label):
             # TODO: GET RID OF THIS NESTED FUNCTION!
-            x = torch.Tensor(calibration_dset.data_dict["correct"])[cluster_labels == label].float()
+            x = torch.Tensor(calibration_dset["correct"])[cluster_labels == label].float()
             return torch.mean(x)
 
         label2target = {label: temp_debug(label)

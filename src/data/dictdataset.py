@@ -1,4 +1,5 @@
 from os import PathLike
+from pathlib import Path
 from typing import Union, Iterable
 
 import dill
@@ -35,6 +36,13 @@ class DictDataset(Dataset):
 
     def save(self, path: PathLike):
         dill_save(self.data_dict, path)
+
+    def save_folderdset(self, path: Path):
+        path.mkdir(parents=True, exist_ok=True)
+        digits_len = len(str(len(self)))
+        for i, x in enumerate(self):
+            p = path / f"{str(i).zfill(digits_len)}.dill"
+            dill_save(x, p)
 
     def update(self, other: dict):
         for k, v in other.items():
