@@ -52,3 +52,54 @@ auprc_verbalised: 0.114857
 | FrequencyTSTopOnly     |   0.0164172 |     0.0626752 |      0.5275   |     0.0748827 |
 
 </details>
+
+## mistralai/Mistral-7B-Instruct-v0.3
+<details>
+<summary>View Results</summary>
+
+### Calibration Set
+```
+ece_logits: 0.509288
+ece_verbalised: 0.596667
+
+brier_logits: 0.492303
+brier_verbalised: 0.598333
+
+auroc_logits: 0.616412
+auroc_verbalised: 0.505184
+
+auprc_logits: 0.460833
+auprc_verbalised: 0.392476
+```
+| name                   |   ece_calib |   brier_calib |   auroc_calib |   auprc_calib |
+|:-----------------------|------------:|--------------:|--------------:|--------------:|
+| FrequencyTS            |    0.123627 |      0.245095 |      0.592826 |      0.444943 |
+| FrequencyTSBotOnly     |    0.129551 |      0.244916 |      0.594507 |      0.448702 |
+| FrequencyTSMeanOnly    |    0.117799 |      0.244066 |      0.593433 |      0.446024 |
+| FrequencyTSMeanStdOnly |    0.117799 |      0.244066 |      0.593433 |      0.446024 |
+| FrequencyTSNoRF        |    0.117799 |      0.244066 |      0.593433 |      0.446024 |
+| FrequencyTSTopOnly     |    0.136381 |      0.245285 |      0.596002 |      0.445691 |
+
+### Test Set
+```
+ece_logits: 0.515209
+ece_verbalised: 0.616667
+
+brier_logits: 0.496182
+brier_verbalised: 0.616667
+
+auroc_logits: 0.628249
+auroc_verbalised: 0.498355
+
+auprc_logits: 0.506961
+auprc_verbalised: 0.382557
+```
+| name                   |   ece_calib |   brier_calib |   auroc_calib |   auprc_calib |
+|:-----------------------|------------:|--------------:|--------------:|--------------:|
+| FrequencyTS            |    0.104548 |      0.237937 |      0.65114  |      0.551856 |
+| FrequencyTSBotOnly     |    0.105197 |      0.237909 |      0.651328 |      0.551826 |
+| FrequencyTSMeanOnly    |    0.100128 |      0.236955 |      0.651469 |      0.552908 |
+| FrequencyTSMeanStdOnly |    0.100128 |      0.236955 |      0.651469 |      0.552908 |
+| FrequencyTSNoRF        |    0.100128 |      0.236955 |      0.651469 |      0.552908 |
+| FrequencyTSTopOnly     |    0.107629 |      0.237745 |      0.656216 |      0.55309  |
+</details>
