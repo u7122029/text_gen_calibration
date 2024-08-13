@@ -9,7 +9,7 @@ import pandas as pd
 from metrics import ModelMetrics, ModelMetricsCollection
 
 
-def main(model_name: str="google/gemma-1.1-2b-it", input_formatter_name: str="GSMCoT"):
+def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3", input_formatter_name: str="GSMCoT"):
     input_formatter: InputFormatter = input_formatter_dict[input_formatter_name]
     results_root = Path(RESULTS_PATH)
     metric_results_calib = ModelMetricsCollection()
@@ -36,8 +36,9 @@ def main(model_name: str="google/gemma-1.1-2b-it", input_formatter_name: str="GS
     pd.set_option('display.max_rows', None)
     pd.set_option('display.width', None)
     pd.set_option('display.max_colwidth', None)
-    print(metric_results_calib.generate_tables().to_markdown(index=False))
-    print(metric_results_test.generate_tables().to_markdown(index=False))
+    with open("temp_output.txt", "w") as f:
+        f.write(metric_results_calib.generate_tables().to_markdown(index=False) + "\n\n")
+        f.write(metric_results_test.generate_tables().to_markdown(index=False))
 
 
 if __name__ == "__main__":
