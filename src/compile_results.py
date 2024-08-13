@@ -36,8 +36,8 @@ def main(model_name: str="google/gemma-1.1-2b-it", input_formatter_name: str="GS
     pd.set_option('display.max_rows', None)
     pd.set_option('display.width', None)
     pd.set_option('display.max_colwidth', None)
-    print(metric_results_calib.generate_tables())
-    print(metric_results_test.generate_tables())
+    print(metric_results_calib.generate_tables().to_markdown(index=False))
+    print(metric_results_test.generate_tables().to_markdown(index=False))
 
 
 if __name__ == "__main__":
