@@ -22,8 +22,8 @@ class InputFormatter(ABC):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
-                 calib_dset_size: int,
-                 test_dset_size: Optional[int] = None):
+                 calib_dset_size: Optional[int]=None,
+                 test_dset_size: Optional[int]=None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
 
@@ -31,10 +31,17 @@ class InputFormatter(ABC):
         @param dataset: The dataset
         @param correctness_fn: Function to obtain the correctness of each (prediction, answer) pair.
                                It is not the loss function.
-        @param calib_dset_size: The size of the calibration set.
-        @param test_dset_size: The size of the test set. If this is None, then all remaining samples of the provided dataset
+        @param calib_dset_size: The size of the calibration set. If this is none along with test_dset_size
+        then roughly 70% of the dataset will be in the calibration set.
+        @param test_dset_size: The size of the test set. If this is None along with calib_dset_size, then 30%
+        of the dataset will appear in the test set.
+        If calib_dset_size is not None, then all remaining samples of the provided dataset
                                will be used in the test set.
         """
+        if calib_dset_size is None and test_dset_size is None:
+            calib_dset_size = int(0.7*len(dataset))
+            test_dset_size = len(dataset) - calib_dset_size
+
         self.llm_bundle = llm_bundle
         self.dataset = dataset
 
@@ -59,7 +66,7 @@ class InputFormatter(ABC):
         self.test_dataset: DictDataset = self.dataset[test_indices]
 
     @abstractmethod
-    def get_calibration_and_test_data(self, batch_size, recompute=False):
+    def get_calibration_and_test_data(self, batch_size=1, recompute=False) -> tuple[DictDataset, DictDataset]:
         pass
 
     @abstractmethod
@@ -71,6 +78,20 @@ class InputFormatter(ABC):
                                  **kwargs) -> Tuple[DictDataset, DictDataset]:
         pass
 
+    def test_calibrator(self,
+                        calibrator: Calibrator,
+                        original_input_formatter: 'InputFormatter',
+                        use_full_dset=True):
+        calib_data, test_data = self.get_calibration_and_test_data()
+        if use_full_dset:
+            test_data = test_data.join(calib_data)
+        del calib_data
+        print(calibrator)
+        calibrator.load(original_input_formatter.target_dir / calibrator.get_name() / "calib_weights.dill")
+        test_results = calibrator.test(test_data)
+        test_data.update(test_results)
+        return test_data
+
     @abstractmethod
     def correctness(self, predictions: list[str], labels: list[str]):
         pass
@@ -80,7 +101,7 @@ class CoTInputFormatter(InputFormatter, ABC):
     @abstractmethod
     def __init__(self, llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
-                 calib_dset_size,
+                 calib_dset_size=None,
                  test_dset_size=None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.

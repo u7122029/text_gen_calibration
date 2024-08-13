@@ -7,7 +7,7 @@ from llm_models import TextGenLLMBundle
 
 
 class GSMCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size, test_dset_size=None):
+    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
         super().__init__(llm_bundle, get_dataset(DatasetType.GSM), calib_dset_size, test_dset_size)
 
     def correctness(self, predictions, labels):
@@ -16,7 +16,7 @@ class GSMCoT(CoTInputFormatter):
 
 
 class MATHCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size, test_dset_size=None):
+    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
         super().__init__(llm_bundle, get_dataset(DatasetType.MATH), calib_dset_size, test_dset_size)
         self.__evl = None
 

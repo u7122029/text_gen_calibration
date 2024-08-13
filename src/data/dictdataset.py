@@ -37,7 +37,18 @@ class DictDataset(Dataset):
     def save(self, path: PathLike):
         dill_save(self.data_dict, path)
 
-    def update(self, other: dict):
+    def join(self, other: 'DictDataset'):
+        common_keys = set(self.keys()).intersection(set(other.keys()))
+        out_dict = {}
+        for key in common_keys:
+            out_dict[key] = self[key]
+            if isinstance(out_dict[key], list):
+                out_dict[key].extend(other[key])
+            else:
+                out_dict[key] = torch.cat([out_dict[key], other[key]])
+        return DictDataset(out_dict)
+
+    def update(self, other: Union[dict, 'DictDataset']):
         for k, v in other.items():
             self[k] = v
 
@@ -112,7 +123,7 @@ class DictDataset(Dataset):
 
     def __setitem__(self, key: str, value):
         assert isinstance(key, str)
-        assert len(value) == len(self[self.ref_key])
+        assert len(value) == len(self[self.ref_key]), f"{len(value)} vs. {len(self[self.ref_key])}."
         self.data_dict[key] = value
 
     def __delitem__(self, key):
