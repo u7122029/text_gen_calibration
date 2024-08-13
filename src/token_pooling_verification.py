@@ -2,7 +2,7 @@ import fire
 from icecream import ic
 from transformers import __version__, AutoTokenizer, AutoModelForCausalLM
 from chat_formats import prompt_dict, CoT
-from get_results_pipeline import get_dataset
+from metrics import get_dataset
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm

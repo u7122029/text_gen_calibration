@@ -74,7 +74,9 @@ def extract_verbalized_confidence(expressions: List[str],
         except AttributeError:
             successful.append(False)
             confidences.append(-1)
-    assert len(expressions) == len(confidences), f"length of expressions not equal to that of the outputted confidences ({len(expressions)} vs. {len(confidences)})"
+    assert (len(expressions) == len(confidences),
+            f"length of expressions not equal to that of the outputted confidences "
+            f"({len(expressions)} vs. {len(confidences)})")
     assert len(successful) == len(confidences)
     return confidences, successful
 

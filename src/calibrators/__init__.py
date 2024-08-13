@@ -1,11 +1,6 @@
 import inspect
 import sys
 
-import numpy as np
-from icecream import ic
-from nltk import corpus
-from torch.nn.functional import relu
-
 from utils import class_predicate
 from .apricot import *
 from .generic import LogitCalibrator, Calibrator
@@ -16,12 +11,7 @@ from .platt_scaling import *
 from .token_response_scaler import *
 
 
-class TemperatureWithLinearity(LogitCalibrator):
-    """
-    Uses a model that contains as many temperature parameters as the vocabulary size.
-    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
-    Each logit vector is a probability distribution. So in reality, any token can be picked.
-    """
+"""class TemperatureWithLinearity(LogitCalibrator):
     class LTModel(nn.Module):
         def __init__(self, vocab_size):
             super().__init__()
@@ -44,11 +34,6 @@ class TemperatureWithLinearity(LogitCalibrator):
 
 
 class LinearScaler(LogitCalibrator):
-    """
-    Uses a model that contains as many temperature parameters as the vocabulary size.
-    Idea is that the calibrator should not affect the generation results. So it's model -> base outputs -> calibrator -> confidence.
-    Each logit vector is a probability distribution. So in reality, any token can be picked.
-    """
     class LinearModel(nn.Module):
         def __init__(self, vocab_size):
             super().__init__()
@@ -71,9 +56,6 @@ class LinearScaler(LogitCalibrator):
 
 class TokenFrequencyPTSv1(LogitCalibrator):
     class TFIDFModel(nn.Module):
-        """
-        Takes a batch of logits with the respective tf-idf scores, computes the temperature, and applies this to the logits.
-        """
         def __init__(self, vocab_size):
             super().__init__()
             self.vocab_size = vocab_size
@@ -133,9 +115,6 @@ class TopKTokenPoolingV1(Calibrator):
         pass
 
     class TokenPoolingCalibrator:
-        """
-        Filter class
-        """
         def __init__(self, tokens_to_filter: torch.Tensor, eos_token: int, temp_tokeniser=None):
             self.tokens_to_filter = torch.ones(len(tokens_to_filter) + 1).int()
             self.tokens_to_filter[:-1] = tokens_to_filter
@@ -162,9 +141,6 @@ class TopKTokenPoolingV1(Calibrator):
         super().__init__(llm_bundle)
 
     def calibrate(self, dataloader: DataLoader, formatter_cls, k=20, **kwargs):
-        """
-        Helps choose which tokens to filter.
-        """
         incorrect_pooled = {}  # token_idx -> list of confidences
         incorrect_token_responses = {}  # token_idx -> list of response numbers
 
@@ -333,7 +309,7 @@ class WATCCalibrator(Calibrator):
         self.calibrator_model.eval()
         confs_after_calib = torch.cat([self.calibrator_model(confs) for confs in all_confs])
         confs_before_calib = torch.cat([torch.mean(batch, dim=1) for batch in all_confs])
-        return all_preds, confs_before_calib, confs_after_calib, self.calibrator_model
+        return all_preds, confs_before_calib, confs_after_calib, self.calibrator_model"""
 
 
 """class ReLu_WATC(WATCCalibrator):
@@ -369,10 +345,7 @@ class WATCCalibrator(Calibrator):
         super().__init__(tokeniser, model, Step_WATC.StepCalibrator(t, f), debug_responses)"""
 
 
-class StopwordRemover(Calibrator):
-    """
-    TODO: CAN INCLUDE THIS MODEL IN RESULTS TO EMPHASISE THAT REMOVING STOPWORDS DOES NOT HELP WITH CALIBRATION.
-    """
+"""class StopwordRemover(Calibrator):
     def test(self, **kwargs):
         pass
 
@@ -455,11 +428,8 @@ class StopwordRemover(Calibrator):
         all_preds = torch.cat(all_preds)
         confs_after_calib = torch.Tensor(all_calibrated_confs)
         confs_before_calib = torch.Tensor(all_uncalibrated_confs)
-        return all_preds, confs_before_calib, confs_after_calib, None
+        return all_preds, confs_before_calib, confs_after_calib, None"""
 
 
 classes = inspect.getmembers(sys.modules[__name__], class_predicate(Calibrator))
 calibrator_dict: dict[str, Calibrator.__class__] = {x: y for x, y in classes}
-
-if __name__ == "__main__":
-    pass

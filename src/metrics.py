@@ -1,19 +1,14 @@
+from typing import Optional
+
 from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
 from torchmetrics import Metric
 from torcheval.metrics.functional import binary_auprc
 
 import torch
-
-import fire
-from calibrators import calibrator_dict
 from tabulate import tabulate
+import pandas as pd
 
 from data import DictDataset
-from input_formatters import input_formatter_dict
-import os
-from llm_models import TextGenLLMBundle
-
-torch.manual_seed(0)
 
 
 class BrierScore(Metric):
@@ -35,8 +30,8 @@ class BrierScore(Metric):
         return torch.sum((self.preds - self.targets) ** 2) / self.total
 
 
-class CompiledMetrics:
-    def __init__(self, calib_data: DictDataset, n_bins=15):
+class ModelMetrics:
+    def __init__(self, calib_data: DictDataset, name: Optional[str]=None, n_bins=15):
         assert "logits_confs" in calib_data
         assert "correct" in calib_data
         assert "numeric_confs" in calib_data
@@ -46,6 +41,7 @@ class CompiledMetrics:
         assert "calibrated_confs" in calib_data
         assert "calibrated_successful" in calib_data
 
+        self.name = name
         self.logits_confs = torch.Tensor(calib_data["logits_confs"])
         self.calibrated_confs = torch.Tensor(calib_data["calibrated_confs"])
         self.correct = torch.Tensor(calib_data["correct"]).bool()
@@ -143,56 +139,35 @@ class CompiledMetrics:
         print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))
 
 
-def show_results(calib_results: CompiledMetrics, test_results: CompiledMetrics, model_name: str, calibrator_name: str):
-    print(f"Model Name: {model_name}")
-    print(f"Calibrator Name: {calibrator_name}")
-    terminal_size = os.get_terminal_size().columns
-    print("-" * terminal_size)
-    print("Calibration Set Results:")
-    calib_results.display()
-    print("-" * terminal_size)
-    print("Test Set Results:")
-    test_results.display()
-
-
-# HuggingFaceH4/zephyr-7b-beta
-# mistralai/Mistral-7B-Instruct-v0.3
-# zhengr/MixTAO-7Bx2-MoE-v8.1 cannot use
-# google/gemma-1.1-7b-it
-# google/gemma-1.1-2b-it
-# Qwen/Qwen1.5-1.8B-Chat not good.
-# meta-llama/Llama-2-7b-chat-hf
-# meta-llama/Meta-Llama-3-8B-Instruct
-# 01-ai/Yi-1.5-9B-Chat
-# NousResearch/Hermes-2-Theta-Llama-3-8B cannot use
-# NousResearch/Hermes-2-Pro-Mistral-7B
-# microsoft/Phi-3-mini-4k-instruct
-def main(input_formatter: str="GSMCoT",
-         calibrator_name="TokenCalibrator",
-         model_name="google/gemma-1.1-2b-it",
-         batch_size=4,
-         calib_dset_size=300,
-         test_dset_size=300,
-         recompute_logits=False,
-         retrain_calibrator=False):
-    if calibrator_name not in calibrator_dict:
-        raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
-
-    llm_bundle = TextGenLLMBundle(model_name)
-    input_formatter_class = input_formatter_dict[input_formatter]
-    input_formatter = input_formatter_class(llm_bundle, calib_dset_size, test_dset_size)
-
-    calib_data, test_data = input_formatter.run_calibration_pipeline(
-        calibrator_dict[calibrator_name],
-        batch_size,
-        recompute_logits=recompute_logits,
-        recalibrate=retrain_calibrator
-    )
-
-    calib_results = CompiledMetrics(calib_data)
-    test_results = CompiledMetrics(test_data)
-    show_results(calib_results, test_results, model_name, calibrator_name)
-
-
-if __name__ == "__main__":
-    fire.Fire(main)
+class ModelMetricsCollection(list[ModelMetrics]):
+    def generate_tables(self):
+        table = {
+            "name": [],
+            "ece_logits": [],
+            "ece_verbalised": [],
+            "ece_calib": [],
+            "brier_logits": [],
+            "brier_verbalised": [],
+            "brier_calib": [],
+            "auroc_logits": [],
+            "auroc_verbalised": [],
+            "auroc_calib": [],
+            "auprc_logits": [],
+            "auprc_verbalised": [],
+            "auprc_calib": []
+        }
+        for x in self:
+            table["name"].append(x.name)
+            table["ece_logits"].append(x.ece_logits)
+            table["ece_verbalised"].append(x.ece_verbalised),
+            table["ece_calib"].append(x.ece_calibrated)
+            table["brier_logits"].append(x.brier_logits)
+            table["brier_verbalised"].append(x.brier_verbalised)
+            table["brier_calib"].append(x.brier_calibrated)
+            table["auroc_logits"].append(x.auroc_logits)
+            table["auroc_verbalised"].append(x.auroc_verbalised)
+            table["auroc_calib"].append(x.auroc_calibrated)
+            table["auprc_logits"].append(x.auprc_logits)
+            table["auprc_verbalised"].append(x.auprc_verbalised)
+            table["auprc_calib"].append(x.auprc_calibrated)
+        return pd.DataFrame(table)

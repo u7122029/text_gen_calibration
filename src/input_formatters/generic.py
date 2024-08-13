@@ -196,7 +196,18 @@ class CoTInputFormatter(InputFormatter, ABC):
                                  recompute_logits=False,
                                  recalibrate=False,
                                  **kwargs) -> Tuple[DictDataset, DictDataset]:
-        # Try to get logits and tokens for both calib and test
+        """
+        The pipeline follows 3 steps.
+        1. Get calibration and test data, such as logits, tokens, answers and confidences.
+        2. Calibrate the calibrator.
+        3. Obtain adjusted confidences from calibration and test sets.
+        @param calibrator_type:
+        @param batch_size:
+        @param recompute_logits:
+        @param recalibrate:
+        @param kwargs:
+        @return:
+        """
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
 
@@ -216,7 +227,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                                         batch_size=batch_size)
             self.__calibrator.save(cw_path)
 
-        # test the calibrator.
+        # Test the calibrator.
         cr_path = weights_path / "calib_results.dill"
         if cr_path.exists():
             print(f"Found existing calibration results at {cr_path}")

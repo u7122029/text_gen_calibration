@@ -1,5 +1,5 @@
 import fire
-from get_results_pipeline import get_dataset
+from metrics import get_dataset
 from chat_formats import prompt_dict, CoT
 from icecream import ic
 from transformers import AutoTokenizer, AutoModelForCausalLM, __version__
