@@ -22,9 +22,9 @@ def show_results(calib_results: ModelMetrics, test_results: ModelMetrics, model_
     test_results.display()
 
 
-def main(input_formatter: str="MATHCoT",
-         calibrator_name="TokenCalibrator",
-         model_name="google/gemma-1.1-2b-it",
+def main(input_formatter: str="GSMCoT",
+         calibrator_name="TemperatureScaling",
+         model_name="mistralai/Mistral-7B-Instruct-v0.3",
          batch_size=4,
          calib_dset_size=300,
          test_dset_size=300,

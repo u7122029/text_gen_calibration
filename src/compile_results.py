@@ -17,7 +17,7 @@ def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3", input_formatter_n
 
     llm_bundle = TextGenLLMBundle(model_name)
     input_formatter = input_formatter(llm_bundle, 300, 300)
-    for calibrator_name in ['FrequencyTS', 'FrequencyTSBotOnly', 'FrequencyTSMeanOnly', 'FrequencyTSMeanStdOnly', 'FrequencyTSNoRF', 'FrequencyTSTopOnly']:
+    for calibrator_name in ['TemperatureScaling', 'FrequencyTS', 'FrequencyTSBotOnly', 'FrequencyTSMeanOnly', 'FrequencyTSMeanStdOnly', 'FrequencyTSNoRF', 'FrequencyTSTopOnly']:
         calibrator = calibrator_dict[calibrator_name]
         calib_data, test_data = input_formatter.run_calibration_pipeline(calibrator)
         results_dir = results_root / model_name / input_formatter.__class__.__name__ / calibrator_name
