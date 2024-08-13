@@ -1,7 +1,11 @@
 # text_gen_calibration
+Calibrating Text Generation Large Language Models
+# FrequencyTS Variant Results
+## google/gemma-1.1-2b-it
+<details>
+  <summary>View Results</summary>
 
-## FrequencyTS Variant Results
-### Calibration Set (google/gemma-1.1-2b-it)
+### Calibration Set
 ```
 ece_logits: 0.881216
 ece_verbalised: 0.256036
@@ -24,7 +28,7 @@ auprc_verbalised: 0.0762646
 | FrequencyTSNoRF        |  0.00963191 |     0.0383401 |      0.630787 |     0.0652092 |
 | FrequencyTSTopOnly     |  0.0106741  |     0.0384153 |      0.618056 |     0.0634603 |
 
-### Test Set (google/gemma-1.1-2b-it)
+### Test Set
 ```
 ece_logits: 0.853072
 ece_verbalised: 0.254713
@@ -46,3 +50,5 @@ auprc_verbalised: 0.114857
 | FrequencyTSMeanStdOnly |   0.0244503 |     0.0626174 |      0.544643 |     0.0777686 |
 | FrequencyTSNoRF        |   0.0244503 |     0.0626174 |      0.544643 |     0.0777686 |
 | FrequencyTSTopOnly     |   0.0164172 |     0.0626752 |      0.5275   |     0.0748827 |
+
+</details>
