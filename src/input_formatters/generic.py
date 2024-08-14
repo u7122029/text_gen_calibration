@@ -82,13 +82,19 @@ class InputFormatter(ABC):
                         calibrator: Calibrator,
                         original_input_formatter: 'InputFormatter',
                         use_full_dset=True):
+        save_path = original_input_formatter.target_dir / calibrator.get_name() / "ood" / f"{self.__class__.__name__}.dill"
         calib_data, test_data = self.get_calibration_and_test_data()
+
         if use_full_dset:
             test_data = test_data.join(calib_data)
         del calib_data
-        print(calibrator)
-        calibrator.load(original_input_formatter.target_dir / calibrator.get_name() / "calib_weights.dill")
-        test_results = calibrator.test(test_data)
+
+        if save_path.exists():
+            test_results = dill_load(save_path)
+        else:
+            calibrator.load(original_input_formatter.target_dir / calibrator.get_name() / "calib_weights.dill")
+            test_results = calibrator.test(test_data)
+            dill_save(test_results, save_path)
         test_data.update(test_results)
         return test_data
 
@@ -184,8 +190,6 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                             self.correctness,
                                                                             batch_size=batch_size,
                                                                             desc="Get Logits + Tokens (Test)")
-            #test_logits_tokens["answer"] = self.test_dataset["answer"]
-            #assert isinstance(test_logits_tokens["answer"], list)
 
             (self.test_dataset
              .update(self.numeric_conf_fmt(self.test_dataset))
@@ -195,16 +199,9 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                                    batch_size=batch_size,
                                                                                    desc="Get Verbalised Confs (Test)")
 
-            # Obtain answers and logits confidences.
-            #test_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(test_logits_tokens,
-            #                                                                                  self.correctness)
-
             self.test_dataset.remove_columns(["response_formatted",
                                               "numeric_conf_formatted",
                                               "worded_conf_formatted"])
-            #self.test_dataset.update(test_logits_tokens)
-            #self.test_dataset.update(test_verbalised_confs)
-            #self.test_dataset.update(test_logit_confs_answers)
 
             self.test_dataset.save(test_filepath / "data.dill")
             print("Test Data done.")
