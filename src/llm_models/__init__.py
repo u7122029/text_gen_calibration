@@ -194,13 +194,16 @@ class TextGenLLMBundle(LLMBundle):
 
                 prob_vecs = torch.softmax(processed_logits, dim=1)  # response_idx, response length, vocab_size
 
-                decoded_response = self.tokeniser.decode(tokens)
+
 
                 token_confidences = torch.take_along_dim(prob_vecs,
                                                          tokens.unsqueeze(1),
                                                          dim=1).squeeze(1)
                 response_confidence = torch.mean(token_confidences).item()
+                all_logit_confs.append(response_confidence)
 
+                # obtain answer and whether the obtaining was successful.
+                decoded_response = self.tokeniser.decode(tokens)
                 decoded_response = decoded_response.lower()
                 try:
                     s1 = decoded_response.split("**explanation:**")[1]
@@ -213,7 +216,6 @@ class TextGenLLMBundle(LLMBundle):
 
                 all_preds.append(final_answer)
                 all_preds_successful.append(successful)
-                all_logit_confs.append(response_confidence)
 
         dset = dset.update({"logits": all_logits_paths,
                             "logits_confs": all_logit_confs,

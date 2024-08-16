@@ -23,7 +23,7 @@ def show_results(calib_results: ModelMetrics, test_results: ModelMetrics, model_
 
 
 def main(input_formatter: str="MATHCoT",
-         calibrator_name="FrequencyTS",
+         calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
          calib_dset_size=300,

@@ -8,6 +8,7 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
+from prompt_formatters import PromptFormat, CoTPromptFormat
 from utils import dill_load, dill_save, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, \
     NUMERIC_CONF_PROMPT, QUESTION_FORMAT, FINAL_ANSWER_FORMAT
 from llm_models import TextGenLLMBundle
@@ -22,6 +23,7 @@ class InputFormatter(ABC):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
+                 prompt_formatter: PromptFormat,
                  calib_dset_size: Optional[int]=None,
                  test_dset_size: Optional[int]=None):
         """
@@ -44,6 +46,7 @@ class InputFormatter(ABC):
 
         self.llm_bundle = llm_bundle
         self.dataset = dataset
+        self.prompt_formatter = prompt_formatter
 
         self.target_dir = Path(RESULTS_PATH) / self.llm_bundle.llm_name / self.__class__.__name__
         self.target_dir.mkdir(parents=True, exist_ok=True)
@@ -105,18 +108,20 @@ class InputFormatter(ABC):
 
 class CoTInputFormatter(InputFormatter, ABC):
     @abstractmethod
-    def __init__(self, llm_bundle: TextGenLLMBundle,
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
+                 prompt_formatter: CoTPromptFormat,
                  calib_dset_size=None,
                  test_dset_size=None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
         """
-        InputFormatter.__init__(self, llm_bundle, dataset, calib_dset_size, test_dset_size)
+        InputFormatter.__init__(self, llm_bundle, dataset, prompt_formatter, calib_dset_size, test_dset_size)
 
         # Format the datasets
-        cf = CoTFormat.from_model_name(self.llm_bundle.llm_name)
-        self.ff_list = [self.__suc_response_formats,
+        #cf = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
+        """self.ff_list = [self.__suc_response_formats,
                         self.__uc_response_formats,
                         self.__nt_response_formats]
         self.response_fmt, self.numeric_conf_fmt, self.worded_conf_fmt = self.ff_list[cf.value](
@@ -125,8 +130,11 @@ class CoTInputFormatter(InputFormatter, ABC):
             NUMERIC_CONF_PROMPT,
             QUESTION_FORMAT,
             FINAL_ANSWER_FORMAT
+        )"""
+        self.numeric_conf_fmt, self.worded_conf_fmt = (
+            self.format_verbalised("numeric", "numeric_conf_formatted"),
+            self.format_verbalised("worded", "worded_conf_formatted")
         )
-
         self.calib_dataset.update(self.response_fmt(self.calib_dataset))
         self.test_dataset.update(self.response_fmt(self.test_dataset))
 
@@ -165,14 +173,9 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                                     batch_size=batch_size,
                                                                                     desc="Get Verbalised Confs (Calib)")
 
-            # Obtain answers and logits confidences.
-            #calib_logit_confs_answers = self.llm_bundle.get_logits_confs_and_answers_from_dset(self.calib_dataset,
-            #                                                                                   self.correctness)
-
             self.calib_dataset.remove_columns(["response_formatted",
                                                "numeric_conf_formatted",
                                                "worded_conf_formatted"])
-            #self.calib_dataset.update(calib_logit_confs_answers)
 
             self.calib_dataset.save(calib_filepath / "data.dill")
             print("Calibration data done.")
@@ -271,149 +274,37 @@ class CoTInputFormatter(InputFormatter, ABC):
 
         return calib_data, test_data
 
-    def __suc_response_formats(self,
-                               system_prompt: str,
-                               worded_conf_user_prompt: str,
-                               numeric_conf_user_prompt: str,
-                               question_prompt: str,
-                               answer_format: str):
-        def response_fmt(x):
+    def response_fmt(self, x):
+        questions = x['question']
+        formatted = []
+        for question in questions:
+            """formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                [{"role": "user", "content": f"{system_prompt}\n\n"
+                                             f"{question_prompt.format(question=question)}"}],
+                tokenize=False,
+                add_generation_prompt=True,
+                return_tensors="pt"
+            )"""
+            formatted_q = self.prompt_formatter(question)
+            formatted.append(formatted_q)
+        return {"response_formatted": formatted}
+
+    def format_verbalised(self, prompt_type, feature_name):
+        def format_fn(x):
             questions = x['question']
+            answers = x["answer"]
             formatted = []
-            for question in questions:
-                formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                    [{"role": "system", "content": system_prompt},
-                     {"role": "user", "content": question_prompt.format(question=question)}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    return_tensors="pt")
-                formatted.append(formatted_q)
-            return {"response_formatted": formatted}
-
-        def choice_fmt(conf_user_prompt, feature_name):
-            def verb_conf_fmt(x):
-                questions = x['question']
-                answers = x["answers"]
-                formatted = []
-                for question, answer in zip(questions, answers):
-                    formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                        [{"role": "system", "content": f"{question_prompt.format(question=question)}\n"
-                                                       f"{answer_format.format(answer=answer)}"},
-                         {"role": "user", "content": conf_user_prompt}],
-                        tokenize=False,
-                        add_generation_prompt=True,
-                        return_tensors="pt")
-                    formatted.append(formatted_q)
-                return {feature_name: formatted}
-
-            return verb_conf_fmt
-
-        return (response_fmt,
-                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
-                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
-
-    def __uc_response_formats(self,
-                              system_prompt: str,
-                              worded_conf_user_prompt: str,
-                              numeric_conf_user_prompt: str,
-                              question_prompt: str,
-                              answer_format: str):
-        def response_fmt(x):
-            questions = x['question']
-            formatted = []
-            for question in questions:
-                formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                    [{"role": "user",
-                      "content": f"{system_prompt}\n\n"
-                                 f"{question_prompt.format(question=question)}"}],
+            for question, answer in zip(questions, answers):
+                """formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
+                    [{"role": "user", "content": f"{question_prompt.format(question=question)}\n"
+                                                 f"{answer_format.format(answer=answer)}\n\n"
+                                                 f"{conf_user_prompt}"}],
                     tokenize=False,
                     add_generation_prompt=True,
                     return_tensors="pt"
-                )
+                )"""
+                formatted_q = self.prompt_formatter.conf_format(question, answer, prompt_type)
                 formatted.append(formatted_q)
-            return {"response_formatted": formatted}
+            return {feature_name: formatted}
 
-        def choice_fmt(conf_user_prompt, feature_name):
-            def verb_conf_fmt(x):
-                questions = x['question']
-                answers = x["answer"]
-                formatted = []
-                for question, answer in zip(questions, answers):
-                    formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                        [{"role": "user",
-                          "content": f"{question_prompt.format(question=question)}\n"
-                                     f"{answer_format.format(answer=answer)}\n\n"
-                                     f"{conf_user_prompt}"}],
-                        tokenize=False,
-                        add_generation_prompt=True,
-                        return_tensors="pt"
-                    )
-                    formatted.append(formatted_q)
-                return {feature_name: formatted}
-
-            return verb_conf_fmt
-
-        return (response_fmt,
-                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
-                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
-
-    def __nt_response_formats(self,
-                              system_prompt: str,
-                              worded_conf_user_prompt: str,
-                              numeric_conf_user_prompt: str,
-                              question_prompt: str,
-                              answer_format: str):
-        def response_fmt(x):
-            questions = x['question']
-            formatted = []
-            for question in questions:
-                formatted_q = f"{system_prompt}\n\n{question_prompt.format(question=question)}"
-                formatted.append(formatted_q)
-            return {"response_formatted": formatted}
-
-        def choice_fmt(conf_user_prompt, feature_name):
-            def verb_conf_fmt(x):
-                questions = x['question']
-                answers = x["answer"]
-                formatted = []
-                for question, answer in zip(questions, answers):
-                    formatted_q = (f"{question_prompt.format(question=question)}\n"
-                                   f"{answer_format.format(answer=answer)}\n\n"
-                                   f"{conf_user_prompt}")
-                    formatted.append(formatted_q)
-                return {feature_name: formatted}
-
-            return verb_conf_fmt
-
-        return (response_fmt,
-                choice_fmt(numeric_conf_user_prompt, "numeric_conf_formatted"),
-                choice_fmt(worded_conf_user_prompt, "worded_conf_formatted"))
-
-
-class CoTFormat(Enum):
-    SYSTEM_USER_CHAT = 0
-    USER_CHAT = 1
-    NO_TEMPLATE = 2
-
-    @classmethod
-    def from_model_name(cls, name):
-        name_dict = {
-            "google/gemma-1.1-2b-it": cls.USER_CHAT, # legacy model already downloaded on home machine for quick testing.
-
-            # confirmed models.
-            "google/gemma-2-2b-it": cls.USER_CHAT,
-            "google/gemma-2-9b-it": cls.USER_CHAT,
-            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
-            "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
-            "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT
-
-            # defunct models.
-            # "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
-            # "01-ai/Yi-1.5-9B-Chat": cls.SYSTEM_USER_CHAT,
-            # "NousResearch/Hermes-2-Theta-Llama-3-8B": cls.SYSTEM_USER_CHAT,
-            # "NousResearch/Hermes-2-Pro-Mistral-7B": cls.SYSTEM_USER_CHAT,
-            # "google/gemma-1.1-7b-it": cls.USER_CHAT,
-            # "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
-        }
-        return name_dict[name]
+        return format_fn

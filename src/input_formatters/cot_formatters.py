@@ -4,11 +4,16 @@ from evaluate import load
 from data import get_dataset, DatasetType
 from .generic import CoTInputFormatter
 from llm_models import TextGenLLMBundle
+from prompt_formatters import CoTPromptFormat, MCQCoTPromptFormat
 
 
 class GSMCoT(CoTInputFormatter):
     def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
-        super().__init__(llm_bundle, get_dataset(DatasetType.GSM), calib_dset_size, test_dset_size)
+        super().__init__(llm_bundle,
+                         get_dataset(DatasetType.GSM),
+                         CoTPromptFormat(llm_bundle),
+                         calib_dset_size,
+                         test_dset_size)
 
     def correctness(self, predictions, labels):
         predictions = [int(x) for x in predictions]
@@ -17,7 +22,11 @@ class GSMCoT(CoTInputFormatter):
 
 class MATHCoT(CoTInputFormatter):
     def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
-        super().__init__(llm_bundle, get_dataset(DatasetType.MATH), calib_dset_size, test_dset_size)
+        super().__init__(llm_bundle,
+                         get_dataset(DatasetType.MATH),
+                         CoTPromptFormat(llm_bundle),
+                         calib_dset_size,
+                         test_dset_size)
         self.__evl = None
 
     def correctness(self, predictions, labels):
@@ -31,5 +40,15 @@ class MATHCoT(CoTInputFormatter):
             outs.append(self.__evl.compute(references=[label], predictions=[pred])["accuracy"])
 
         return torch.Tensor(outs).to(torch.uint8)
+
+
+class AQUARATCoT(CoTInputFormatter):
+    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
+        super().__init__(llm_bundle,
+                         get_dataset(DatasetType.MATH),
+                         MCQCoTPromptFormat(llm_bundle),
+                         calib_dset_size,
+                         test_dset_size)
+        self.__evl = None
 
 
