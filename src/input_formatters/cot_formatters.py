@@ -43,6 +43,9 @@ class MATHCoT(CoTInputFormatter):
 
 
 class AQUARATCoT(CoTInputFormatter):
+    """
+    TODO: FINISH THIS CLASS!
+    """
     def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
         super().__init__(llm_bundle,
                          get_dataset(DatasetType.MATH),

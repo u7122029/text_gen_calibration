@@ -20,16 +20,6 @@ QUALITATIVE_SCALE = {
 RESULTS_PATH = "results"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# TODO: MAKE A DIFFERENT PROMPT SET FOR FREQUENCYTS TESTING.
-NUMERIC_CONF_PROMPT = "Provide your confidence in the above answer only as a percentage (0-100%).\n**Confidence:**"
-WORDED_CONF_PROMPT = (f"Provide your confidence in the above answer only as one of "
-                      f"{' / '.join([f'{exp}' for exp in QUALITATIVE_SCALE.keys()])}.\n**Confidence:**")
-COT_SYSTEM_PROMPT = ("You are a friendly chatbot that only outputs in the form:\n"
-                     "**Explanation:** <Your explanation>\n"
-                     "**Final Answer:** <A single number>")
-FINAL_ANSWER_FORMAT = "**Final Answer:** {answer}"
-QUESTION_FORMAT = "**Question:** {question}"
-
 try:
     with open("hf_token.txt") as f:
         HF_TOKEN = f.read().strip()

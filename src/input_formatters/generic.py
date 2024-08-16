@@ -9,8 +9,7 @@ import torch
 from calibrators import Calibrator
 from data import DictDataset
 from prompt_formatters import PromptFormat, CoTPromptFormat
-from utils import dill_load, dill_save, RESULTS_PATH, COT_SYSTEM_PROMPT, WORDED_CONF_PROMPT, \
-    NUMERIC_CONF_PROMPT, QUESTION_FORMAT, FINAL_ANSWER_FORMAT
+from utils import dill_load, dill_save, RESULTS_PATH
 from llm_models import TextGenLLMBundle
 
 
@@ -85,7 +84,9 @@ class InputFormatter(ABC):
                         calibrator: Calibrator,
                         original_input_formatter: 'InputFormatter',
                         use_full_dset=True):
-        save_path = original_input_formatter.target_dir / calibrator.get_name() / "ood" / f"{self.__class__.__name__}.dill"
+        save_path = (original_input_formatter.target_dir /
+                     calibrator.get_name() /
+                     "ood" / f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data()
 
         if use_full_dset:
@@ -120,17 +121,6 @@ class CoTInputFormatter(InputFormatter, ABC):
         InputFormatter.__init__(self, llm_bundle, dataset, prompt_formatter, calib_dset_size, test_dset_size)
 
         # Format the datasets
-        #cf = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
-        """self.ff_list = [self.__suc_response_formats,
-                        self.__uc_response_formats,
-                        self.__nt_response_formats]
-        self.response_fmt, self.numeric_conf_fmt, self.worded_conf_fmt = self.ff_list[cf.value](
-            COT_SYSTEM_PROMPT,
-            WORDED_CONF_PROMPT,
-            NUMERIC_CONF_PROMPT,
-            QUESTION_FORMAT,
-            FINAL_ANSWER_FORMAT
-        )"""
         self.numeric_conf_fmt, self.worded_conf_fmt = (
             self.format_verbalised("numeric", "numeric_conf_formatted"),
             self.format_verbalised("worded", "worded_conf_formatted")
@@ -278,13 +268,6 @@ class CoTInputFormatter(InputFormatter, ABC):
         questions = x['question']
         formatted = []
         for question in questions:
-            """formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                [{"role": "user", "content": f"{system_prompt}\n\n"
-                                             f"{question_prompt.format(question=question)}"}],
-                tokenize=False,
-                add_generation_prompt=True,
-                return_tensors="pt"
-            )"""
             formatted_q = self.prompt_formatter(question)
             formatted.append(formatted_q)
         return {"response_formatted": formatted}
@@ -295,14 +278,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             answers = x["answer"]
             formatted = []
             for question, answer in zip(questions, answers):
-                """formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                    [{"role": "user", "content": f"{question_prompt.format(question=question)}\n"
-                                                 f"{answer_format.format(answer=answer)}\n\n"
-                                                 f"{conf_user_prompt}"}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    return_tensors="pt"
-                )"""
                 formatted_q = self.prompt_formatter.conf_format(question, answer, prompt_type)
                 formatted.append(formatted_q)
             return {feature_name: formatted}

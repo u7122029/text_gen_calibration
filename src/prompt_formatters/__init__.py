@@ -87,8 +87,8 @@ class CoTPromptFormat(PromptFormat):
         else:
             conf_prompt = self.numeric_conf_prompt
 
-        final_answer_formatted = self.final_answer_format.format(answer)
-        question_formatted = self.question_format.format(question)
+        final_answer_formatted = self.final_answer_format.format(answer=answer)
+        question_formatted = self.question_format.format(question=question)
         if self.cot_format == CoTModelConfig.SYSTEM_USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "system", "content": f"{question_formatted}\n"
