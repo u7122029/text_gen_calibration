@@ -1,6 +1,6 @@
-import os
+
 from abc import ABC, abstractmethod
-from enum import Enum
+
 from pathlib import Path
 from typing import Type, Tuple, Optional
 
@@ -8,10 +8,10 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
-from prompt_formatters import PromptFormat
-from prompt_formatters.cot import CoTPromptFormat
 from utils import dill_load, dill_save, RESULTS_PATH
 from llm_models.textgen import TextGenLLMBundle
+from prompt_formatters import PromptFormat
+from prompt_formatters.cot import CoTPromptFormat
 
 
 class InputFormatter(ABC):
@@ -155,10 +155,15 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                              #self.prompt_formatter,
                                                                              batch_size=batch_size,
                                                                              desc="Get Logits + Tokens (Calib)")
-            all_answers, all_answers_successful = self.prompt_formatter.obtain_answers(
+            all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
                 self.llm_bundle.tokeniser.batch_decode(self.calib_dataset["tokens"])
             )
-            self.calib_dataset["correct"] = self.correctness() # here
+            self.calib_dataset["correct"] = self.correctness(all_predictions,
+                                                             self.calib_dataset["answer"],
+                                                             all_predictions_successful) # here
+            self.calib_dataset["pred_successful"] = all_predictions_successful
+            self.calib_dataset["prediction"] = all_predictions
+
             (self.calib_dataset
              .update(self.numeric_conf_fmt(self.calib_dataset))
              .update(self.worded_conf_fmt(self.calib_dataset)))
@@ -185,10 +190,19 @@ class CoTInputFormatter(InputFormatter, ABC):
             with torch.no_grad():
                 self.test_dataset = self.llm_bundle.get_eval_data_from_dset(self.test_dataset,
                                                                             test_filepath,
-                                                                            self.correctness,
-                                                                            self.prompt_formatter,
+                                                                            #self.correctness,
+                                                                            #self.prompt_formatter,
                                                                             batch_size=batch_size,
                                                                             desc="Get Logits + Tokens (Test)")
+
+            all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
+                self.llm_bundle.tokeniser.batch_decode(self.test_dataset["tokens"])
+            )
+            self.test_dataset["correct"] = self.correctness(all_predictions,
+                                                             self.test_dataset["answer"],
+                                                             all_predictions_successful)  # here
+            self.test_dataset["pred_successful"] = all_predictions_successful
+            self.test_dataset["prediction"] = all_predictions
 
             (self.test_dataset
              .update(self.numeric_conf_fmt(self.test_dataset))
@@ -281,10 +295,10 @@ class CoTInputFormatter(InputFormatter, ABC):
     def format_verbalised(self, prompt_type, feature_name):
         def format_fn(x):
             questions = x['question']
-            answers = x["answer"]
+            preds = x["prediction"]
             formatted = []
-            for question, answer in zip(questions, answers):
-                formatted_q = self.prompt_formatter.conf_format(question, answer, prompt_type)
+            for question, pred in zip(questions, preds):
+                formatted_q = self.prompt_formatter.conf_format(question, pred, prompt_type)
                 formatted.append(formatted_q)
             return {feature_name: formatted}
 

@@ -1,8 +1,8 @@
 import re
 from enum import Enum
 
-from prompt_formatters import PromptFormat
 from llm_models import TextGenLLMBundle
+from prompt_formatters.generic import PromptFormat
 
 
 class CoTModelConfig(Enum):
@@ -94,22 +94,22 @@ class CoTPromptFormat(PromptFormat):
         return formatted_q
 
     def obtain_answers(self, decoded_responses):
-        final_answers = []
+        final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
             try:
                 s1 = decoded_response.split("**explanation:**")[1]
                 explanation, final_answer_raw = s1.split("**final answer:**")
-                final_answer = re.findall(r"\d+", final_answer_raw)[0]
+                final_prediction = re.findall(r"\d+", final_answer_raw)[0]
                 successful = True
             except:
-                final_answer = "-1"  # Indicates a failed response.
+                final_prediction = "-1"  # Indicates a failed response.
                 successful = False
 
-            final_answers.append(final_answer)
+            final_preds.append(final_prediction)
             all_successful.append(successful)
 
-        return final_answers, all_successful
+        return final_preds, all_successful
 
     def __call__(self, question):
         question_formatted = self.question_format.format(question=question)
@@ -146,22 +146,22 @@ class MCQCoTPromptFormat(CoTPromptFormat):
                               "**Final Answer:** <A single letter>")
 
     def obtain_answers(self, decoded_responses):
-        final_answers = []
+        final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
             try:
                 s1 = decoded_response.split("**explanation:**")[1]
                 explanation, final_answer_raw = s1.split("**final answer:**")
                 match = re.search(r'[a-z]', final_answer_raw)
-                final_answer = match.group(0)
+                final_prediction = match.group(0)
 
-                assert final_answer in self.mcq_options, "go to except."
+                assert final_prediction in self.mcq_options, "go to except."
                 successful = True
             except:
-                final_answer = "-1"  # Indicates a failed response.
+                final_prediction = "-1"  # Indicates a failed response.
                 successful = False
 
-            final_answers.append(final_answer)
+            final_preds.append(final_prediction)
             all_successful.append(successful)
 
-        return final_answers, all_successful
+        return final_preds, all_successful

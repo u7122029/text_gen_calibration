@@ -7,7 +7,6 @@ from transformers import AutoModelForCausalLM
 
 from data import DictDataset
 from llm_models import LLMBundle, extract_verbalized_confidence, VerbalisedConfidence
-from prompt_formatters import PromptFormat
 from utils import HF_TOKEN, dill_save, DEVICE
 
 
