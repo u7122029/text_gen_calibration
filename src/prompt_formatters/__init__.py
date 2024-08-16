@@ -153,8 +153,27 @@ class CoTPromptFormat(PromptFormat):
 
 
 class MCQCoTPromptFormat(CoTPromptFormat):
-    def __init__(self, llm_bundle: TextGenLLMBundle):
+    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None):
         super().__init__(llm_bundle)
+        if mcq_options is None:
+            self.mcq_options = {'a', 'b', 'c', 'd', 'e'}
+        else:
+            self.mcq_options = mcq_options
         self.system_prompt = ("You are a friendly chatbot that only outputs in the form:\n"
                               "**Explanation:** <Your explanation>\n"
                               "**Final Answer:** <A single letter>")
+
+    def obtain_answer(self, decoded_response):
+        try:
+            s1 = decoded_response.split("**explanation:**")[1]
+            explanation, final_answer_raw = s1.split("**final answer:**")
+            match = re.search(r'[a-z]', final_answer_raw)
+            final_answer = match.group(0)
+
+            assert final_answer in self.mcq_options, "go to except."
+            successful = True
+        except:
+            final_answer = "-1"  # Indicates a failed response.
+            successful = False
+
+        return final_answer, successful

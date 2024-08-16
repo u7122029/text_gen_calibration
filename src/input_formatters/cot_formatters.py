@@ -43,15 +43,18 @@ class MATHCoT(CoTInputFormatter):
 
 
 class AQUARATCoT(CoTInputFormatter):
-    """
-    TODO: FINISH THIS CLASS!
-    """
     def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
         super().__init__(llm_bundle,
                          get_dataset(DatasetType.MATH),
                          MCQCoTPromptFormat(llm_bundle),
                          calib_dset_size,
                          test_dset_size)
-        self.__evl = None
+
+    def correctness(self, predictions, labels):
+        correctness = []
+        for pred, label in zip(predictions, labels):
+            pred = pred.upper()
+            correctness.append(pred == label)
+        return torch.Tensor(correctness).bool()
 
 
