@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
+import re
 
 from llm_models import TextGenLLMBundle
 
@@ -50,6 +51,10 @@ class PromptFormat(ABC):
         @param kwargs:
         @return:
         """
+        pass
+
+    @abstractmethod
+    def obtain_answer(self, decoded_response):
         pass
 
 
@@ -111,6 +116,18 @@ class CoTPromptFormat(PromptFormat):
                            f"{conf_prompt}")
 
         return formatted_q
+
+    def obtain_answer(self, decoded_response):
+        try:
+            s1 = decoded_response.split("**explanation:**")[1]
+            explanation, final_answer_raw = s1.split("**final answer:**")
+            final_answer = re.findall(r"\d+", final_answer_raw)[0]
+            successful = True
+        except:
+            final_answer = "-1"  # Indicates a failed response.
+            successful = False
+
+        return final_answer, successful
 
     def __call__(self, question):
         question_formatted = self.question_format.format(question=question)

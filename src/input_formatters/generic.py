@@ -151,6 +151,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                 self.calib_dataset = self.llm_bundle.get_eval_data_from_dset(self.calib_dataset,
                                                                              calib_filepath,
                                                                              self.correctness,
+                                                                             self.prompt_formatter,
                                                                              batch_size=batch_size,
                                                                              desc="Get Logits + Tokens (Calib)")
 
@@ -181,6 +182,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                 self.test_dataset = self.llm_bundle.get_eval_data_from_dset(self.test_dataset,
                                                                             test_filepath,
                                                                             self.correctness,
+                                                                            self.prompt_formatter,
                                                                             batch_size=batch_size,
                                                                             desc="Get Logits + Tokens (Test)")
 

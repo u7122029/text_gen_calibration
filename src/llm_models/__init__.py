@@ -11,6 +11,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from data import DictDataset
+from prompt_formatters import PromptFormat
 from utils import QUALITATIVE_SCALE, HF_TOKEN, DEVICE, dill_save, dill_load
 
 
@@ -131,6 +132,7 @@ class TextGenLLMBundle(LLMBundle):
                                 dset: DictDataset,
                                 storage_root: Path,
                                 correctness_func,
+                                prompt_formatter: PromptFormat,
                                 batch_size=1,
                                 max_new_tokens=550,
                                 desc=None) -> DictDataset:
@@ -194,8 +196,6 @@ class TextGenLLMBundle(LLMBundle):
 
                 prob_vecs = torch.softmax(processed_logits, dim=1)  # response_idx, response length, vocab_size
 
-
-
                 token_confidences = torch.take_along_dim(prob_vecs,
                                                          tokens.unsqueeze(1),
                                                          dim=1).squeeze(1)
@@ -205,14 +205,8 @@ class TextGenLLMBundle(LLMBundle):
                 # obtain answer and whether the obtaining was successful.
                 decoded_response = self.tokeniser.decode(tokens)
                 decoded_response = decoded_response.lower()
-                try:
-                    s1 = decoded_response.split("**explanation:**")[1]
-                    explanation, final_answer_raw = s1.split("**final answer:**")
-                    final_answer = re.findall(r"\d+", final_answer_raw)[0]
-                    successful = True
-                except:
-                    final_answer = "-1"  # Indicates a failed response.
-                    successful = False
+
+                final_answer, successful = prompt_formatter.obtain_answer(decoded_response)
 
                 all_preds.append(final_answer)
                 all_preds_successful.append(successful)
@@ -289,45 +283,3 @@ class TextGenLLMBundle(LLMBundle):
 
         dset = dset.update(out_dict)
         return dset
-
-    def get_logits_confs_and_answers_from_dset(self, logits_and_tokens: dict, correctness_func):
-        """
-        Is this function really needed when I can do all this in the logits and tokens function?
-        @deprecated
-        :param logits_and_tokens:
-        :return:
-        """
-        all_preds = []
-        all_successful = []
-        all_confs = []
-        for logits, tokens in zip(logits_and_tokens["logits"], logits_and_tokens["tokens"]):
-            prob_vecs = torch.softmax(logits, dim=1)  # response_idx, response length, vocab_size
-            tokens = tokens.cpu()
-            decoded_response = self.tokeniser.decode(tokens)
-
-            token_confidences = torch.take_along_dim(prob_vecs,
-                                                     tokens.unsqueeze(1),
-                                                     dim=1).squeeze(1)
-            response_confidence = torch.mean(token_confidences).item()
-
-            # TODO: Perhaps make getting the model's answer part of the input formatter, and leave
-            #       the logit confidence to this class.
-            decoded_response = decoded_response.lower()
-            try:
-                s1 = decoded_response.split("**explanation:**")[1]
-                explanation, final_answer_raw = s1.split("**final answer:**")
-                final_answer = re.findall(r"\d+", final_answer_raw)[0]
-                successful = True
-            except:
-                final_answer = "-1" # Indicates a failed response.
-                successful = False
-
-            all_preds.append(final_answer)
-            all_successful.append(successful)
-            all_confs.append(response_confidence)
-
-        # require logits_and_tokens["correct"] to be a torch tensor of type torch.uint8, each element in {0, 1}.
-        logits_and_tokens["correct"] = correctness_func(all_preds, logits_and_tokens["answer"])
-        logits_and_tokens["logits_confs"] = torch.Tensor(all_confs)
-        logits_and_tokens["pred_successful"] = torch.Tensor(all_successful).bool()
-        return logits_and_tokens
