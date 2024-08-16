@@ -1,7 +1,7 @@
 import fire
 from input_formatters import input_formatter_dict, InputFormatter, CoTInputFormatter
 from calibrators import calibrator_dict
-from llm_models import TextGenLLMBundle
+from llm_models.textgen import TextGenLLMBundle
 from utils import RESULTS_PATH, dill_load
 from pathlib import Path
 from data import DictDataset

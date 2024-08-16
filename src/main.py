@@ -5,7 +5,7 @@ import torch
 
 from calibrators import calibrator_dict
 from input_formatters import input_formatter_dict
-from llm_models import TextGenLLMBundle
+from llm_models.textgen import TextGenLLMBundle
 
 from metrics import ModelMetrics
 
@@ -22,7 +22,7 @@ def show_results(calib_results: ModelMetrics, test_results: ModelMetrics, model_
     test_results.display()
 
 
-def main(input_formatter: str="MATHCoT",
+def main(input_formatter: str="AQUARATCoT",
          calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,

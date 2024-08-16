@@ -2,9 +2,9 @@ import torch
 from evaluate import load
 
 from data import get_dataset, DatasetType
+from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat
 from .generic import CoTInputFormatter
-from llm_models import TextGenLLMBundle
-from prompt_formatters import CoTPromptFormat, MCQCoTPromptFormat
+from llm_models.textgen import TextGenLLMBundle
 
 
 class GSMCoT(CoTInputFormatter):
@@ -15,9 +15,13 @@ class GSMCoT(CoTInputFormatter):
                          calib_dset_size,
                          test_dset_size)
 
-    def correctness(self, predictions, labels):
-        predictions = [int(x) for x in predictions]
-        return (torch.Tensor(predictions).int() == torch.Tensor(labels)).to(torch.uint8)
+    def correctness(self, predictions, labels, successful):
+        assert len(predictions) == len(labels)
+        predictions = torch.Tensor([int(x) for x in predictions]).int()
+        labels = torch.Tensor(labels)
+        out = torch.zeros(len(predictions)).bool()
+        out[successful] = predictions[successful] == labels[successful]
+        return out.to(torch.uint8)
 
 
 class MATHCoT(CoTInputFormatter):
@@ -29,14 +33,17 @@ class MATHCoT(CoTInputFormatter):
                          test_dset_size)
         self.__evl = None
 
-    def correctness(self, predictions, labels):
+    def correctness(self, predictions, labels, successful):
         assert len(predictions) == len(labels)
 
         if self.__evl is None:
             self.__evl = load("evaluate-metric/competition_math")
 
         outs = []
-        for pred, label in zip(predictions, labels):
+        for pred, label, succ in zip(predictions, labels, successful):
+            if not succ:
+                outs.append(0)
+                continue
             outs.append(self.__evl.compute(references=[label], predictions=[pred])["accuracy"])
 
         return torch.Tensor(outs).to(torch.uint8)
@@ -50,11 +57,14 @@ class AQUARATCoT(CoTInputFormatter):
                          calib_dset_size,
                          test_dset_size)
 
-    def correctness(self, predictions, labels):
+    def correctness(self, predictions, labels, successful):
         correctness = []
-        for pred, label in zip(predictions, labels):
+        for pred, label, succ in zip(predictions, labels, successful):
+            if not succ:
+                correctness.append(False)
+                continue
             pred = pred.upper()
             correctness.append(pred == label)
-        return torch.Tensor(correctness).bool()
+        return torch.Tensor(correctness).to(torch.uint8)
 
 

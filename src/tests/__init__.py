@@ -1,8 +1,8 @@
 import unittest
 import simple_colors as sc
-from prompt_formatters import CoTPromptFormat
-from input_formatters import GSMCoT, MATHCoT
-from llm_models import TextGenLLMBundle
+from input_formatters import GSMCoT, MATHCoT, AQUARATCoT
+from prompt_formatters.cot import CoTPromptFormat
+from llm_models.textgen import TextGenLLMBundle
 
 
 class PromptFormatterDisplayTests(unittest.TestCase):
@@ -15,6 +15,7 @@ class PromptFormatterDisplayTests(unittest.TestCase):
         cls.prompt_formatter = CoTPromptFormat(cls.llm_bundle)
         cls.gsmcot = GSMCoT(cls.llm_bundle, 1, 1)
         cls.mathcot = MATHCoT(cls.llm_bundle, 1, 1)
+        cls.aquaratcot = AQUARATCoT(cls.llm_bundle, 1, 1)
 
     """def test_cotprompt_general(self):
         print(sc.red("Testing general CoT prompt format below"))
@@ -33,5 +34,9 @@ class PromptFormatterDisplayTests(unittest.TestCase):
     def test_cotprompt_math(self):
         print(sc.red("Testing MATH CoT prompt format below"))
         print(self.mathcot.test_dataset["response_formatted"][0])
+
+    def test_cotprompt_aquarat(self):
+        print(sc.red("Testing AQUARAT CoT prompt format below"))
+        print(self.aquaratcot.test_dataset["response_formatted"][0])
 
 

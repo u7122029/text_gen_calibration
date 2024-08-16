@@ -1,6 +1,6 @@
 import fire
 from utils import RESULTS_PATH
-from llm_models import TextGenLLMBundle
+from llm_models.textgen import TextGenLLMBundle
 from input_formatters import input_formatter_dict
 from calibrators import FrequencyTS
 from pathlib import Path

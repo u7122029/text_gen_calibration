@@ -8,9 +8,10 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
-from prompt_formatters import PromptFormat, CoTPromptFormat
+from prompt_formatters import PromptFormat
+from prompt_formatters.cot import CoTPromptFormat
 from utils import dill_load, dill_save, RESULTS_PATH
-from llm_models import TextGenLLMBundle
+from llm_models.textgen import TextGenLLMBundle
 
 
 class InputFormatter(ABC):
@@ -103,7 +104,7 @@ class InputFormatter(ABC):
         return test_data
 
     @abstractmethod
-    def correctness(self, predictions: list[str], labels: list[str]):
+    def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
         pass
 
 
@@ -150,11 +151,14 @@ class CoTInputFormatter(InputFormatter, ABC):
             with torch.no_grad():
                 self.calib_dataset = self.llm_bundle.get_eval_data_from_dset(self.calib_dataset,
                                                                              calib_filepath,
-                                                                             self.correctness,
-                                                                             self.prompt_formatter,
+                                                                             #self.correctness,
+                                                                             #self.prompt_formatter,
                                                                              batch_size=batch_size,
                                                                              desc="Get Logits + Tokens (Calib)")
-
+            all_answers, all_answers_successful = self.prompt_formatter.obtain_answers(
+                self.llm_bundle.tokeniser.batch_decode(self.calib_dataset["tokens"])
+            )
+            self.calib_dataset["correct"] = self.correctness() # here
             (self.calib_dataset
              .update(self.numeric_conf_fmt(self.calib_dataset))
              .update(self.worded_conf_fmt(self.calib_dataset)))

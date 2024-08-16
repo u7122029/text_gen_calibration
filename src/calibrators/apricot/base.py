@@ -4,8 +4,8 @@ import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import HDBSCAN
 from torch.utils.data import DataLoader
-
 from calibrators.generic import Calibrator
+
 from data import DictDataset
 from utils import DEVICE
 

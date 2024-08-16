@@ -1,5 +1,5 @@
 import fire
-from llm_models import TextGenLLMBundle
+from llm_models.textgen import TextGenLLMBundle
 from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict, Calibrator
 from main import ModelMetrics
