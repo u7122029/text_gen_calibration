@@ -22,12 +22,12 @@ def show_results(calib_results: ModelMetrics, test_results: ModelMetrics, model_
     test_results.display()
 
 
-def main(input_formatter: str="AQUARATCoT",
+def main(input_formatter: str="GSMCoT",
          calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
-         calib_dset_size=300,
-         test_dset_size=300,
+         calib_dset_size=10,
+         test_dset_size=10,
          recompute_logits=False,
          retrain_calibrator=False):
     torch.manual_seed(0)

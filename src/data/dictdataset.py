@@ -69,6 +69,8 @@ class DictDataset(Dataset):
 
     def __getitem__(self, item: Union[str, int, list[int], slice, torch.Tensor]):
         if isinstance(item, str):
+            if isinstance(self.data_dict[item][0], Path):
+                return [dill_load(x) for x in self.data_dict[item]]
             return self.data_dict[item]
 
         if isinstance(item, list):

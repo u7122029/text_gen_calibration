@@ -10,7 +10,7 @@ from calibrators import Calibrator
 from data import DictDataset
 from utils import dill_load, dill_save, RESULTS_PATH
 from llm_models.textgen import TextGenLLMBundle
-from prompt_formatters import PromptFormat
+from prompt_formatters.generic import PromptFormat
 from prompt_formatters.cot import CoTPromptFormat
 
 
