@@ -26,8 +26,8 @@ def main(input_formatter: str="GSMCoT",
          calibrator_name="TemperatureScaling",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
-         calib_dset_size=10,
-         test_dset_size=10,
+         calib_dset_size=None,
+         test_dset_size=None,
          recompute_logits=False,
          retrain_calibrator=False):
     torch.manual_seed(0)

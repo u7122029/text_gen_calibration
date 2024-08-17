@@ -20,8 +20,6 @@ class TextGenLLMBundle(LLMBundle):
     def get_eval_data_from_dset(self,
                                 dset: DictDataset,
                                 storage_root: Path,
-                                #correctness_func, #
-                                #prompt_formatter: PromptFormat, #
                                 batch_size=1,
                                 max_new_tokens=550,
                                 desc=None) -> DictDataset:
@@ -45,8 +43,6 @@ class TextGenLLMBundle(LLMBundle):
         all_logits_paths = []
         all_tokens_paths = []
         all_logit_confs = []
-        #all_preds_successful = []
-        #all_preds = []
 
         dl = DataLoader(dset, batch_size=batch_size)
 
@@ -91,20 +87,9 @@ class TextGenLLMBundle(LLMBundle):
                 response_confidence = torch.mean(token_confidences).item()
                 all_logit_confs.append(response_confidence)
 
-                # obtain answer and whether the obtaining was successful.
-                """decoded_response = self.tokeniser.decode(tokens)
-                decoded_response = decoded_response.lower()
-
-                final_answer, successful = prompt_formatter.obtain_answers(decoded_response)
-
-                all_preds.append(final_answer)
-                all_preds_successful.append(successful)"""
-
         dset = dset.update({"logits": all_logits_paths,
                             "logits_confs": all_logit_confs,
-                            "tokens": all_tokens_paths})#,
-                            #"pred_successful": all_preds_successful,
-                            #"correct": correctness_func(all_preds, dset["answer"])})
+                            "tokens": all_tokens_paths})
 
         return dset
 

@@ -97,9 +97,9 @@ class CoTPromptFormat(PromptFormat):
         final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
+            decoded_response = decoded_response.lower()
             try:
-                s1 = decoded_response.split("**explanation:**")[1]
-                explanation, final_answer_raw = s1.split("**final answer:**")
+                _, final_answer_raw = decoded_response.split("**final answer:**")
                 final_prediction = re.findall(r"\d+", final_answer_raw)[0]
                 successful = True
             except:
@@ -108,7 +108,6 @@ class CoTPromptFormat(PromptFormat):
 
             final_preds.append(final_prediction)
             all_successful.append(successful)
-
         return final_preds, all_successful
 
     def __call__(self, question):
@@ -149,9 +148,9 @@ class MCQCoTPromptFormat(CoTPromptFormat):
         final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
+            decoded_response = decoded_response.lower()
             try:
-                s1 = decoded_response.split("**explanation:**")[1]
-                explanation, final_answer_raw = s1.split("**final answer:**")
+                _, final_answer_raw = decoded_response.split("**final answer:**")
                 match = re.search(r'[a-z]', final_answer_raw)
                 final_prediction = match.group(0)
 
