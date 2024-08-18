@@ -28,8 +28,8 @@ def main(input_formatter: str="AQUARATCoT",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
-         calib_dset_size=10,
-         test_dset_size=10,
+         calib_dset_size=None,
+         test_dset_size=None,
          recompute_logits=False,
          retrain_calibrator=False):
     torch.manual_seed(0)
@@ -42,7 +42,7 @@ def main(input_formatter: str="AQUARATCoT",
     input_formatter_class = input_formatter_dict[input_formatter]
     input_formatter = input_formatter_class(llm_bundle, cot_version, calib_dset_size, test_dset_size)
 
-    calib_data, test_data = input_formatter.run_calibration_pipeline(
+    calib_data, test_data = input_formatter.run_pipeline(
         calibrator_dict[calibrator_name],
         batch_size,
         recompute_logits=recompute_logits,
