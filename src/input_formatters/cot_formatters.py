@@ -2,16 +2,26 @@ import torch
 from evaluate import load
 
 from data import get_dataset, DatasetType
-from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat
+from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat, CoTVersion, AltCoTPromptFormat, \
+    AltMCQCoTPromptFormat
 from .generic import CoTInputFormatter
 from llm_models.textgen import TextGenLLMBundle
 
 
 class GSMCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 cot_version: CoTVersion,
+                 calib_dset_size=None,
+                 test_dset_size=None):
+        if cot_version == CoTVersion.ALT:
+            prompt_formatter = AltCoTPromptFormat(llm_bundle)
+        else:
+            prompt_formatter = CoTPromptFormat(llm_bundle)
+
         super().__init__(llm_bundle,
                          get_dataset(DatasetType.GSM),
-                         CoTPromptFormat(llm_bundle),
+                         prompt_formatter,
                          calib_dset_size,
                          test_dset_size)
 
@@ -25,10 +35,19 @@ class GSMCoT(CoTInputFormatter):
 
 
 class MATHCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 cot_version: CoTVersion,
+                 calib_dset_size=None,
+                 test_dset_size=None):
+        if cot_version == CoTVersion.ALT:
+            prompt_formatter = AltCoTPromptFormat(llm_bundle)
+        else:
+            prompt_formatter = CoTPromptFormat(llm_bundle)
+
         super().__init__(llm_bundle,
                          get_dataset(DatasetType.MATH),
-                         CoTPromptFormat(llm_bundle),
+                         prompt_formatter,
                          calib_dset_size,
                          test_dset_size)
         self.__evl = None
@@ -50,10 +69,14 @@ class MATHCoT(CoTInputFormatter):
 
 
 class AQUARATCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, calib_dset_size=None, test_dset_size=None):
+    def __init__(self, llm_bundle: TextGenLLMBundle, cot_version: CoTVersion, calib_dset_size=None, test_dset_size=None):
+        if cot_version == CoTVersion.ALT:
+            prompt_formatter = AltMCQCoTPromptFormat(llm_bundle)
+        else:
+            prompt_formatter = MCQCoTPromptFormat(llm_bundle)
         super().__init__(llm_bundle,
                          get_dataset(DatasetType.MATH),
-                         MCQCoTPromptFormat(llm_bundle),
+                         prompt_formatter,
                          calib_dset_size,
                          test_dset_size)
 

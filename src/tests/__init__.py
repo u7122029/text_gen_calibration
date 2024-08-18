@@ -1,7 +1,7 @@
 import unittest
 import simple_colors as sc
 from input_formatters import GSMCoT, MATHCoT, AQUARATCoT
-from prompt_formatters.cot import CoTPromptFormat
+from prompt_formatters.cot import CoTPromptFormat, CoTVersion
 from llm_models.textgen import TextGenLLMBundle
 
 
@@ -13,9 +13,9 @@ class PromptFormatterDisplayTests(unittest.TestCase):
     def setUpClass(cls):
         cls.llm_bundle = TextGenLLMBundle("google/gemma-1.1-2b-it")
         cls.prompt_formatter = CoTPromptFormat(cls.llm_bundle)
-        cls.gsmcot = GSMCoT(cls.llm_bundle, 1, 1)
-        cls.mathcot = MATHCoT(cls.llm_bundle, 1, 1)
-        cls.aquaratcot = AQUARATCoT(cls.llm_bundle, 1, 1)
+        cls.gsmcot = GSMCoT(cls.llm_bundle, CoTVersion.ALT, 1, 1)
+        cls.mathcot = MATHCoT(cls.llm_bundle,  CoTVersion.ALT, 1, 1)
+        cls.aquaratcot = AQUARATCoT(cls.llm_bundle,  CoTVersion.ALT, 1, 1)
 
     """def test_cotprompt_general(self):
         print(sc.red("Testing general CoT prompt format below"))

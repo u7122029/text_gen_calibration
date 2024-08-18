@@ -48,7 +48,10 @@ class InputFormatter(ABC):
         self.dataset = dataset
         self.prompt_formatter = prompt_formatter
 
-        self.target_dir = Path(RESULTS_PATH) / self.llm_bundle.llm_name / self.__class__.__name__
+        self.target_dir = (Path(RESULTS_PATH) /
+                           self.llm_bundle.llm_name /
+                           self.__class__.__name__ /
+                           self.prompt_formatter.__class__.__name__)
         self.target_dir.mkdir(parents=True, exist_ok=True)
 
         self.__calibrator: Optional[Calibrator] = None

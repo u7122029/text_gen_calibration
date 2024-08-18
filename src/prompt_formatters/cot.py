@@ -5,6 +5,18 @@ from llm_models import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
 
 
+class CoTVersion(Enum):
+    DEFAULT = 0
+    ALT = 1
+
+    @classmethod
+    def from_string(cls, name):
+        try:
+            return cls[name]
+        except KeyError:
+            raise ValueError(f"{name} is not a valid {cls.__name__}")
+
+
 class CoTModelConfig(Enum):
     SYSTEM_USER_CHAT = 0
     USER_CHAT = 1
@@ -35,10 +47,20 @@ class CoTModelConfig(Enum):
 
 
 class CoTPromptFormat(PromptFormat):
-    def __init__(self, llm_bundle: TextGenLLMBundle):
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 question_tag="**Question:**",
+                 final_answer_tag="**Final Answer:**",
+                 explanation_tag="**Explanation:**",
+                 confidence_tag="**Confidence:**"):
         super().__init__()
         self.llm_bundle = llm_bundle
         self.cot_format = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
+
+        self.question_tag = question_tag
+        self.final_answer_tag = final_answer_tag
+        self.explanation_tag = explanation_tag
+        self.confidence_tag = confidence_tag
 
         self.qualitative_scale = {
             "Very low": 0,
@@ -49,17 +71,17 @@ class CoTPromptFormat(PromptFormat):
             "High": 0.7,
             "Very high": 1,
         }
-        self.numeric_conf_prompt = ("Provide your confidence in the above answer only as a percentage (0-100%).\n"
-                                    "**Confidence:**")
+        self.numeric_conf_prompt = (f"Provide your confidence in the above answer only as a percentage (0-100%).\n"
+                                    f"{self.confidence_tag}")
         self.worded_conf_prompt = (f"Provide your confidence in the above answer only as one of "
                                    f"{' / '.join([f'{exp}' for exp in self.qualitative_scale.keys()])}.\n"
-                                   f"**Confidence:**")
-        self.system_prompt = ("You are a friendly chatbot that only outputs in the form:\n"
-                              "**Explanation:** <Your explanation>\n"
-                              "**Final Answer:** <A single number>")
+                                   f"{self.confidence_tag}")
+        self.system_prompt = (f"You are a friendly chatbot that only outputs in the form:\n"
+                              f"{self.explanation_tag} <Your explanation>\n"
+                              f"{self.final_answer_tag} <A single number>")
 
-        self.final_answer_format = "**Final Answer:** {answer}"
-        self.question_format = "**Question:** {question}"
+        self.final_answer_format = f"{self.final_answer_tag} " + "{answer}"
+        self.question_format = f"{self.question_tag} " + "{question}"
 
     def conf_format(self, question, answer, conf_prompt_type: str):
         assert conf_prompt_type in {"worded", "numeric"}
@@ -94,12 +116,13 @@ class CoTPromptFormat(PromptFormat):
         return formatted_q
 
     def obtain_answers(self, decoded_responses):
+        final_answer_tag_lower = self.final_answer_tag.lower()
         final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
             decoded_response = decoded_response.lower()
             try:
-                _, final_answer_raw = decoded_response.split("**final answer:**")
+                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)
                 final_prediction = re.findall(r"\d+", final_answer_raw)[0]
                 successful = True
             except:
@@ -134,23 +157,24 @@ class CoTPromptFormat(PromptFormat):
 
 
 class MCQCoTPromptFormat(CoTPromptFormat):
-    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None):
-        super().__init__(llm_bundle)
+    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None, **kwargs):
+        super().__init__(llm_bundle, **kwargs)
         if mcq_options is None:
             self.mcq_options = {'a', 'b', 'c', 'd', 'e'}
         else:
             self.mcq_options = mcq_options
         self.system_prompt = ("You are a friendly chatbot that only outputs in the form:\n"
-                              "**Explanation:** <Your explanation>\n"
-                              "**Final Answer:** <A single letter>")
+                              f"{self.explanation_tag} <Your explanation>\n"
+                              f"{self.final_answer_tag} <A single letter>")
 
     def obtain_answers(self, decoded_responses):
+        final_answer_tag_lower = self.final_answer_tag.lower()
         final_preds = []
         all_successful = []
         for decoded_response in decoded_responses:
             decoded_response = decoded_response.lower()
             try:
-                _, final_answer_raw = decoded_response.split("**final answer:**")
+                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)
                 match = re.search(r'[a-z]', final_answer_raw)
                 final_prediction = match.group(0)
 
@@ -164,3 +188,28 @@ class MCQCoTPromptFormat(CoTPromptFormat):
             all_successful.append(successful)
 
         return final_preds, all_successful
+
+
+class AltCoTPromptFormat(CoTPromptFormat):
+    """
+    Alternative CoT Prompt Format without the *s.
+    """
+    def __init__(self, llm_bundle: TextGenLLMBundle):
+        super().__init__(llm_bundle,
+                         "Question:",
+                         "Final Answer:",
+                         "Explanation:",
+                         "Confidence:")
+
+
+class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
+    """
+    Alternative CoT Prompt Format without the *s.
+    """
+    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None):
+        super().__init__(llm_bundle,
+                         mcq_options,
+                         question_tag="Question:",
+                         final_answer_tag="Final Answer:",
+                         explanation_tag="Explanation:",
+                         confidence_tag="Confidence:")
