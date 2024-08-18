@@ -75,12 +75,13 @@ class AQUARATCoT(CoTInputFormatter):
         else:
             prompt_formatter = MCQCoTPromptFormat(llm_bundle)
         super().__init__(llm_bundle,
-                         get_dataset(DatasetType.MATH),
+                         get_dataset(DatasetType.AQUARAT),
                          prompt_formatter,
                          calib_dset_size,
                          test_dset_size)
 
     def correctness(self, predictions, labels, successful):
+        assert len(predictions) == len(labels)
         correctness = []
         for pred, label, succ in zip(predictions, labels, successful):
             if not succ:

@@ -1,6 +1,6 @@
 from datasets import load_dataset, concatenate_datasets
 
-from data import DictDataset
+from .dictdataset import DictDataset
 
 
 def get_aqua_rat():
@@ -20,4 +20,6 @@ def get_aqua_rat():
 
 
 if __name__ == "__main__":
-    print(get_aqua_rat())
+    x = get_aqua_rat()
+    print(x.keys())
+    print(x["answer"])
