@@ -35,7 +35,13 @@ class BrierScore(Metric):
 
 class ModelMetrics:
     @abstractmethod
-    def __init__(self, data: DictDataset, n_bins=15):
+    def __init__(self, data: DictDataset, n_bins=15, **kwargs):
+        """
+
+        @param data:
+        @param n_bins:
+        @param kwargs: Extra details to be included in the results.
+        """
         assert "logits_confs" in data
         assert "correct" in data
         assert "numeric_confs" in data
@@ -45,6 +51,8 @@ class ModelMetrics:
         assert "calibrated_confs" in data
         assert "calibrated_successful" in data
 
+        self.n_bins = n_bins
+        self.extra_details = list(kwargs.items())
         self.logits_confs = torch.Tensor(data["logits_confs"])
         self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
         self.correct = torch.Tensor(data["correct"]).bool()
@@ -115,16 +123,12 @@ class ModelMetrics:
     def __len__(self):
         return len(self.correct)
 
-    def display(self, additional_details=None):
-        if additional_details is None:
-            details = []
-        else:
-            details = additional_details.copy()
-
-        details.extend([["No. Samples", len(self)],
-                        ["Accuracy", self.accuracy],
-                        ["Succeeded VCs", self.num_verbalised_successful]])
-        print(tabulate(details, tablefmt="github"))
+    def display(self):
+        base = [["No. Samples", len(self)],
+                ["Succeeded VCs", self.num_verbalised_successful],
+                ["Accuracy", self.accuracy],
+                ["No. ECE Bins", self.n_bins]]
+        print(tabulate(self.extra_details + base, tablefmt="github"))
 
         print("\n**Basic Metrics:**")
         table = [

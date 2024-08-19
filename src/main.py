@@ -4,6 +4,7 @@ import fire
 import torch
 
 from calibrators import calibrator_dict
+from data import DictDataset
 from input_formatters import input_formatter_dict
 from llm_models.textgen import TextGenLLMBundle
 
@@ -11,20 +12,22 @@ from metrics import ModelMetrics
 from prompt_formatters import CoTVersion
 
 
-def show_results(calib_results: ModelMetrics,
-                 test_results: ModelMetrics,
+def show_results(calib_data: DictDataset,
+                 test_data: DictDataset,
                  model_name: str,
                  calibrator_name: str,
                  input_formatter_name: str):
-    details = [["LLM", model_name],
-               ["Calibrator", calibrator_name],
-               ["Input Formatter", input_formatter_name]]
+    details = {"LLM": model_name,
+               "Calibrator": calibrator_name,
+               "Input Formatter": input_formatter_name}
+    calib_results = ModelMetrics(calib_data, **details)
+    test_results = ModelMetrics(test_data, **details)
     print("---")
     print("### Calibration Set Results")
-    calib_results.display(details)
+    calib_results.display()
     print("---")
     print("### Test Set Results")
-    test_results.display(details)
+    test_results.display()
 
 
 def main(input_formatter_name: str="MATHCoT",
@@ -53,9 +56,7 @@ def main(input_formatter_name: str="MATHCoT",
         recalibrate=retrain_calibrator
     )
 
-    calib_results = ModelMetrics(calib_data)
-    test_results = ModelMetrics(test_data)
-    show_results(calib_results, test_results, model_name, calibrator_name, input_formatter_name)
+    show_results(calib_data, test_data, model_name, calibrator_name, input_formatter_name)
 
 
 if __name__ == "__main__":
