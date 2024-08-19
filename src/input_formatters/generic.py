@@ -54,7 +54,7 @@ class InputFormatter(ABC):
                            self.prompt_formatter.__class__.__name__)
         self.target_dir.mkdir(parents=True, exist_ok=True)
 
-        self.__calibrator: Optional[Calibrator] = None
+        self.calibrator: Optional[Calibrator] = None
 
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
@@ -99,10 +99,11 @@ class InputFormatter(ABC):
                         calibrator_type: Type[Calibrator],
                         original_input_formatter: 'InputFormatter',
                         use_full_dset=True):
-        calibrator = calibrator_type(self.llm_bundle)
+        #calibrator = calibrator_type(self.llm_bundle)
         save_path = (original_input_formatter.target_dir /
-                     calibrator.get_name() /
-                     "ood" / f"{self.__class__.__name__}.dill")
+                     calibrator_type.__name__ /
+                     "ood" /
+                     f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data()
 
         if use_full_dset:
@@ -113,9 +114,10 @@ class InputFormatter(ABC):
         if save_path.exists():
             test_results = dill_load(save_path)
         else:
+            print(f"Did not find ood test results at {save_path}.")
             #calibrator.load(original_input_formatter.target_dir / calibrator.get_name() / "calib_weights.dill")
             original_input_formatter.run_pipeline(calibrator_type, batch_size=4)
-            test_results = calibrator.test(test_data)
+            test_results = original_input_formatter.calibrator.test(test_data)
             dill_save(test_results, save_path)
         test_data.update(test_results)
         return test_data
@@ -155,7 +157,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calib_data"
+        calib_filepath = self.target_dir / "data"
         test_filepath = self.target_dir / "test_data"
 
         if calib_filepath.exists() and not recompute:
@@ -241,13 +243,14 @@ class CoTInputFormatter(InputFormatter, ABC):
     def perform_calibration(self, calib_data, weights_path, batch_size):
         cw_path = weights_path / "calib_weights.dill"
         if cw_path.exists():
-            self.__calibrator.load(cw_path)
+            print("Loading calibration weights.")
+            self.calibrator.load(cw_path)
         else:
             print("Performing calibration of model.")
             weights_path.mkdir(parents=True, exist_ok=True)
-            self.__calibrator.calibrate(calibration_dset=calib_data,
-                                        batch_size=batch_size)
-            self.__calibrator.save(cw_path)
+            self.calibrator.calibrate(calibration_dset=calib_data,
+                                      batch_size=batch_size)
+            self.calibrator.save(cw_path)
 
     def run_pipeline(self,
                      calibrator_type: Type[Calibrator],
@@ -270,39 +273,25 @@ class CoTInputFormatter(InputFormatter, ABC):
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
 
-        self.__calibrator = calibrator_type(self.llm_bundle)
-        weights_path = self.target_dir / self.__calibrator.get_name()
+        self.calibrator = calibrator_type(self.llm_bundle)
+        weights_path = self.target_dir / self.calibrator.get_name()
         self.perform_calibration(calib_data, weights_path, batch_size)
-
-        """self.__calibrator = calibrator_type(self.llm_bundle)
-
-        
-        cw_path = weights_path / "calib_weights.dill"
-        if cw_path.exists():
-            self.__calibrator.load(cw_path)
-        else:
-            print("Performing calibration of model.")
-
-            weights_path.mkdir(parents=True, exist_ok=True)
-            self.__calibrator.calibrate(calibration_dset=calib_data,
-                                        batch_size=batch_size)
-            self.__calibrator.save(cw_path)"""
 
         # Test the calibrator.
         cr_path = weights_path / "calib_results.dill"
         if cr_path.exists():
             calib_results = dill_load(cr_path)
         else:
-            calib_results = self.__calibrator.test(test_dset=calib_data,
-                                                   batch_size=batch_size)
+            calib_results = self.calibrator.test(test_dset=calib_data,
+                                                 batch_size=batch_size)
             dill_save(calib_results, cr_path)
 
         tr_path = weights_path / "test_results.dill"
         if tr_path.exists():
             test_results = dill_load(tr_path)
         else:
-            test_results = self.__calibrator.test(test_dset=test_data,
-                                                  batch_size=batch_size)
+            test_results = self.calibrator.test(test_dset=test_data,
+                                                batch_size=batch_size)
             dill_save(test_results, tr_path)
 
         calib_data.update(calib_results)

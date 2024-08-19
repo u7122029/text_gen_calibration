@@ -3,6 +3,7 @@ from typing import Optional
 from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
 from torchmetrics import Metric
 from torcheval.metrics.functional import binary_auprc
+import simple_colors as sc
 
 import torch
 from tabulate import tabulate
@@ -31,32 +32,32 @@ class BrierScore(Metric):
 
 
 class ModelMetrics:
-    def __init__(self, calib_data: DictDataset, name: Optional[str]=None, n_bins=15):
-        assert "logits_confs" in calib_data
-        assert "correct" in calib_data
-        assert "numeric_confs" in calib_data
-        assert "numeric_successful" in calib_data
-        assert "worded_confs" in calib_data
-        assert "worded_successful" in calib_data
-        assert "calibrated_confs" in calib_data
-        assert "calibrated_successful" in calib_data
+    def __init__(self, data: DictDataset, name: Optional[str]=None, n_bins=15):
+        assert "logits_confs" in data
+        assert "correct" in data
+        assert "numeric_confs" in data
+        assert "numeric_successful" in data
+        assert "worded_confs" in data
+        assert "worded_successful" in data
+        assert "calibrated_confs" in data
+        assert "calibrated_successful" in data
 
         self.name = name
-        self.logits_confs = torch.Tensor(calib_data["logits_confs"])
-        self.calibrated_confs = torch.Tensor(calib_data["calibrated_confs"])
-        self.correct = torch.Tensor(calib_data["correct"]).bool()
+        self.logits_confs = torch.Tensor(data["logits_confs"])
+        self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
+        self.correct = torch.Tensor(data["correct"]).bool()
 
-        self.calibrated_successful = torch.Tensor(calib_data["calibrated_successful"]).bool()
+        self.calibrated_successful = torch.Tensor(data["calibrated_successful"]).bool()
         self.calibrated_confs = self.calibrated_confs[self.calibrated_successful]
         self.calibrated_correct = self.correct[self.calibrated_successful]
 
         # construct verbalised confs
-        self.num_success_mask = torch.Tensor(calib_data["numeric_successful"]).bool()
-        self.worded_success_mask = torch.Tensor(calib_data["worded_successful"]).bool() & ~self.num_success_mask
+        self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool()
+        self.worded_success_mask = torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask
         self.verbalised_success_mask = self.num_success_mask | self.worded_success_mask
 
-        self.worded_confs = torch.Tensor(calib_data["worded_confs"])[self.worded_success_mask]
-        self.numeric_confs = torch.Tensor(calib_data["numeric_confs"])[self.num_success_mask]
+        self.worded_confs = torch.Tensor(data["worded_confs"])[self.worded_success_mask]
+        self.numeric_confs = torch.Tensor(data["numeric_confs"])[self.num_success_mask]
 
         self.numeric_correct = self.correct[self.num_success_mask]
         self.worded_correct = self.correct[self.worded_success_mask]
@@ -113,10 +114,12 @@ class ModelMetrics:
         return len(self.correct)
 
     def display(self):
-        print(f"No. Samples: {len(self)}")
-        print(f"Accuracy: {self.accuracy}")
-        print(f"Number of succeeded verbalised confidences: {self.num_verbalised_successful}")
-        print("\nBasic Metrics:")
+        print(sc.green(f"Name: {self.name}"))
+        print(sc.green(f"No. Samples: {len(self)}"))
+        print(sc.green(f"Accuracy: {self.accuracy}"))
+        print(sc.green(f"Number of succeeded verbalised confidences: {self.num_verbalised_successful}"))
+
+        print("\n**Basic Metrics:**")
         table = [
             ["Category", "ECE", "Brier", "AUROC", "AUPRC"],
             ["Logit Confs", self.ece_logits, self.brier_logits, self.auroc_logits, self.auprc_logits],
@@ -124,7 +127,7 @@ class ModelMetrics:
             ["After Calibration", self.ece_calibrated, self.brier_calibrated, self.auroc_calibrated, self.auprc_calibrated]
         ]
         print(tabulate(table[1:], headers=table[0], tablefmt="github"))
-        print("\nChanges in Confidences:")
+        print("\n**Changes in Confidences:**")
         table1 = [
             ["Category", "All Preds", "Correct Preds", "Incorrect Preds"],
             ["Mean Change (Logit Confs)", self.logits_mean_conf_change, self.correct_logits_mean_conf_change,
