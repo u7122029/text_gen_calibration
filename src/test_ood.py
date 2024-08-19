@@ -18,7 +18,13 @@ def main(model_name: str="google/gemma-1.1-2b-it",
     test_if: InputFormatter = input_formatter_dict[test_input_formatter_name](llm_bundle, CoTVersion.from_string(cot_version))
     calibrator: Type[Calibrator] = calibrator_dict[calibrator_name]
     test_results = test_if.test_calibrator(calibrator, calib_if)
-    print(ModelMetrics(test_results, f"{test_input_formatter_name} + {model_name}").display())
+    details = {
+        "LLM": model_name,
+        "Calibrator": calibrator_name,
+        "Calibration Formatter": calib_input_formatter_name,
+        "Test Formatter": test_input_formatter_name,
+    }
+    print(ModelMetrics(test_results, **details).display())
 
 
 if __name__ == "__main__":
