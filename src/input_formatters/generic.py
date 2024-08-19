@@ -157,7 +157,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "data"
+        calib_filepath = self.target_dir / "calib_data"
         test_filepath = self.target_dir / "test_data"
 
         if calib_filepath.exists() and not recompute:

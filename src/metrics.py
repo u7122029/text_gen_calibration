@@ -1,4 +1,5 @@
 from typing import Optional
+from abc import ABC, abstractmethod
 
 from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
 from torchmetrics import Metric
@@ -10,6 +11,7 @@ from tabulate import tabulate
 import pandas as pd
 
 from data import DictDataset
+from input_formatters import InputFormatter
 
 
 class BrierScore(Metric):
@@ -32,7 +34,8 @@ class BrierScore(Metric):
 
 
 class ModelMetrics:
-    def __init__(self, data: DictDataset, name: Optional[str]=None, n_bins=15):
+    @abstractmethod
+    def __init__(self, data: DictDataset, n_bins=15):
         assert "logits_confs" in data
         assert "correct" in data
         assert "numeric_confs" in data
@@ -42,7 +45,6 @@ class ModelMetrics:
         assert "calibrated_confs" in data
         assert "calibrated_successful" in data
 
-        self.name = name
         self.logits_confs = torch.Tensor(data["logits_confs"])
         self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
         self.correct = torch.Tensor(data["correct"]).bool()
@@ -113,11 +115,16 @@ class ModelMetrics:
     def __len__(self):
         return len(self.correct)
 
-    def display(self):
-        print(sc.green(f"Name: {self.name}"))
-        print(sc.green(f"No. Samples: {len(self)}"))
-        print(sc.green(f"Accuracy: {self.accuracy}"))
-        print(sc.green(f"Number of succeeded verbalised confidences: {self.num_verbalised_successful}"))
+    def display(self, additional_details=None):
+        if additional_details is None:
+            details = []
+        else:
+            details = additional_details.copy()
+
+        details.extend([["No. Samples", len(self)],
+                        ["Accuracy", self.accuracy],
+                        ["Succeeded VCs", self.num_verbalised_successful]])
+        print(tabulate(details, tablefmt="github"))
 
         print("\n**Basic Metrics:**")
         table = [
@@ -145,7 +152,7 @@ class ModelMetrics:
 class ModelMetricsCollection(list[ModelMetrics]):
     def generate_tables(self):
         table = {
-            "name": [],
+            "llm_name": [],
             "ece_logits": [],
             "ece_verbalised": [],
             "ece_calib": [],
@@ -160,7 +167,7 @@ class ModelMetricsCollection(list[ModelMetrics]):
             "auprc_calib": []
         }
         for x in self:
-            table["name"].append(x.name)
+            table["llm_name"].append(x.llm_name)
             table["ece_logits"].append(x.ece_logits)
             table["ece_verbalised"].append(x.ece_verbalised),
             table["ece_calib"].append(x.ece_calibrated)

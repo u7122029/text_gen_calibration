@@ -11,20 +11,24 @@ from metrics import ModelMetrics
 from prompt_formatters import CoTVersion
 
 
-def show_results(calib_results: ModelMetrics, test_results: ModelMetrics, model_name: str, calibrator_name: str):
-    print(f"Model Name: {model_name}")
-    print(f"Calibrator Name: {calibrator_name}")
-    terminal_size = os.get_terminal_size().columns
-    print("-" * terminal_size)
-    print("Calibration Set Results:")
-    calib_results.display()
-    print("-" * terminal_size)
-    print("Test Set Results:")
-    test_results.display()
+def show_results(calib_results: ModelMetrics,
+                 test_results: ModelMetrics,
+                 model_name: str,
+                 calibrator_name: str,
+                 input_formatter_name: str):
+    details = [["LLM", model_name],
+               ["Calibrator", calibrator_name],
+               ["Input Formatter", input_formatter_name]]
+    print("---")
+    print("### Calibration Set Results")
+    calib_results.display(details)
+    print("---")
+    print("### Test Set Results")
+    test_results.display(details)
 
 
-def main(input_formatter: str="AQUARATCoT",
-         calibrator_name="TemperatureScaling",
+def main(input_formatter_name: str="MATHCoT",
+         calibrator_name="FrequencyTS",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
@@ -39,7 +43,7 @@ def main(input_formatter: str="AQUARATCoT",
     llm_bundle = TextGenLLMBundle(model_name)
 
     cot_version = CoTVersion.from_string(cot_version)
-    input_formatter_class = input_formatter_dict[input_formatter]
+    input_formatter_class = input_formatter_dict[input_formatter_name]
     input_formatter = input_formatter_class(llm_bundle, cot_version, calib_dset_size, test_dset_size)
 
     calib_data, test_data = input_formatter.run_pipeline(
@@ -49,9 +53,9 @@ def main(input_formatter: str="AQUARATCoT",
         recalibrate=retrain_calibrator
     )
 
-    calib_results = ModelMetrics(calib_data, f"{calibrator_name} + {model_name}")
-    test_results = ModelMetrics(test_data, f"{calibrator_name} + {model_name}")
-    show_results(calib_results, test_results, model_name, calibrator_name)
+    calib_results = ModelMetrics(calib_data)
+    test_results = ModelMetrics(test_data)
+    show_results(calib_results, test_results, model_name, calibrator_name, input_formatter_name)
 
 
 if __name__ == "__main__":
