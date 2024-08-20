@@ -9,7 +9,7 @@ from input_formatters import input_formatter_dict
 from llm_models.textgen import TextGenLLMBundle
 
 from metrics import ModelMetrics
-from prompt_formatters import CoTVersion
+from prompt_formatters import PromptVersion
 
 
 def show_results(calib_data: DictDataset,
@@ -45,7 +45,7 @@ def main(input_formatter_name: str="MATHCoT",
 
     llm_bundle = TextGenLLMBundle(model_name)
 
-    cot_version = CoTVersion.from_string(cot_version)
+    cot_version = PromptVersion.from_string(cot_version)
     input_formatter_class = input_formatter_dict[input_formatter_name]
     input_formatter = input_formatter_class(llm_bundle, cot_version, calib_dset_size, test_dset_size)
 

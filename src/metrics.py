@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from abc import ABC, abstractmethod
 
 from torchmetrics.classification import BinaryCalibrationError, BinaryAUROC
@@ -42,17 +42,16 @@ class ModelMetrics:
         @param n_bins:
         @param kwargs: Extra details to be included in the results.
         """
-        assert "logits_confs" in data
-        assert "correct" in data
-        assert "numeric_confs" in data
-        assert "numeric_successful" in data
-        assert "worded_confs" in data
-        assert "worded_successful" in data
-        assert "calibrated_confs" in data
-        assert "calibrated_successful" in data
+        cols = {"logits_confs", "correct", "numeric_confs", "numeric_successful", "worded_confs", "worded_successful",
+                "calibrated_confs", "calibrated_successful"}
+        keys_to_delete = set(data.keys()) - cols
+        for key in keys_to_delete:
+            del data[key]
+
+        assert cols.issubset(set(data.keys()))
 
         self.n_bins = n_bins
-        self.extra_details = list(kwargs.items())
+        self.extra_details = kwargs
         self.logits_confs = torch.Tensor(data["logits_confs"])
         self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
         self.correct = torch.Tensor(data["correct"]).bool()
@@ -120,15 +119,18 @@ class ModelMetrics:
         self.correct_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[self.verbalised_correct])
         self.incorrect_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[~self.verbalised_correct])
 
+        self.extra_details.update({
+            "No. Samples": len(self),
+            "Succeeded VCs": self.num_verbalised_successful,
+            "Accuracy": self.accuracy,
+            "No. ECE Bins": self.n_bins
+        })
+
     def __len__(self):
         return len(self.correct)
 
     def display(self):
-        base = [["No. Samples", len(self)],
-                ["Succeeded VCs", self.num_verbalised_successful],
-                ["Accuracy", self.accuracy],
-                ["No. ECE Bins", self.n_bins]]
-        print(tabulate(self.extra_details + base, tablefmt="github"))
+        print(tabulate(list(self.extra_details.items()), tablefmt="github"))
 
         print("\n**Basic Metrics:**")
         table = [
@@ -154,9 +156,16 @@ class ModelMetrics:
 
 
 class ModelMetricsCollection(list[ModelMetrics]):
-    def generate_tables(self):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.details = {}
+
+    def make_details_table(self):
+        return tabulate(list(self.details.items()), tablefmt="github")
+
+    def generate_tables(self, key: str):
         table = {
-            "llm_name": [],
+            key: [],
             "ece_logits": [],
             "ece_verbalised": [],
             "ece_calib": [],
@@ -171,17 +180,21 @@ class ModelMetricsCollection(list[ModelMetrics]):
             "auprc_calib": []
         }
         for x in self:
-            table["llm_name"].append(x.llm_name)
+            table[key].append(x.extra_details[key])
             table["ece_logits"].append(x.ece_logits)
             table["ece_verbalised"].append(x.ece_verbalised),
             table["ece_calib"].append(x.ece_calibrated)
+
             table["brier_logits"].append(x.brier_logits)
             table["brier_verbalised"].append(x.brier_verbalised)
             table["brier_calib"].append(x.brier_calibrated)
+
             table["auroc_logits"].append(x.auroc_logits)
             table["auroc_verbalised"].append(x.auroc_verbalised)
             table["auroc_calib"].append(x.auroc_calibrated)
+
             table["auprc_logits"].append(x.auprc_logits)
             table["auprc_verbalised"].append(x.auprc_verbalised)
             table["auprc_calib"].append(x.auprc_calibrated)
+
         return pd.DataFrame(table)

@@ -5,7 +5,7 @@ from llm_models import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
 
 
-class CoTVersion(Enum):
+class PromptVersion(Enum):
     DEFAULT = 0
     ALT = 1
 

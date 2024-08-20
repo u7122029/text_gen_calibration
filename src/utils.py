@@ -1,6 +1,7 @@
+from abc import ABC
 from os import PathLike
 from pathlib import Path
-from typing import Any
+from typing import Any, Type
 import dill
 
 import torch
@@ -28,7 +29,12 @@ except:
                   f"loaded.")
 
 
-def get_class_bases(x):
+def get_class_bases(x: Type):
+    """
+    Recursively obtain all superclasses of class x.
+    @param x:
+    @return:
+    """
     bases = set()
     for base in x.__bases__:
         bases.add(base)
@@ -36,12 +42,17 @@ def get_class_bases(x):
     return bases
 
 
-def class_predicate(cls):
+def class_predicate(*cls):
     def predicate_func(x):
+        # Exclude functions and other non-classes.
         if not inspect.isclass(x): return False
 
+        # Exclude classes that directly derive from ABC.
+        if ABC in x.__bases__: return False
+
+        # Check that the class x at some point derives from all classes in cls.
         class_bases = get_class_bases(x)
-        return cls in class_bases
+        return all([c in class_bases for c in cls])
 
     return predicate_func
 

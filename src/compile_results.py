@@ -1,23 +1,84 @@
+from typing import Optional
+
 import fire
-from input_formatters import input_formatter_dict, InputFormatter, CoTInputFormatter
+from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
-from utils import RESULTS_PATH, dill_load
-from pathlib import Path
-from data import DictDataset
+from prompt_formatters import PromptVersion
 import pandas as pd
 from metrics import ModelMetrics, ModelMetricsCollection
 
 
-def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3", input_formatter_name: str="GSMCoT"):
-    input_formatter: InputFormatter = input_formatter_dict[input_formatter_name]
+def vary_ood_if(model_name, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
+    llm_bundle = TextGenLLMBundle(model_name)
+    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
+    ood_if_names = set(input_formatter_dict.keys()) - {id_if_name}
+
+    collection = ModelMetricsCollection()
+    collection.details = {
+        "LLM": model_name,
+        "Calibrator": calibrator_name,
+        "Prompt Version": prompt_version.name,
+        "Calib. Input Formatter": id_if_name
+    }
+    for ood_if_name in ["MATHCoT"]:
+        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version)
+        calibrator_type = calibrator_dict[calibrator_name]
+        test_results = ood_if.test_calibrator(calibrator_type, id_if)
+        details = {
+            "Test Formatter": ood_if_name
+        }
+        collection.append(ModelMetrics(test_results, **details))
+        del test_results
+    print(collection.make_details_table())
+    print()
+    print(collection.generate_tables("Test Formatter").to_markdown(index=False))
+
+
+def main(model_name: str="google/gemma-1.1-2b-it",
+         calibrator_name: str="FrequencyTS",
+         prompt_version: str="DEFAULT",
+         id_input_formatter_name: str="GSMCoT",
+         ood_input_formatter_name: Optional[str]=None):
+    """
+
+    @param model_name:
+    @param calibrator_name:
+    @param id_input_formatter_name:
+    @param ood_input_formatter_name:
+    @return:
+    """
+    pd.set_option('display.expand_frame_repr', False)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+    prompt_version = PromptVersion.from_string(prompt_version)
+
+    # Check that exactly one of the arguments is None.
+    assert sum([1 if x is None else 0
+                for x in [model_name,
+                          calibrator_name,
+                          prompt_version,
+                          id_input_formatter_name,
+                          ood_input_formatter_name]]) == 1
+
+    if ood_input_formatter_name is None:
+        vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
+    """input_formatter: InputFormatter = input_formatter_dict[id_input_formatter_name]
     results_root = Path(RESULTS_PATH)
     metric_results_calib = ModelMetricsCollection()
     metric_results_test = ModelMetricsCollection()
 
     llm_bundle = TextGenLLMBundle(model_name)
     input_formatter = input_formatter(llm_bundle, 300, 300)
-    for calibrator_name in ['TemperatureScaling', 'FrequencyTS', 'FrequencyTSBotOnly', 'FrequencyTSMeanOnly', 'FrequencyTSMeanStdOnly', 'FrequencyTSNoRF', 'FrequencyTSTopOnly']:
+    for calibrator_name in ['TemperatureScaling',
+                            'FrequencyTS',
+                            'FrequencyTSBotOnly',
+                            'FrequencyTSMeanOnly',
+                            'FrequencyTSMeanStdOnly',
+                            'FrequencyTSNoRF',
+                            'FrequencyTSTopOnly']:
         calibrator = calibrator_dict[calibrator_name]
         calib_data, test_data = input_formatter.run_pipeline(calibrator)
         results_dir = results_root / model_name / input_formatter.__class__.__name__ / calibrator_name
@@ -38,7 +99,7 @@ def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3", input_formatter_n
     pd.set_option('display.max_colwidth', None)
     with open("temp_output.txt", "w") as f:
         f.write(metric_results_calib.generate_tables().to_markdown(index=False) + "\n\n")
-        f.write(metric_results_test.generate_tables().to_markdown(index=False))
+        f.write(metric_results_test.generate_tables().to_markdown(index=False))"""
 
 
 if __name__ == "__main__":

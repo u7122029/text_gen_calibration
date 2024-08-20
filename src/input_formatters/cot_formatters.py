@@ -2,7 +2,7 @@ import torch
 from evaluate import load
 
 from data import get_dataset, DatasetType
-from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat, CoTVersion, AltCoTPromptFormat, \
+from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat, PromptVersion, AltCoTPromptFormat, \
     AltMCQCoTPromptFormat
 from .generic import CoTInputFormatter
 from llm_models.textgen import TextGenLLMBundle
@@ -11,10 +11,10 @@ from llm_models.textgen import TextGenLLMBundle
 class GSMCoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
-                 cot_version: CoTVersion,
+                 prompt_version: PromptVersion,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if cot_version == CoTVersion.ALT:
+        if prompt_version == PromptVersion.ALT:
             prompt_formatter = AltCoTPromptFormat(llm_bundle)
         else:
             prompt_formatter = CoTPromptFormat(llm_bundle)
@@ -37,10 +37,10 @@ class GSMCoT(CoTInputFormatter):
 class MATHCoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
-                 cot_version: CoTVersion,
+                 prompt_version: PromptVersion,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if cot_version == CoTVersion.ALT:
+        if prompt_version == PromptVersion.ALT:
             prompt_formatter = AltCoTPromptFormat(llm_bundle)
         else:
             prompt_formatter = CoTPromptFormat(llm_bundle)
@@ -69,8 +69,12 @@ class MATHCoT(CoTInputFormatter):
 
 
 class AQUARATCoT(CoTInputFormatter):
-    def __init__(self, llm_bundle: TextGenLLMBundle, cot_version: CoTVersion, calib_dset_size=None, test_dset_size=None):
-        if cot_version == CoTVersion.ALT:
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 prompt_version: PromptVersion,
+                 calib_dset_size=None,
+                 test_dset_size=None):
+        if prompt_version == PromptVersion.ALT:
             prompt_formatter = AltMCQCoTPromptFormat(llm_bundle)
         else:
             prompt_formatter = MCQCoTPromptFormat(llm_bundle)

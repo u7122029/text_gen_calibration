@@ -41,11 +41,11 @@ class DictDataset(Dataset):
         common_keys = set(self.keys()).intersection(set(other.keys()))
         out_dict = {}
         for key in common_keys:
-            out_dict[key] = self[key]
+            out_dict[key] = self[key, True]
             if isinstance(out_dict[key], list):
-                out_dict[key].extend(other[key])
+                out_dict[key].extend(other[key, True])
             else:
-                out_dict[key] = torch.cat([out_dict[key], other[key]])
+                out_dict[key] = torch.cat([out_dict[key], other[key, True]])
         return DictDataset(out_dict)
 
     def update(self, other: Union[dict, 'DictDataset']):
@@ -67,9 +67,14 @@ class DictDataset(Dataset):
     def __len__(self):
         return len(self.data_dict[self.ref_key])
 
-    def __getitem__(self, item: Union[str, int, list[int], slice, torch.Tensor]):
+    def __getitem__(self, item: str | int | list[int] | slice | torch.Tensor | tuple[str | int | list[int] | slice | torch.Tensor, bool]):
+        raw = False
+        if isinstance(item, tuple):
+            raw = item[1]
+            item = item[0]
+
         if isinstance(item, str):
-            if isinstance(self.data_dict[item][0], Path):
+            if isinstance(self.data_dict[item][0], Path) and not raw:
                 return [dill_load(x) for x in self.data_dict[item]]
             return self.data_dict[item]
 

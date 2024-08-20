@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 
 from pathlib import Path
@@ -24,8 +23,8 @@ class InputFormatter(ABC):
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
                  prompt_formatter: PromptFormat,
-                 calib_dset_size: Optional[int]=None,
-                 test_dset_size: Optional[int]=None):
+                 calib_dset_size: Optional[int] = None,
+                 test_dset_size: Optional[int] = None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
 
@@ -40,9 +39,17 @@ class InputFormatter(ABC):
         If calib_dset_size is not None, then all remaining samples of the provided dataset
                                will be used in the test set.
         """
-        if calib_dset_size is None and test_dset_size is None:
-            calib_dset_size = int(0.7*len(dataset))
+        if calib_dset_size is not None and test_dset_size is not None:
+            assert (calib_dset_size + test_dset_size <= len(dataset),
+                    f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes "
+                    f"exceed given dataset size.")
+        elif calib_dset_size is None and test_dset_size is None:
+            calib_dset_size = int(0.7 * len(dataset))
             test_dset_size = len(dataset) - calib_dset_size
+        elif calib_dset_size is not None and test_dset_size is None:
+            test_dset_size = len(dataset) - calib_dset_size
+        else:
+            raise Exception("calib_dset_size is None and test_dset_size is not None")
 
         self.llm_bundle = llm_bundle
         self.dataset = dataset
@@ -58,15 +65,7 @@ class InputFormatter(ABC):
 
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
-
-        if test_dset_size is not None:
-            assert (calib_dset_size + test_dset_size <= len(indices),
-                    f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes "
-                    f"exceed given dataset size.")
-
-            test_indices = indices[calib_dset_size: calib_dset_size + test_dset_size]
-        else:
-            test_indices = indices[calib_dset_size:]
+        test_indices = indices[calib_dset_size: calib_dset_size + test_dset_size]
 
         self.calib_dataset: DictDataset = self.dataset[calib_indices]
         self.test_dataset: DictDataset = self.dataset[test_indices]
@@ -99,13 +98,11 @@ class InputFormatter(ABC):
                         calibrator_type: Type[Calibrator],
                         original_input_formatter: 'InputFormatter',
                         use_full_dset=True):
-        #calibrator = calibrator_type(self.llm_bundle)
         save_path = (original_input_formatter.target_dir /
                      calibrator_type.__name__ /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data()
-
         if use_full_dset:
             test_data = test_data.join(calib_data)
         del calib_data
@@ -114,9 +111,10 @@ class InputFormatter(ABC):
         if save_path.exists():
             test_results = dill_load(save_path)
         else:
-            print(f"Did not find ood test results at {save_path}.")
-            #calibrator.load(original_input_formatter.target_dir / calibrator.get_name() / "calib_weights.dill")
+            print(f"Did not find ood test results at {save_path}. Running pipeline.")
             original_input_formatter.run_pipeline(calibrator_type, batch_size=4)
+
+            print("Testing calibrator on test_data")
             test_results = original_input_formatter.calibrator.test(test_data)
             dill_save(test_results, save_path)
         test_data.update(test_results)
@@ -179,7 +177,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             )
             self.calib_dataset["correct"] = self.correctness(all_predictions,
                                                              self.calib_dataset["answer"],
-                                                             all_predictions_successful) # here
+                                                             all_predictions_successful)  # here
             self.calib_dataset["pred_successful"] = all_predictions_successful
             self.calib_dataset["prediction"] = all_predictions
 
@@ -209,8 +207,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             with torch.no_grad():
                 self.test_dataset = self.llm_bundle.get_eval_data_from_dset(self.test_dataset,
                                                                             test_filepath,
-                                                                            #self.correctness,
-                                                                            #self.prompt_formatter,
                                                                             batch_size=batch_size,
                                                                             desc="Get Logits + Tokens (Test)")
 
@@ -218,8 +214,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                 self.llm_bundle.tokeniser.batch_decode(self.test_dataset["tokens"])
             )
             self.test_dataset["correct"] = self.correctness(all_predictions,
-                                                             self.test_dataset["answer"],
-                                                             all_predictions_successful)  # here
+                                                            self.test_dataset["answer"],
+                                                            all_predictions_successful)
             self.test_dataset["pred_successful"] = all_predictions_successful
             self.test_dataset["prediction"] = all_predictions
 
@@ -280,16 +276,20 @@ class CoTInputFormatter(InputFormatter, ABC):
         # Test the calibrator.
         cr_path = weights_path / "calib_results.dill"
         if cr_path.exists():
+            print(f"Found existing calibration results in {cr_path}")
             calib_results = dill_load(cr_path)
         else:
+            print(f"Did not find existing calibration results in {cr_path}")
             calib_results = self.calibrator.test(test_dset=calib_data,
                                                  batch_size=batch_size)
             dill_save(calib_results, cr_path)
 
         tr_path = weights_path / "test_results.dill"
         if tr_path.exists():
+            print(f"Found existing test results in {tr_path}")
             test_results = dill_load(tr_path)
         else:
+            print(f"Did not find existing test results in {tr_path}")
             test_results = self.calibrator.test(test_dset=test_data,
                                                 batch_size=batch_size)
             dill_save(test_results, tr_path)
