@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from data import DictDataset
-from utils import DEVICE, dill_load, dill_save
+from utils import DEVICE, dill_load, dill_save, EarlyStopping
 from .generic import Calibrator
 from .universal_calibration_models import TokenCalibratorModel
 
@@ -50,6 +50,7 @@ class TokenCalibrator(Calibrator):
         print("Training Calibrator")
         self.calibrator_model.train()
 
+        es = EarlyStopping(verbose=True)
         postfix = {}
         for epoch_idx in range(epochs):
             pbar = tqdm(calibration_dl,
@@ -57,8 +58,13 @@ class TokenCalibrator(Calibrator):
                         postfix=postfix)
 
             self.calibration_epoch(pbar, postfix, optimiser)
+            should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
+            if should_stop:
+                break
 
+        es.load_checkpoint(self.calibrator_model)
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
+
         self.calibrator_model.eval()
         self.tuned = True
 

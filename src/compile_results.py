@@ -5,11 +5,11 @@ from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters import PromptVersion
-import pandas as pd
+import simple_colors as sc
 from metrics import ModelMetrics, ModelMetricsCollection
 
 
-def vary_ood_if(model_name, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
+def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
     id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
     ood_if_names = set(input_formatter_dict.keys()) - {id_if_name}
@@ -21,7 +21,7 @@ def vary_ood_if(model_name, calibrator_name, prompt_version: PromptVersion, id_i
         "Prompt Version": prompt_version.name,
         "Calib. Input Formatter": id_if_name
     }
-    for ood_if_name in ["MATHCoT"]:
+    for ood_if_name in ood_if_names:
         ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version)
         calibrator_type = calibrator_dict[calibrator_name]
         test_results = ood_if.test_calibrator(calibrator_type, id_if)
@@ -35,11 +35,38 @@ def vary_ood_if(model_name, calibrator_name, prompt_version: PromptVersion, id_i
     print(collection.generate_tables("Test Formatter").to_markdown(index=False))
 
 
+def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: str, ood_if_name: str):
+    llm_bundle = TextGenLLMBundle(model_name)
+    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
+
+    calibrator_names = ["TemperatureScaling", "FrequencyTS", "FrequencyTSTopOnly", "FrequencyTSBotOnly", "FrequencyTSMeanOnly", "FrequencyTSMeanStdOnly", "FrequencyTSNoRF"]
+
+    collection = ModelMetricsCollection()
+    collection.details = {
+        "LLM": model_name,
+        "Prompt Version": prompt_version.name,
+        "Calib. Input Formatter": id_if_name,
+        "Test Input Formatter": ood_if_name
+    }
+    for calibrator_name in calibrator_names:
+        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version)
+        print(sc.red(calibrator_name))
+        calibrator_type = calibrator_dict[calibrator_name]
+        test_results = ood_if.test_calibrator(calibrator_type, id_if)
+
+        details = {"Calibrator": calibrator_name}
+        collection.append(ModelMetrics(test_results, **details))
+        del test_results
+    print(collection.make_details_table())
+    print()
+    print(collection.generate_tables("Calibrator").to_markdown(index=False))
+
+
 def main(model_name: str="google/gemma-1.1-2b-it",
-         calibrator_name: str="FrequencyTS",
+         calibrator_name: str=None,
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="GSMCoT",
-         ood_input_formatter_name: Optional[str]=None):
+         ood_input_formatter_name: Optional[str]="MATHCoT"):
     """
 
     @param model_name:
@@ -48,11 +75,6 @@ def main(model_name: str="google/gemma-1.1-2b-it",
     @param ood_input_formatter_name:
     @return:
     """
-    pd.set_option('display.expand_frame_repr', False)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.width', None)
-    pd.set_option('display.max_colwidth', None)
     prompt_version = PromptVersion.from_string(prompt_version)
 
     # Check that exactly one of the arguments is None.
@@ -65,6 +87,9 @@ def main(model_name: str="google/gemma-1.1-2b-it",
 
     if ood_input_formatter_name is None:
         vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
+    elif calibrator_name is None:
+        vary_calibrator(model_name, prompt_version, id_input_formatter_name, ood_input_formatter_name)
+
     """input_formatter: InputFormatter = input_formatter_dict[id_input_formatter_name]
     results_root = Path(RESULTS_PATH)
     metric_results_calib = ModelMetricsCollection()

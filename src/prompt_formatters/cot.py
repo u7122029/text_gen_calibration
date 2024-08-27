@@ -70,7 +70,7 @@ class CoTPromptFormat(PromptFormat):
             "Somewhat high": 0.65,
             "High": 0.7,
             "Very high": 1,
-        }
+        } # These confidences are from APRICOT.
         self.numeric_conf_prompt = (f"Provide your confidence in the above answer only as a percentage (0-100%).\n"
                                     f"{self.confidence_tag}")
         self.worded_conf_prompt = (f"Provide your confidence in the above answer only as one of "

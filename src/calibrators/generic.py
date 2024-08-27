@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
-
-from collate_postprocess_functions import logit_token_repeat_label_key
-from data import DictDataset
-from utils import DEVICE, dill_save, dill_load
-from llm_models.generic import LLMBundle
-
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
 import torch, warnings
+
+from utils import EarlyStopping
+from collate_postprocess_functions import logit_token_repeat_label_key
+from data import DictDataset
+from utils import DEVICE, dill_save, dill_load
+from llm_models.generic import LLMBundle
 
 
 class Calibrator(ABC):
@@ -110,6 +110,7 @@ class LogitCalibrator(Calibrator, ABC):
         print("Training Calibrator")
         self.calibrator_model.train()
 
+        es = EarlyStopping(verbose=True)
         postfix = {}
         for epoch_idx in range(epochs):
             pbar = tqdm(calibration_dl,
@@ -117,8 +118,13 @@ class LogitCalibrator(Calibrator, ABC):
                         postfix=postfix)
 
             self.calibration_epoch(pbar, postfix, optimiser)
+            should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
+            if should_stop:
+                break
 
+        es.load_checkpoint(self.calibrator_model)
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
+
         self.calibrator_model.eval()
         self.tuned = True
 

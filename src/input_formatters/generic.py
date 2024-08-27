@@ -11,6 +11,7 @@ from utils import dill_load, dill_save, RESULTS_PATH
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
 from prompt_formatters.cot import CoTPromptFormat
+import simple_colors as sc
 
 
 class InputFormatter(ABC):
@@ -109,6 +110,7 @@ class InputFormatter(ABC):
 
         # Get the test results.
         if save_path.exists():
+            print(f"Getting test results from {save_path}")
             test_results = dill_load(save_path)
         else:
             print(f"Did not find ood test results at {save_path}. Running pipeline.")
@@ -145,6 +147,8 @@ class CoTInputFormatter(InputFormatter, ABC):
         )
         self.calib_dataset.update(self.response_fmt(self.calib_dataset))
         self.test_dataset.update(self.response_fmt(self.test_dataset))
+        print(sc.blue(len(self.calib_dataset)))
+        print(sc.blue(len(self.test_dataset)))
 
     def get_calibration_and_test_data(self, batch_size=1, recompute=False):
         """
@@ -168,8 +172,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             with torch.no_grad():
                 self.calib_dataset = self.llm_bundle.get_eval_data_from_dset(self.calib_dataset,
                                                                              calib_filepath,
-                                                                             #self.correctness,
-                                                                             #self.prompt_formatter,
                                                                              batch_size=batch_size,
                                                                              desc="Get Logits + Tokens (Calib)")
             all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
@@ -200,6 +202,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         if test_filepath.exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
             test_conf_dset = dill_load(test_filepath / "data.dill")
+            print(sc.green(len(self.test_dataset)))
             self.test_dataset.update(test_conf_dset)
         else:
             print(f"test data at ({test_filepath}) not found.")

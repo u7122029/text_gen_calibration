@@ -1,12 +1,13 @@
+import inspect
 from abc import ABC
 from os import PathLike
 from pathlib import Path
-from typing import Any, Type
-import dill
+from typing import Type, Any
 
+import dill
 import torch
-import inspect
-import warnings
+
+from earlystopping import EarlyStopping
 
 QUALITATIVE_SCALE = {
     "Very low": 0,
@@ -17,7 +18,6 @@ QUALITATIVE_SCALE = {
     "High": 0.7,
     "Very high": 1,
 }
-
 RESULTS_PATH = "results"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -25,8 +25,8 @@ try:
     with open("hf_token.txt") as f:
         HF_TOKEN = f.read().strip()
 except:
-    warnings.warn(f"Huggingface token from file hf_token.txt not found. Some models requiring such a token will not be"
-                  f"loaded.")
+    print("hf_token.txt file containing the huggingface token not found. Some models will not load.")
+    HF_TOKEN = None
 
 
 def get_class_bases(x: Type):
