@@ -59,6 +59,7 @@ class LogitCalibrator(Calibrator, ABC):
             self.loss_fn = loss_fn
 
         self.calibrator_model = calibrator_model.to(DEVICE)
+        self.calibrator_model.eval()
         self.label_key = label_key
         self.tuned = False
 
@@ -108,8 +109,6 @@ class LogitCalibrator(Calibrator, ABC):
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
         print("Training Calibrator")
-        self.calibrator_model.train()
-
         es = EarlyStopping(verbose=True)
         postfix = {}
         for epoch_idx in range(epochs):
@@ -125,7 +124,6 @@ class LogitCalibrator(Calibrator, ABC):
         es.load_checkpoint(self.calibrator_model)
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
 
-        self.calibrator_model.eval()
         self.tuned = True
 
     def load(self, filepath):

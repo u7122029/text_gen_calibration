@@ -60,6 +60,7 @@ class VCPlattScaling(Calibrator):
     def __init__(self, llm_bundle):
         super().__init__(llm_bundle)
         self.calibrator_model = PlattScalerConfs()
+        self.calibrator_model.eval()
         self.loss_fn = nn.MSELoss()
 
     def __get_input_confs_and_correctness(self, batch):
@@ -125,7 +126,6 @@ class VCPlattScaling(Calibrator):
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
         print("Training Calibrator")
-        self.calibrator_model.train()
 
         postfix = {}
         for epoch_idx in range(epochs):
@@ -134,7 +134,6 @@ class VCPlattScaling(Calibrator):
                         postfix=postfix)
 
             self.calibration_epoch(pbar, postfix, optimiser)
-        self.calibrator_model.eval()
         self.tuned = True
 
     def load(self, filepath):
