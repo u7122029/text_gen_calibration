@@ -15,8 +15,11 @@ class TokenCalibrator(Calibrator):
     def __init__(self, llm_bundle, label_key="correct"):
         super().__init__(llm_bundle)
         self.calibrator_model = TokenCalibratorModel(device=DEVICE)
+        self.calibrator_model.eval()
+
         self.label_key = label_key
         self.loss_fn = nn.MSELoss()
+        self.tuned = False
 
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
@@ -47,8 +50,7 @@ class TokenCalibrator(Calibrator):
 
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
-        print("Training Calibrator")
-        self.calibrator_model.train()
+        tqdm.write("Training Calibrator")
 
         es = EarlyStopping(verbose=True)
         postfix = {}
