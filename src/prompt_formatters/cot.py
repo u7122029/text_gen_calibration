@@ -1,5 +1,6 @@
 import re
 from enum import Enum
+from typing import Optional
 
 from llm_models import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
@@ -50,6 +51,7 @@ class CoTPromptFormat(PromptFormat):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  question_tag="**Question:**",
+                 context_tag="**Context:**",
                  final_answer_tag="**Final Answer:**",
                  explanation_tag="**Explanation:**",
                  confidence_tag="**Confidence:**"):
@@ -57,6 +59,7 @@ class CoTPromptFormat(PromptFormat):
         self.llm_bundle = llm_bundle
         self.cot_format = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
 
+        self.context_tag = context_tag
         self.question_tag = question_tag
         self.final_answer_tag = final_answer_tag
         self.explanation_tag = explanation_tag
@@ -82,19 +85,35 @@ class CoTPromptFormat(PromptFormat):
 
         self.final_answer_format = f"{self.final_answer_tag} " + "{answer}"
         self.question_format = f"{self.question_tag} " + "{question}"
+        self.context_format = f"{self.context_tag} " + "{context}"
 
-    def conf_format(self, question, answer, conf_prompt_type: str):
+    def conf_format(self, question: str, context: Optional[str], answer: str, conf_prompt_type: str):
+        """
+        Construct a prompt that asks the model how confident its response is given the question and its answer.
+        The prompt can be constructed such that it asks for a numeric or worded confidence.
+        @param question:
+        @param context: Question can have no context.
+        @param answer:
+        @param conf_prompt_type:
+        @return:
+        """
         assert conf_prompt_type in {"worded", "numeric"}
         if conf_prompt_type == "worded":
             conf_prompt = self.worded_conf_prompt
         else:
             conf_prompt = self.numeric_conf_prompt
 
+        if context is not None:
+            context_formatted = self.context_format.format(context=context) + "\n"
+        else:
+            context_formatted = ""
+
         final_answer_formatted = self.final_answer_format.format(answer=answer)
         question_formatted = self.question_format.format(question=question)
         if self.cot_format == CoTModelConfig.SYSTEM_USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                [{"role": "system", "content": f"{question_formatted}\n"
+                [{"role": "system", "content": f"{context_formatted}"
+                                               f"{question_formatted}\n"
                                                f"{final_answer_formatted}"},
                  {"role": "user", "content": conf_prompt}],
                 tokenize=False,
@@ -102,14 +121,16 @@ class CoTPromptFormat(PromptFormat):
                 return_tensors="pt")
         elif self.cot_format == CoTModelConfig.USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
-                [{"role": "user", "content": f"{question_formatted}\n"
+                [{"role": "user", "content": f"{context_formatted}"
+                                             f"{question_formatted}\n"
                                              f"{final_answer_formatted}\n\n"
                                              f"{conf_prompt}"}],
                 tokenize=False,
                 add_generation_prompt=True,
                 return_tensors="pt")
         else:
-            formatted_q = (f"{question_formatted}\n"
+            formatted_q = (f"{context_formatted}"
+                           f"{question_formatted}\n"
                            f"{final_answer_formatted}\n\n"
                            f"{conf_prompt}")
 
@@ -133,25 +154,32 @@ class CoTPromptFormat(PromptFormat):
             all_successful.append(successful)
         return final_preds, all_successful
 
-    def __call__(self, question):
+    def __call__(self, question, context=None):
+        if context is not None:
+            context_formatted = self.context_format.format(context=context) + "\n"
+        else:
+            context_formatted = ""
+
         question_formatted = self.question_format.format(question=question)
         if self.cot_format == CoTModelConfig.SYSTEM_USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "system", "content": self.system_prompt},
-                 {"role": "user", "content": question_formatted}],
+                 {"role": "user", "content": f"{context_formatted}"
+                                             f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
                 return_tensors="pt")
         elif self.cot_format == CoTModelConfig.USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "user", "content": f"{self.system_prompt}\n\n"
+                                             f"{context_formatted}"
                                              f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
                 return_tensors="pt"
             )
         else:
-            formatted_q = f"{self.system_prompt}\n\n{question_formatted}"
+            formatted_q = f"{self.system_prompt}\n\n{context_formatted}{question_formatted}"
 
         return formatted_q
 
@@ -197,6 +225,7 @@ class AltCoTPromptFormat(CoTPromptFormat):
     def __init__(self, llm_bundle: TextGenLLMBundle):
         super().__init__(llm_bundle,
                          "Question:",
+                         "Context:",
                          "Final Answer:",
                          "Explanation:",
                          "Confidence:")
@@ -210,6 +239,7 @@ class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
         super().__init__(llm_bundle,
                          mcq_options,
                          question_tag="Question:",
+                         context_tag="Context:",
                          final_answer_tag="Final Answer:",
                          explanation_tag="Explanation:",
                          confidence_tag="Confidence:")

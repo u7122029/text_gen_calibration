@@ -67,7 +67,8 @@ class DictDataset(Dataset):
     def __len__(self):
         return len(self.data_dict[self.ref_key])
 
-    def __getitem__(self, item: str | int | list[int] | slice | torch.Tensor | tuple[str | int | list[int] | slice | torch.Tensor, bool]):
+    def __getitem__(self,
+                    item: str | int | list[int] | slice | torch.Tensor | tuple[str | int | list[int] | slice | torch.Tensor, bool]):
         raw = False
         if isinstance(item, tuple):
             raw = item[1]

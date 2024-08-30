@@ -3,11 +3,12 @@ from abc import ABC
 from os import PathLike
 from pathlib import Path
 from typing import Type, Any
+import simple_colors as sc
 
 import dill
 import torch
 
-from earlystopping import EarlyStopping
+from utils.earlystopping import EarlyStopping
 
 QUALITATIVE_SCALE = {
     "Very low": 0,
@@ -25,7 +26,7 @@ try:
     with open("hf_token.txt") as f:
         HF_TOKEN = f.read().strip()
 except:
-    print("hf_token.txt file containing the huggingface token not found. Some models will not load.")
+    print(sc.red("hf_token.txt file containing the huggingface token not found. Some models will not load."))
     HF_TOKEN = None
 
 

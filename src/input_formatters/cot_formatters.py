@@ -2,8 +2,13 @@ import torch
 from evaluate import load
 
 from data import get_dataset, DatasetType
-from prompt_formatters.cot import CoTPromptFormat, MCQCoTPromptFormat, PromptVersion, AltCoTPromptFormat, \
+from prompt_formatters.cot import (
+    CoTPromptFormat,
+    MCQCoTPromptFormat,
+    PromptVersion,
+    AltCoTPromptFormat,
     AltMCQCoTPromptFormat
+)
 from .generic import CoTInputFormatter
 from llm_models.textgen import TextGenLLMBundle
 
@@ -84,7 +89,7 @@ class AQUARATCoT(CoTInputFormatter):
                          calib_dset_size,
                          test_dset_size)
 
-    def correctness(self, predictions, labels, successful):
+    def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
         assert len(predictions) == len(labels)
         correctness = []
         for pred, label, succ in zip(predictions, labels, successful):
@@ -95,4 +100,31 @@ class AQUARATCoT(CoTInputFormatter):
             correctness.append(pred == label)
         return torch.Tensor(correctness).to(torch.uint8)
 
+
+class TriviaQACoT(CoTInputFormatter):
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 prompt_version: PromptVersion,
+                 calib_dset_size=None,
+                 test_dset_size=None):
+        if prompt_version == PromptVersion.ALT:
+            prompt_formatter = AltCoTPromptFormat(llm_bundle)
+        else:
+            prompt_formatter = CoTPromptFormat(llm_bundle)
+        super().__init__(llm_bundle,
+                         get_dataset(DatasetType.TRIVIAQA),
+                         prompt_formatter,
+                         calib_dset_size,
+                         test_dset_size)
+
+    def correctness(self, predictions: list[str], labels: list, successful: torch.Tensor):
+        assert len(predictions) == len(labels)
+        correctness = []
+        for pred, label, succ in zip(predictions, labels, successful):
+            if not succ:
+                correctness.append(False)
+                continue
+            pred = pred.lower()
+            correctness.append(pred in label)
+        return torch.Tensor(correctness).to(torch.uint8)
 

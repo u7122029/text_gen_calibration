@@ -147,8 +147,6 @@ class CoTInputFormatter(InputFormatter, ABC):
         )
         self.calib_dataset.update(self.response_fmt(self.calib_dataset))
         self.test_dataset.update(self.response_fmt(self.test_dataset))
-        print(sc.blue(len(self.calib_dataset)))
-        print(sc.blue(len(self.test_dataset)))
 
     def get_calibration_and_test_data(self, batch_size=1, recompute=False):
         """
@@ -304,9 +302,13 @@ class CoTInputFormatter(InputFormatter, ABC):
 
     def response_fmt(self, x):
         questions = x['question']
+        contexts = [None] * len(questions)
+        if "context" in x:
+            contexts = x["context"]
+
         formatted = []
-        for question in questions:
-            formatted_q = self.prompt_formatter(question)
+        for question, context in zip(questions, contexts):
+            formatted_q = self.prompt_formatter(question, context)
             formatted.append(formatted_q)
         return {"response_formatted": formatted}
 
@@ -314,9 +316,14 @@ class CoTInputFormatter(InputFormatter, ABC):
         def format_fn(x):
             questions = x['question']
             preds = x["prediction"]
+
+            contexts = [None] * len(questions)
+            if "context" in x:
+                contexts = x["context"]
+
             formatted = []
-            for question, pred in zip(questions, preds):
-                formatted_q = self.prompt_formatter.conf_format(question, pred, prompt_type)
+            for question, context, pred in zip(questions, contexts, preds):
+                formatted_q = self.prompt_formatter.conf_format(question, context, pred, prompt_type)
                 formatted.append(formatted_q)
             return {feature_name: formatted}
 

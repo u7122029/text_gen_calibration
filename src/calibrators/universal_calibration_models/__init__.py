@@ -128,6 +128,41 @@ class PTSModel(nn.Module):
         return x
 
 
+class TieredPTSModel(nn.Module):
+    """
+    TODO: FINISH THIS MODEL!
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.top_token_ids = None
+        self.bot_token_ids = None
+
+        self.top_linear = None
+        self.bot_temp = nn.Parameter(torch.tensor(1.0))
+        self.general_temp = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x, tokens=None):
+        # x.shape: [logit_vec, vocab size]
+        if self.top_token_ids is not None:
+            x[:, self.top_token_ids] = x[:, self.top_token_ids] / self.top_temp
+
+        if self.bot_token_ids is not None:
+            x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / self.bot_temp
+
+        x = x / self.general_temp
+        x = torch.softmax(x, dim=1)
+        if tokens is not None:
+            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        else:
+            x = torch.max(x, dim=1).values
+        return x  # [confs]
+
+    def set_tokens(self, top_token_ids: Optional[torch.Tensor], bot_token_ids: Optional[torch.Tensor]):
+        self.top_token_ids = top_token_ids
+        self.bot_token_ids = bot_token_ids
+
+
 class TokenCalibratorModel(nn.Module):
     """
     Uses a sequence classification model that takes a question + its response, then outputs the calibrated confidence.

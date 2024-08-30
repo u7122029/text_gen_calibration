@@ -1,16 +1,18 @@
 from enum import Enum
+from torch.utils.data import DataLoader
 
-from data.aqua_rat import get_aqua_rat
 from data.dictdataset import DictDataset
 from data.gsm import get_gsm
 from data.math_dset import get_math
-from torch.utils.data import DataLoader
+from data.aqua_rat import get_aqua_rat
+from data.trivia_qa import get_trivia_qa
 
 
 class DatasetType(Enum):
     GSM = 0
     MATH = 1
     AQUARAT = 2
+    TRIVIAQA = 3
 
 
 def get_dataset(name: DatasetType) -> DictDataset:
@@ -22,6 +24,8 @@ def get_dataset(name: DatasetType) -> DictDataset:
         out = get_math()
     elif name == DatasetType.AQUARAT:
         out = get_aqua_rat()
+    elif name == DatasetType.TRIVIAQA:
+        out = get_trivia_qa()
     return out
 
 

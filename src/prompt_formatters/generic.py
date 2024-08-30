@@ -11,10 +11,11 @@ class PromptFormat(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, question):
+    def __call__(self, question, context):
         """
-        Formats a question.
+        Formats a question with context if available.
         @param question:
+        @param context:
         @param kwargs:
         @return:
         """
