@@ -166,7 +166,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.calib_dataset.update(calib_conf_dset)
         else:
             print(f"Calibration data at ({calib_filepath}) not found.")
-            self.llm_bundle.load_model()
             with torch.no_grad():
                 self.calib_dataset = self.llm_bundle.get_eval_data_from_dset(self.calib_dataset,
                                                                              calib_filepath,
@@ -204,7 +203,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.test_dataset.update(test_conf_dset)
         else:
             print(f"test data at ({test_filepath}) not found.")
-            self.llm_bundle.load_model()
             with torch.no_grad():
                 self.test_dataset = self.llm_bundle.get_eval_data_from_dset(self.test_dataset,
                                                                             test_filepath,

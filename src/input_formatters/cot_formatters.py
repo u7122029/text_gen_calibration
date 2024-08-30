@@ -101,7 +101,7 @@ class AQUARATCoT(CoTInputFormatter):
         return torch.Tensor(correctness).to(torch.uint8)
 
 
-class TriviaQACoT(CoTInputFormatter):
+class TRIVIAQACoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,

@@ -97,7 +97,7 @@ class LLMBundle(ABC):
     def get_model(self):
         pass
 
-    def load_model(self):
+    def load_model(self, silent=False):
         """
         Calls the function to load the model into the program. This is a whole separate method because a user might only
         need the tokeniser.
@@ -106,7 +106,7 @@ class LLMBundle(ABC):
         if self.llm_model is None:
             print(f"Loading model {self.llm_name}")
             self.get_model()
-        else:
+        elif not silent:
             print(f"Model {self.llm_name} already loaded.")
 
     def __del__(self):

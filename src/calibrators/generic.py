@@ -95,10 +95,10 @@ class LogitCalibrator(Calibrator, ABC):
         :return:
         """
         if _postprocess_fn is None:
-            _postprocess_fn = logit_token_repeat_label_key(self.label_key)
+            _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
 
         calibration_dl = DataLoader(calibration_dset,
-                                    collate_fn=calibration_dset.collate_fn("logits", "tokens", self.label_key,
+                                    collate_fn=calibration_dset.collate_fn("final_hidden_states", "tokens", self.label_key,
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)

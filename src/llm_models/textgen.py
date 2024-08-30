@@ -17,6 +17,15 @@ class TextGenLLMBundle(LLMBundle):
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
 
+    def final_hs_to_logits(self, final_hs: torch.Tensor):
+        """
+
+        @param final_hs: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
+        @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
+        """
+        self.load_model(silent=True) # Don't overload with "model already loaded" messages.
+        return self.llm_model.lm_head(final_hs)
+
     def get_eval_data_from_dset(self,
                                 dset: DictDataset,
                                 storage_root: Path,
@@ -40,7 +49,8 @@ class TextGenLLMBundle(LLMBundle):
         :return:
         """
         print("Getting Evaluation Data.")
-        all_logits_paths = []
+        self.load_model()
+        all_final_hs_paths = []
         all_tokens_paths = []
         all_logit_confs = []
 
@@ -54,28 +64,38 @@ class TextGenLLMBundle(LLMBundle):
             generated = self.llm_model.generate(**inputs,
                                                 max_new_tokens=max_new_tokens,
                                                 output_logits=True,
+                                                output_hidden_states=True,
                                                 return_dict_in_generate=True,
                                                 pad_token_id=self.tokeniser.eos_token_id)
+
+            # Compute the final hidden state of the model for each token outputted.
+            final_hs = torch.stack([h[-1][:, -1, :] for h in generated.hidden_states], dim=1).cpu()
             model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+
+            #tqdm.write(f"{final_hs.shape}")
+            #test_logits = self.llm_model.lm_head(final_hs).cpu()
+
+            #tqdm.write(f"{torch.norm(test_logits - model_logits)}")
 
             # get the tokens, then remove the ones that made up the input.
             sequences = generated.sequences.cpu()
-            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:]
+            responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:].cpu()
 
-            for logits, response in zip(model_logits, responses):
+            for logits, final_hs_response, response in zip(model_logits, final_hs, responses): # final_hs used to be model_logits
                 eos_mask = response != self.tokeniser.eos_token_id
 
                 processed_logits = logits[eos_mask]
+                processed_final_hs = final_hs_response[eos_mask]
                 tokens = response[eos_mask]
 
                 idx_name = str(file_idx).zfill(4)
-                logits_path = storage_root / idx_name / f"logits.dill"
-                dill_save(processed_logits, logits_path)
+                final_hs_path = storage_root / idx_name / f"final_hs.dill"
+                dill_save(processed_final_hs, final_hs_path)
 
                 tokens_path = storage_root / idx_name / f"tokens.dill"
                 dill_save(tokens, tokens_path)
 
-                all_logits_paths.append(logits_path)
+                all_final_hs_paths.append(final_hs_path)
                 all_tokens_paths.append(tokens_path)
                 file_idx += 1
 
@@ -87,7 +107,7 @@ class TextGenLLMBundle(LLMBundle):
                 response_confidence = torch.mean(token_confidences).item()
                 all_logit_confs.append(response_confidence)
 
-        dset = dset.update({"logits": all_logits_paths,
+        dset = dset.update({"final_hidden_states": all_final_hs_paths,
                             "logits_confs": all_logit_confs,
                             "tokens": all_tokens_paths})
 
