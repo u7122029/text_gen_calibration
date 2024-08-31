@@ -140,7 +140,7 @@ class LogitCalibrator(Calibrator, ABC):
     def test_loop(self, test_dset):
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            logits = batch["logits"].to(DEVICE)
+            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"]).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
             out = torch.mean(token_confs)

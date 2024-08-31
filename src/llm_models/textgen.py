@@ -17,15 +17,6 @@ class TextGenLLMBundle(LLMBundle):
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
 
-    def final_hs_to_logits(self, final_hs: torch.Tensor):
-        """
-
-        @param final_hs: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
-        @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
-        """
-        self.load_model(silent=True) # Don't overload with "model already loaded" messages.
-        return self.llm_model.lm_head(final_hs)
-
     def get_eval_data_from_dset(self,
                                 dset: DictDataset,
                                 storage_root: Path,

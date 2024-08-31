@@ -1,4 +1,5 @@
 import re
+import torch
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional, Dict, Tuple
@@ -92,6 +93,16 @@ class LLMBundle(ABC):
         if self.llm_name in manual_sizes:
             return manual_sizes[self.llm_name]
         return len(self.tokeniser)
+
+    def final_hs_to_logits(self, final_hs: torch.Tensor):
+        """
+        NOTE: I'm assuming that this applies to all models, not just text generation models. I could be wrong about
+        this structure.
+        @param final_hs: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
+        @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
+        """
+        self.load_model(silent=True) # Don't overload with "model already loaded" messages.
+        return self.llm_model.lm_head(final_hs)
 
     @abstractmethod
     def get_model(self):
