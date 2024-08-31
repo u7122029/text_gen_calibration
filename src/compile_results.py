@@ -37,7 +37,7 @@ def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion,
 
 def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: str, ood_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
-    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
+    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, 200, 200) # NOTE: TEMPORARY DATASET SIZES.
 
     calibrator_names = ["TemperatureScaling", "FrequencyTS", "FrequencyTSTopOnly", "FrequencyTSBotOnly", "FrequencyTSMeanOnly", "FrequencyTSMeanStdOnly", "FrequencyTSNoRF"]
 
@@ -49,7 +49,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
         "Test Input Formatter": ood_if_name
     }
     for calibrator_name in calibrator_names:
-        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version)
+        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version, 200, 200) # NOTE: TEMPORARY DATASET SIZES.
         print(sc.red(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
         test_results = ood_if.test_calibrator(calibrator_type, id_if)
