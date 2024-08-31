@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -19,6 +21,9 @@ class EarlyStopping:
         @param model:
         @return: True if the model should stop being trained, and False otherwise.
         """
+        temp_dir = Path(TEMP_DIR)
+        if not temp_dir.exists():
+            temp_dir.mkdir(exist_ok=True, parents=True)
 
         if train_loss >= self.best_train_loss:
             self.counter += 1
@@ -31,7 +36,8 @@ class EarlyStopping:
             if self.verbose:
                 tqdm.write(f'Train loss decreased ({self.best_train_loss:.6f} --> {train_loss:.6f}).  Saving model.')
             self.best_train_loss = train_loss
-            torch.save(model.state_dict(), f"{TEMP_DIR}/checkpoint.pt")
+
+            torch.save(model.state_dict(), str(temp_dir / "checkpoint.pt"))
             self.counter = 0
         return False
 
