@@ -62,7 +62,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
     print(collection.generate_tables("Calibrator").to_markdown(index=False))
 
 
-def main(model_name: str="google/gemma-1.1-2b-it",
+def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
          calibrator_name: str=None,
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="GSMCoT",
