@@ -161,7 +161,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         calib_filepath = self.target_dir / "calib_data"
         test_filepath = self.target_dir / "test_data"
 
-        if calib_filepath.exists() and not recompute:
+        if (calib_filepath / "data.dill").exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
             calib_conf_dset = dill_load(calib_filepath / "data.dill")
             self.calib_dataset.update(calib_conf_dset)
@@ -197,7 +197,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.calib_dataset.save(calib_filepath / "data.dill")
             print("Calibration data done.")
 
-        if test_filepath.exists() and not recompute:
+        if (test_filepath / "data.dill").exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
             test_conf_dset = dill_load(test_filepath / "data.dill")
             print(sc.green(len(self.test_dataset)))
