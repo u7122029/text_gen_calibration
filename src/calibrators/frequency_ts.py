@@ -36,8 +36,9 @@ class FrequencyTS(LogitCalibrator):
         response_occurrences = {}
 
         for i, item in enumerate(calibration_dset):
+            logits = self.llm_bundle.final_hs_to_logits(item["final_hidden_states"])
             tokens = item["tokens"].long()
-            prob_vecs = torch.softmax(item["logits"], dim=1)
+            prob_vecs = torch.softmax(logits, dim=1)
             assert len(tokens) == len(prob_vecs)
             confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
             for token, conf in zip(tokens, confs):
