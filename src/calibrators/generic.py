@@ -54,7 +54,7 @@ class LogitCalibrator(Calibrator, ABC):
     def __init__(self, llm_bundle, calibrator_model, label_key="correct", loss_fn=None):
         super().__init__(llm_bundle)
         if loss_fn is None:
-            self.loss_fn = nn.MSELoss() # calibration aware loss with l2 norm squared.
+            self.loss_fn = nn.MSELoss() # Correctness-Aware loss with l2 norm squared.
         else:
             self.loss_fn = loss_fn
 
@@ -72,6 +72,7 @@ class LogitCalibrator(Calibrator, ABC):
 
             optimiser.zero_grad()
             out_token_confs = self.calibrator_model(logits_batch, tokens_batch)
+            label_batch = label_batch.to(out_token_confs.dtype)
             loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
@@ -98,7 +99,9 @@ class LogitCalibrator(Calibrator, ABC):
             _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
 
         calibration_dl = DataLoader(calibration_dset,
-                                    collate_fn=calibration_dset.collate_fn("final_hidden_states", "tokens", self.label_key,
+                                    collate_fn=calibration_dset.collate_fn("final_hidden_states",
+                                                                           "tokens",
+                                                                           self.label_key,
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)
@@ -140,7 +143,7 @@ class LogitCalibrator(Calibrator, ABC):
     def test_loop(self, test_dset):
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"]).to(DEVICE)
+            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"].to(DEVICE)).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
             out = torch.mean(token_confs)
