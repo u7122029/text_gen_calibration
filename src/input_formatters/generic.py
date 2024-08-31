@@ -98,12 +98,13 @@ class InputFormatter(ABC):
     def test_calibrator(self,
                         calibrator_type: Type[Calibrator],
                         original_input_formatter: 'InputFormatter',
+                        batch_size=4,
                         use_full_dset=True):
         save_path = (original_input_formatter.target_dir /
                      calibrator_type.__name__ /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
-        calib_data, test_data = self.get_calibration_and_test_data()
+        calib_data, test_data = self.get_calibration_and_test_data(batch_size)
         if use_full_dset:
             test_data = test_data.join(calib_data)
         del calib_data
