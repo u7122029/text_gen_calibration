@@ -20,7 +20,9 @@ class LHSModel(nn.Module):
         # x.shape: [hidden_feature_vecs, num_hidden_features]
         # tokens.shape: [hidden_feature_vecs]
 
+
         temperatures = nn.functional.softplus(self.fc(x)) # vector of temperatures.
+        temperatures = torch.clip(temperatures, min=1e-5)
 
         # lm head will not be trained, so .float() and device changes are safe.
         logits = self.llm_bundle.final_hs_to_logits(x).float().to(temperatures.device)
