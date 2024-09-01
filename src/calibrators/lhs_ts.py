@@ -20,8 +20,8 @@ class LHSModel(nn.Module):
         # x.shape: [hidden_feature_vecs, num_hidden_features]
         # tokens.shape: [hidden_feature_vecs]
 
-        logits = self.llm_bundle.final_hs_to_logits(x)
-        temperatures = self.fc(x) # vector of temperatures.
+        logits = self.llm_bundle.final_hs_to_logits(x).float() # lm head will not be trained, so .float() is safe.
+        temperatures = nn.functional.softplus(self.fc(x)) # vector of temperatures.
         logits = logits / temperatures
 
         prob_vecs = torch.softmax(logits, dim=1)
@@ -37,12 +37,13 @@ class LastHiddenStateCalibrator(LogitCalibrator):
         super().__init__(llm_bundle, LHSModel(llm_bundle), "final_hidden_states")
 
     def calibrate(self, calibration_dset: DictDataset, *args, **kwargs):
-        super().calibrate(calibration_dset, *args, _postprocess_fn=lhs_token_repeat_label_key)
+        super().calibrate(calibration_dset, *args, _postprocess_fn=lhs_token_repeat_label_key(self.label_key))
 
     def test_loop(self, test_dset):
+        print("here")
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            final_hidden_states = batch[self.input_key].to(DEVICE)
+            final_hidden_states = batch[self.input_key].to(DEVICE).float()
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(final_hidden_states, tokens).cpu()
             out = torch.mean(token_confs)

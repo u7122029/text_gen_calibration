@@ -16,6 +16,9 @@ class TextGenLLMBundle(LLMBundle):
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
+        # Freeze all the parameters
+        for parameter in self.llm_model.parameters():
+            parameter.requires_grad = False
 
     def get_eval_data_from_dset(self,
                                 dset: DictDataset,

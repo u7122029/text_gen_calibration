@@ -62,16 +62,19 @@ class LogitCalibrator(Calibrator, ABC):
         self.calibrator_model.eval()
         self.label_key = label_key
         self.input_key = input_key
+
         self.tuned = False
 
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
-        for batch in pbar:
+        torch.autograd.set_detect_anomaly(True)
+        for i, batch in enumerate(pbar):
             label_batch = batch[self.label_key].to(DEVICE)
-            logits_batch = batch[self.input_key].to(DEVICE)
+            logits_batch = batch[self.input_key].to(DEVICE).float()
             tokens_batch = batch["tokens"].to(DEVICE)
 
             optimiser.zero_grad()
+
             out_token_confs = self.calibrator_model(logits_batch, tokens_batch)
             label_batch = label_batch.to(out_token_confs.dtype)
             loss = self.loss_fn(out_token_confs, label_batch)
@@ -96,6 +99,7 @@ class LogitCalibrator(Calibrator, ABC):
         :param kwargs:
         :return:
         """
+        self.llm_bundle.llm_model.lm_head.float()
         if _postprocess_fn is None:
             _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
 
@@ -129,6 +133,7 @@ class LogitCalibrator(Calibrator, ABC):
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
 
         self.tuned = True
+        self.llm_bundle.llm_model.lm_head.half()
 
     def load(self, filepath):
         self.calibrator_model.load_state_dict(dill_load(filepath)["state_dict"])
@@ -152,6 +157,7 @@ class LogitCalibrator(Calibrator, ABC):
         return confs_after_calibration
 
     def test(self, test_dset: DictDataset, **kwargs):
+        self.llm_bundle.llm_model.lm_head.float()
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
 
@@ -163,4 +169,5 @@ class LogitCalibrator(Calibrator, ABC):
             "calibrated_confs": torch.Tensor(confs_after_calibration),
             "calibrated_successful": torch.ones(len(test_dset)).bool()
         }
+        self.llm_bundle.llm_model.lm_head.half()
         return out_dict

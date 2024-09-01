@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+import torch
+
 from .generic import LogitCalibrator
 from .universal_calibration_models import PTSModel
 

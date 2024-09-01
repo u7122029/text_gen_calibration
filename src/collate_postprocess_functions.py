@@ -13,7 +13,7 @@ def logit_token_repeat_label_key(label_key, llm_bundle: LLMBundle):
     return collate_fn
 
 
-def lhs_token_repeat_label_key(label_key, *args, **kwargs):
+def lhs_token_repeat_label_key(label_key):
     def collate_fn(out_dict: dict):
         out_dict["final_hidden_states"] = torch.cat(out_dict["final_hidden_states"], dim=0)
         out_dict[label_key] = torch.cat(
