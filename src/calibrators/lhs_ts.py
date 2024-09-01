@@ -11,7 +11,9 @@ from .generic import LogitCalibrator
 
 class LHSModel(nn.Module):
     def __init__(self, llm_bundle: LLMBundle):
+        super().__init__()
         self.llm_bundle = llm_bundle
+        self.llm_bundle.load_model(silent=True)
         self.fc = nn.Linear(in_features=llm_bundle.llm_model.config.hidden_size, out_features=1)
 
     def forward(self, x, tokens=None):

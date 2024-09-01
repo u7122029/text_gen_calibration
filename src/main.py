@@ -33,10 +33,10 @@ def show_results(calib_data: DictDataset,
 def main(input_formatter_name: str="GSMCoT",
          calibrator_name="LastHiddenStateCalibrator",
          cot_version="DEFAULT",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="mistralai/Mistral-7B-Instruct-v0.3",
          batch_size=4,
-         calib_dset_size=None,
-         test_dset_size=None,
+         calib_dset_size=200,
+         test_dset_size=200,
          recompute_logits=False,
          retrain_calibrator=False):
     torch.manual_seed(0)
