@@ -51,7 +51,7 @@ class LogitCalibrator(Calibrator, ABC):
     Calibrator Class that focuses on tuning response confidences based on the logits of the responses.
     """
     @abstractmethod
-    def __init__(self, llm_bundle, calibrator_model, label_key="correct", loss_fn=None):
+    def __init__(self, llm_bundle, calibrator_model, input_key="logits", label_key="correct", loss_fn=None):
         super().__init__(llm_bundle)
         if loss_fn is None:
             self.loss_fn = nn.MSELoss() # Correctness-Aware loss with l2 norm squared.
@@ -61,13 +61,14 @@ class LogitCalibrator(Calibrator, ABC):
         self.calibrator_model = calibrator_model.to(DEVICE)
         self.calibrator_model.eval()
         self.label_key = label_key
+        self.input_key = input_key
         self.tuned = False
 
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
         for batch in pbar:
             label_batch = batch[self.label_key].to(DEVICE)
-            logits_batch = batch["logits"].to(DEVICE)
+            logits_batch = batch[self.input_key].to(DEVICE)
             tokens_batch = batch["tokens"].to(DEVICE)
 
             optimiser.zero_grad()

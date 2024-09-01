@@ -9,6 +9,7 @@ from .temperature_scaling import TemperatureScaling
 from .frequency_ts import *
 from .platt_scaling import *
 from .token_response_scaler import *
+from .lhs_ts import *
 
 
 """class TemperatureWithLinearity(LogitCalibrator):

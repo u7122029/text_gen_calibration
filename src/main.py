@@ -30,8 +30,8 @@ def show_results(calib_data: DictDataset,
     test_results.display()
 
 
-def main(input_formatter_name: str="AQUARATCoT",
-         calibrator_name="TemperatureScaling",
+def main(input_formatter_name: str="GSMCoT",
+         calibrator_name="LastHiddenStateCalibrator",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
