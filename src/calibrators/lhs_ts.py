@@ -20,8 +20,10 @@ class LHSModel(nn.Module):
         # x.shape: [hidden_feature_vecs, num_hidden_features]
         # tokens.shape: [hidden_feature_vecs]
 
-        logits = self.llm_bundle.final_hs_to_logits(x).float() # lm head will not be trained, so .float() is safe.
         temperatures = nn.functional.softplus(self.fc(x)) # vector of temperatures.
+
+        # lm head will not be trained, so .float() and device changes are safe.
+        logits = self.llm_bundle.final_hs_to_logits(x).float().to(temperatures.device)
         logits = logits / temperatures
 
         prob_vecs = torch.softmax(logits, dim=1)
