@@ -118,6 +118,7 @@ class InputFormatter(ABC):
             original_input_formatter.run_pipeline(calibrator_type, batch_size=4)
 
             print("Testing calibrator on test_data")
+            self.llm_bundle.load_model(silent=True)
             test_results = original_input_formatter.calibrator.test(test_data)
             dill_save(test_results, save_path)
         test_data.update(test_results)
@@ -280,6 +281,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             calib_results = dill_load(cr_path)
         else:
             print(f"Did not find existing calibration results in {cr_path}")
+            self.llm_bundle.load_model(silent=True)
             calib_results = self.calibrator.test(test_dset=calib_data,
                                                  batch_size=batch_size)
             dill_save(calib_results, cr_path)

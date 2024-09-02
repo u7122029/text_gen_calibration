@@ -99,6 +99,7 @@ class LogitCalibrator(Calibrator, ABC):
         :param kwargs:
         :return:
         """
+        self.llm_bundle.load_model(silent=True)
         self.llm_bundle.llm_model.lm_head.float()
         if _postprocess_fn is None:
             _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
@@ -149,7 +150,7 @@ class LogitCalibrator(Calibrator, ABC):
     def test_loop(self, test_dset):
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"].to(DEVICE)).to(DEVICE)
+            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"].to(DEVICE).to(self.llm_bundle.llm_model.dtype)).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
             out = torch.mean(token_confs)

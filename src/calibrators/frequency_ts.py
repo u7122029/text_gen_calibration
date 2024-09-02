@@ -88,13 +88,14 @@ class FrequencyTS(LogitCalibrator):
         return df_top, df_bot
 
     def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: -2 * x + 1
+        #sf = lambda x: -2 * x + 1
+        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
         f = lambda x: -1 / (x / 4 + 1) + 1
 
         sf_std = sf(std)
         f_tf = f(token_frequency)
 
-        return mean * sf_std * f_tf * response_frequency_ratio
+        return mean * sf_std * f_tf * (response_frequency_ratio ** 10)
 
     def load(self, filepath):
         d = dill_load(filepath)
@@ -155,7 +156,7 @@ class FrequencyTSMeanStdOnly(FrequencyTS):
     FrequencyTSModel that only considers the mean token confidence and their stds. Does not factor in anything else.
     """
     def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: -2 * x + 1
+        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
         return mean * sf(std)
 
 
@@ -164,6 +165,15 @@ class FrequencyTSNoRF(FrequencyTS):
     FrequencyTSModel without response frequency ratio.
     """
     def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: -2 * x + 1
+        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
         f = lambda x: -1 / (x / 4 + 1) + 1
         return mean * sf(std) * f(token_frequency)
+
+
+class FrequencyTSNoTF(FrequencyTS):
+    """
+    FrequencyTSModel without token frequency.
+    """
+    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
+        return mean * sf(std) * (response_frequency_ratio ** 10)

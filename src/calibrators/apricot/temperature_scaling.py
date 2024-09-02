@@ -12,7 +12,7 @@ class APRICOT_TemperatureScaling(APRICOT, LogitCalibrator):
     """
     def __init__(self, llm_bundle: LLMBundle):
         APRICOT.__init__(self, llm_bundle)
-        LogitCalibrator.__init__(self, llm_bundle, TSModel(), "target_confs")
+        LogitCalibrator.__init__(self, llm_bundle, TSModel(), "logits", "target_confs")
 
     def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=30, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, batch_size)
