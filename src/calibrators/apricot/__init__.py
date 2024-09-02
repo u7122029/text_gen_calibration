@@ -5,4 +5,5 @@ from .fts import (APRICOT_FrequencyTS,
                   APRICOT_FrequencyTSBotOnly,
                   APRICOT_FrequencyTSMeanStdOnly,
                   APRICOT_FrequencyTSMeanOnly,
-                  APRICOT_FrequencyTSNoRF)
+                  APRICOT_FrequencyTSNoRF,
+                  APRICOT_FrequencyTSNoTF)

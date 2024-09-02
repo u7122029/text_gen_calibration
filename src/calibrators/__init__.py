@@ -5,6 +5,7 @@ from utils import class_predicate
 from .apricot import *
 from .generic import LogitCalibrator, Calibrator
 from .pts import *
+from .frequency_pts import *
 from .temperature_scaling import TemperatureScaling
 from .frequency_ts import *
 from .platt_scaling import *

@@ -4,9 +4,75 @@ import pandas as pd
 import torch
 
 from data import DictDataset
+from llm_models import TextGenLLMBundle
 from utils import dill_load
 from .generic import LogitCalibrator
 from .universal_calibration_models import TieredTSModel
+
+
+def std_proc(std, p=4):
+    """
+    Standard deviation processor.
+    Higher standard deviations are given lower scores (penalised). The penalisation factor is controlled by p.
+    @param std:
+    @param p:
+    @return:
+    """
+    return torch.abs((2*(std - 0.5)) ** p)
+
+
+def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBundle, metric_func):
+    token_confs = {}
+    response_occurrences = {}
+
+    for i, item in enumerate(calibration_dset):
+        logits = llm_bundle.final_hs_to_logits(item["final_hidden_states"].cuda()).cpu()
+        tokens = item["tokens"].long()
+        prob_vecs = torch.softmax(logits, dim=1)
+        assert len(tokens) == len(prob_vecs)
+        confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
+        for token, conf in zip(tokens, confs):
+            token = token.item()
+            conf = conf.item()
+            if token not in token_confs:
+                token_confs[token] = []
+            token_confs[token].append(conf)
+
+            if token not in response_occurrences:
+                response_occurrences[token] = set()
+            response_occurrences[token].add(i)
+
+    df_top = {
+        "token_ids": [],
+        "token_values": [],
+    }
+    df_bot = {
+        "token_ids": [],
+        "token_values": [],
+    }
+    total_tokens = sum([len(v) for _, v in token_confs.items()])
+
+    for k, v in token_confs.items():
+        v = torch.Tensor(v)
+        n_response_occurrences = len(response_occurrences[k])
+        df_top["token_ids"].append(k)
+        df_bot["token_ids"].append(k)
+
+        m = torch.mean(v)
+        s = torch.std(v, correction=0 if len(v) == 1 else 1)
+        fv = len(v) / total_tokens
+        r = n_response_occurrences / len(calibration_dset)
+
+        df_top["token_values"].append(metric_func(m, s, fv, r).item())
+        df_bot["token_values"].append(metric_func((1 - m), s, fv, r).item())
+
+    df_top["token_str"] = llm_bundle.tokeniser.batch_decode(df_top["token_ids"])
+    df_bot["token_str"] = llm_bundle.tokeniser.batch_decode(df_bot["token_ids"])
+
+    df_top = pd.DataFrame(df_top).sort_values("token_values", ascending=False)
+    df_bot = pd.DataFrame(df_bot).sort_values("token_values", ascending=False)
+
+    return df_top, df_bot
 
 
 class FrequencyTS(LogitCalibrator):
@@ -15,70 +81,24 @@ class FrequencyTS(LogitCalibrator):
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    def __init__(self, llm_bundle):
-        self.top_k = None
-        self.bot_k = None
+    def __init__(self, llm_bundle, top_k=10, bot_k=10, _calibrator_model=None):
+        if _calibrator_model is None:
+            _calibrator_model = TieredTSModel()
+
+        self.top_k = top_k
+        self.bot_k = bot_k
         self.top_token_values = self.top_token_ids = self.bot_token_values = self.bot_token_ids = None
 
-        super().__init__(llm_bundle, TieredTSModel())
+        super().__init__(llm_bundle, _calibrator_model)
 
-    def calibrate(self, calibration_dset: DictDataset, top_k=10, bot_k=10, **kwargs):
-        _, _ = self.compute_scores_and_indices(calibration_dset, top_k, bot_k)
+    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+        _, _ = self.compute_scores_and_indices(calibration_dset)
 
         self.calibrator_model.set_tokens(self.top_token_ids[:self.top_k], self.bot_token_ids[:self.bot_k])
         super().calibrate(calibration_dset, **kwargs)
 
-    def compute_scores_and_indices(self, calibration_dset: DictDataset, top_k=1, bot_k=1):
-        self.top_k = top_k
-        self.bot_k = bot_k
-
-        token_confs = {}
-        response_occurrences = {}
-
-        for i, item in enumerate(calibration_dset):
-            logits = self.llm_bundle.final_hs_to_logits(item["final_hidden_states"].cuda()).cpu()
-            tokens = item["tokens"].long()
-            prob_vecs = torch.softmax(logits, dim=1)
-            assert len(tokens) == len(prob_vecs)
-            confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
-            for token, conf in zip(tokens, confs):
-                token = token.item()
-                conf = conf.item()
-                if token not in token_confs:
-                    token_confs[token] = []
-                token_confs[token].append(conf)
-
-                if token not in response_occurrences:
-                    response_occurrences[token] = set()
-                response_occurrences[token].add(i)
-
-        df_top = {
-            "token_ids": [],
-            "token_values": [],
-        }
-        df_bot = {
-            "token_ids": [],
-            "token_values": [],
-        }
-        for k, v in token_confs.items():
-            v = torch.Tensor(v)
-            n_response_occurrences = len(response_occurrences[k])
-            df_top["token_ids"].append(k)
-            df_bot["token_ids"].append(k)
-
-            m = torch.mean(v)
-            s = torch.std(v, correction=0 if len(v) == 1 else 1)
-            fv = len(v)
-            r = n_response_occurrences / len(calibration_dset)
-
-            df_top["token_values"].append(self.__compute_metric(m, s, fv, r).item())
-            df_bot["token_values"].append(self.__compute_metric((1 - m), s, fv, r).item())
-
-        df_top["token_str"] = self.llm_bundle.tokeniser.batch_decode(df_top["token_ids"])
-        df_bot["token_str"] = self.llm_bundle.tokeniser.batch_decode(df_bot["token_ids"])
-
-        df_top = pd.DataFrame(df_top).sort_values("token_values", ascending=False)
-        df_bot = pd.DataFrame(df_bot).sort_values("token_values", ascending=False)
+    def compute_scores_and_indices(self, calibration_dset: DictDataset):
+        df_top, df_bot = compute_top_bot_dfs(calibration_dset, self.llm_bundle, self.__compute_metric)
 
         self.top_token_ids = torch.as_tensor(df_top["token_ids"].to_numpy())
         self.top_token_values = torch.as_tensor(df_top["token_values"].to_numpy())
@@ -87,15 +107,11 @@ class FrequencyTS(LogitCalibrator):
 
         return df_top, df_bot
 
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        #sf = lambda x: -2 * x + 1
-        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
-        f = lambda x: -1 / (x / 4 + 1) + 1
-
-        sf_std = sf(std)
-        f_tf = f(token_frequency)
-
-        return mean * sf_std * f_tf * (response_frequency_ratio ** 10)
+    def __compute_metric(self, mean, std, relative_token_frequency, response_frequency_ratio):
+        #f = lambda x: -1 / (x / 4 + 1) + 1
+        sf_std = std_proc(std)
+        #f_tf = f(token_frequency)
+        return mean * sf_std * relative_token_frequency * (response_frequency_ratio ** 10)
 
     def load(self, filepath):
         d = dill_load(filepath)
@@ -132,22 +148,20 @@ class FrequencyTS(LogitCalibrator):
 
 
 class FrequencyTSTopOnly(FrequencyTS):
-    def calibrate(self, calibration_dset: DictDataset, top_k=10, **kwargs):
-        kwargs["bot_k"] = 0
-        super().calibrate(calibration_dset, top_k, **kwargs)
+    def __init__(self, llm_bundle, top_k=10):
+        super().__init__(llm_bundle, top_k, bot_k=0)
 
 
 class FrequencyTSBotOnly(FrequencyTS):
-    def calibrate(self, calibration_dset: DictDataset, bot_k=10, **kwargs):
-        kwargs["top_k"] = 0
-        super().calibrate(calibration_dset, bot_k=bot_k, **kwargs)
+    def __init__(self, llm_bundle, bot_k=10):
+        super().__init__(llm_bundle, top_k=0, bot_k=bot_k)
 
 
 class FrequencyTSMeanOnly(FrequencyTS):
     """
     FrequencyTSModel that only considers the mean token confidence. Does not factor in anything else.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+    def __compute_metric(self, mean, std, relative_token_frequency, response_frequency_ratio):
         return mean
 
 
@@ -156,18 +170,15 @@ class FrequencyTSMeanStdOnly(FrequencyTS):
     FrequencyTSModel that only considers the mean token confidence and their stds. Does not factor in anything else.
     """
     def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
-        return mean * sf(std)
+        return mean * std_proc(std)
 
 
 class FrequencyTSNoRF(FrequencyTS):
     """
     FrequencyTSModel without response frequency ratio.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
-        f = lambda x: -1 / (x / 4 + 1) + 1
-        return mean * sf(std) * f(token_frequency)
+    def __compute_metric(self, mean, std, relative_token_frequency, response_frequency_ratio):
+        return mean * std_proc(std) * relative_token_frequency
 
 
 class FrequencyTSNoTF(FrequencyTS):
@@ -175,5 +186,4 @@ class FrequencyTSNoTF(FrequencyTS):
     FrequencyTSModel without token frequency.
     """
     def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
-        sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
-        return mean * sf(std) * (response_frequency_ratio ** 10)
+        return mean * std_proc(std) * (response_frequency_ratio ** 10)

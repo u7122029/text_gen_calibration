@@ -31,7 +31,7 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="GSMCoT",
-         calibrator_name="APRICOT_FrequencyTS",
+         calibrator_name="PTS_1L",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,

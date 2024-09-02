@@ -40,6 +40,8 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
     id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, 200, 200) # NOTE: TEMPORARY DATASET SIZES.
 
     calibrator_names = ["TemperatureScaling",
+                        "PTS_1L",
+                        "PTS_2L",
                         "FrequencyTS",
                         "FrequencyTSTopOnly",
                         "FrequencyTSBotOnly",
@@ -54,7 +56,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
                         "APRICOT_FrequencyTSMeanOnly",
                         "APRICOT_FrequencyTSMeanStdOnly",
                         "APRICOT_FrequencyTSNoRF",
-                        "APRICOT_FrequencyTSNoRF"]
+                        "APRICOT_FrequencyTSNoTF"]
 
     collection = ModelMetricsCollection()
     collection.details = {
