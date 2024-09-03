@@ -29,7 +29,7 @@ class APRICOT_FrequencyTSMeanOnly(APRICOT_FrequencyTS):
     """
     FrequencyTSModel that only considers the mean token confidence. Does not factor in anything else.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+    def metric(self, mean, std, token_frequency, response_frequency_ratio):
         return mean
 
 
@@ -37,7 +37,7 @@ class APRICOT_FrequencyTSMeanStdOnly(APRICOT_FrequencyTS):
     """
     FrequencyTSModel that only considers the mean token confidence and their stds. Does not factor in anything else.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+    def metric(self, mean, std, token_frequency, response_frequency_ratio):
         sf = lambda x: -2 * x + 1
         return mean * sf(std)
 
@@ -46,7 +46,7 @@ class APRICOT_FrequencyTSNoRF(APRICOT_FrequencyTS):
     """
     FrequencyTSModel without response frequency ratio.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+    def metric(self, mean, std, token_frequency, response_frequency_ratio):
         sf = lambda x: -2 * x + 1
         f = lambda x: -1 / (x / 4 + 1) + 1
         return mean * sf(std) * f(token_frequency)
@@ -56,6 +56,6 @@ class APRICOT_FrequencyTSNoTF(FrequencyTS):
     """
     FrequencyTSModel without token frequency.
     """
-    def __compute_metric(self, mean, std, token_frequency, response_frequency_ratio):
+    def metric(self, mean, std, token_frequency, response_frequency_ratio):
         sf = lambda x: torch.abs((2*(x - 0.5)) ** 16)
         return mean * sf(std) * (response_frequency_ratio ** 10)

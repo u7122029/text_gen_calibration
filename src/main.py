@@ -31,12 +31,12 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="GSMCoT",
-         calibrator_name="PTS_1L",
+         calibrator_name="FrequencyTS",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
-         calib_dset_size=200,
-         test_dset_size=200,
+         calib_dset_size=None,
+         test_dset_size=None,
          recompute_logits=False,
          retrain_calibrator=False):
     torch.manual_seed(0)

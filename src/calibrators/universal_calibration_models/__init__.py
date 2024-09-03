@@ -70,21 +70,21 @@ class TieredTSModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.top_token_ids = None
-        self.bot_token_ids = None
 
         self.top_temp = nn.Parameter(torch.tensor(1.0))
-        self.bot_temp = nn.Parameter(torch.tensor(1.0))
         self.general_temp = nn.Parameter(torch.tensor(1.0))
+
+        self.ready = False
 
     def forward(self, x, tokens=None):
         # x.shape: [logit_vec, vocab size]
+        x = x / self.general_temp
         if self.top_token_ids is not None:
             x[:, self.top_token_ids] = x[:, self.top_token_ids] / self.top_temp
 
-        if self.bot_token_ids is not None:
-            x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / self.bot_temp
+        #if self.bot_token_ids is not None:
+        #    x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / self.bot_temp
 
-        x = x / self.general_temp
         x = torch.softmax(x, dim=1)
         if tokens is not None:
             x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
@@ -92,9 +92,9 @@ class TieredTSModel(nn.Module):
             x = torch.max(x, dim=1).values
         return x  # [confs]
 
-    def set_tokens(self, top_token_ids: Optional[torch.Tensor], bot_token_ids: Optional[torch.Tensor]):
+    def set_tokens(self, top_token_ids: Optional[torch.Tensor]):
         self.top_token_ids = top_token_ids
-        self.bot_token_ids = bot_token_ids
+        self.ready = True
 
 
 class PTSModel(nn.Module):
