@@ -1,16 +1,15 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import HDBSCAN
 from torch.utils.data import DataLoader
-from calibrators.generic import Calibrator
 
 from data import DictDataset
 from utils import DEVICE
 
 
-class APRICOT(Calibrator, ABC):
+class APRICOT(ABC):
     """
     Base abstract class for the APRICOT method.
     The idea is to encode each question into latent space, clustering them by distance. Closer questions indicate that
@@ -20,6 +19,10 @@ class APRICOT(Calibrator, ABC):
 
     From here, this class can be extended via a child class to determine how these targets should be used.
     """
+    def __init__(self):
+        if type(self) is APRICOT:
+            raise Exception("This class cannot be instantiated!")
+
     def get_target_accuracies(self, calibration_dset: DictDataset, batch_size=1, embed_model_name="all-mpnet-base-v2"):
         """
 

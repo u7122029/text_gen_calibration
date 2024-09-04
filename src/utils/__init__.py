@@ -1,9 +1,12 @@
 import inspect
 from abc import ABC
+from enum import Enum
 from os import PathLike
 from pathlib import Path
 from typing import Type, Any
 import simple_colors as sc
+
+from torch import nn
 
 import dill
 import torch
@@ -28,6 +31,19 @@ try:
 except:
     print(sc.red("hf_token.txt file containing the huggingface token not found. Some models will not load."))
     HF_TOKEN = None
+
+
+class LossFunc(Enum):
+    CALIB_AWARE = 0
+    BCE = 1
+
+    def __call__(self):
+        losses = [nn.MSELoss(), nn.BCELoss()]
+        return losses[self.value]
+
+    @classmethod
+    def from_string(cls, x):
+        return cls.__members__[x]
 
 
 def get_class_bases(x: Type):

@@ -6,18 +6,6 @@ from llm_models import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
 
 
-class PromptVersion(Enum):
-    DEFAULT = 0
-    ALT = 1
-
-    @classmethod
-    def from_string(cls, name):
-        try:
-            return cls[name]
-        except KeyError:
-            raise ValueError(f"{name} is not a valid {cls.__name__}")
-
-
 class CoTModelConfig(Enum):
     SYSTEM_USER_CHAT = 0
     USER_CHAT = 1
@@ -243,3 +231,20 @@ class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
                          final_answer_tag="Final Answer:",
                          explanation_tag="Explanation:",
                          confidence_tag="Confidence:")
+
+
+class PromptVersion(Enum):
+    DEFAULT = 0
+    ALT = 1
+
+    @classmethod
+    def from_string(cls, name):
+        try:
+            return cls[name]
+        except KeyError:
+            raise ValueError(f"{name} is not a valid {cls.__name__}")
+
+    def __call__(self, mcq=False):
+        mcq = 1 if mcq else 0
+        formatters = [CoTPromptFormat, AltCoTPromptFormat, MCQCoTPromptFormat, AltMCQCoTPromptFormat]
+        return formatters[mcq * len(self.__class__.__members__) + self.value]

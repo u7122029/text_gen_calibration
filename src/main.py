@@ -5,11 +5,12 @@ import torch
 
 from calibrators import calibrator_dict
 from data import DictDataset
-from input_formatters import input_formatter_dict
+from input_formatters import input_formatter_dict, InputFormatter
 from llm_models.textgen import TextGenLLMBundle
 
 from metrics import ModelMetrics
 from prompt_formatters import PromptVersion
+from utils import LossFunc
 
 
 def show_results(calib_data: DictDataset,
@@ -32,6 +33,7 @@ def show_results(calib_data: DictDataset,
 
 def main(input_formatter_name: str="GSMCoT",
          calibrator_name="FrequencyTS",
+         loss_fn="CALIB_AWARE",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
@@ -44,13 +46,19 @@ def main(input_formatter_name: str="GSMCoT",
         raise ValueError(f"calibrator_name '{calibrator_name}' not in {calibrator_dict.keys()}")
 
     llm_bundle = TextGenLLMBundle(model_name)
+    loss_func = LossFunc.from_string(loss_fn)
 
     cot_version = PromptVersion.from_string(cot_version)
+    calibrator_type = calibrator_dict[calibrator_name]
     input_formatter_class = input_formatter_dict[input_formatter_name]
-    input_formatter = input_formatter_class(llm_bundle, cot_version, calib_dset_size, test_dset_size)
+    input_formatter: InputFormatter = input_formatter_class(llm_bundle,
+                                                            cot_version,
+                                                            calibrator_type,
+                                                            loss_func,
+                                                            calib_dset_size,
+                                                            test_dset_size)
 
     calib_data, test_data = input_formatter.run_pipeline(
-        calibrator_dict[calibrator_name],
         batch_size,
         recompute_logits=recompute_logits,
         recalibrate=retrain_calibrator

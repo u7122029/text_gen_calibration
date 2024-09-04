@@ -1,7 +1,5 @@
-import warnings
-
 import torch
-from torch import optim, nn
+from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -12,14 +10,9 @@ from .universal_calibration_models import TokenCalibratorModel
 
 
 class TokenCalibrator(Calibrator):
-    def __init__(self, llm_bundle, label_key="correct"):
-        super().__init__(llm_bundle)
-        self.calibrator_model = TokenCalibratorModel(device=DEVICE)
-        self.calibrator_model.eval()
-
+    def __init__(self, llm_bundle, loss_fn, label_key="correct"):
+        super().__init__(llm_bundle, loss_fn, TokenCalibratorModel(device=DEVICE))
         self.label_key = label_key
-        self.loss_fn = nn.MSELoss()
-        self.tuned = False
 
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
@@ -44,9 +37,6 @@ class TokenCalibrator(Calibrator):
                                     collate_fn=calibration_dset.collate_fn("question", "tokens", self.label_key),
                                     batch_size=batch_size,
                                     shuffle=True)
-        # Optimise llm.
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        self.loss_fn.to(DEVICE)
 
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
@@ -88,17 +78,3 @@ class TokenCalibrator(Calibrator):
             confs = self.calibrator_model(input_batch).cpu()
             confs_after_calibration.extend(confs)
         return confs_after_calibration
-
-    def test(self, test_dset: DictDataset, **kwargs):
-        if not self.tuned:
-            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        with torch.no_grad():
-            confs_after_calibration = self.test_loop(test_dset)
-
-        out_dict = {
-            "calibrated_confs": torch.Tensor(confs_after_calibration),
-            "calibrated_successful": torch.ones(len(test_dset)).bool()
-        }
-        return out_dict

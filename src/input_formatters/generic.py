@@ -7,7 +7,7 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
-from utils import dill_load, dill_save, RESULTS_PATH
+from utils import dill_load, dill_save, RESULTS_PATH, LossFunc
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
 from prompt_formatters.cot import CoTPromptFormat
@@ -15,15 +15,13 @@ import simple_colors as sc
 
 
 class InputFormatter(ABC):
-    """
-    TODO: Determine methods that should be common across all subclasses.
-    """
-
     @abstractmethod
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
                  prompt_formatter: PromptFormat,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
                  calib_dset_size: Optional[int] = None,
                  test_dset_size: Optional[int] = None):
         """
@@ -31,8 +29,9 @@ class InputFormatter(ABC):
 
         @param llm_bundle: The LLM bundle
         @param dataset: The dataset
-        @param correctness_fn: Function to obtain the correctness of each (prediction, answer) pair.
-                               It is not the loss function.
+        @param prompt_formatter:
+        @param calibrator_type:
+        @param loss_fn:
         @param calib_dset_size: The size of the calibration set. If this is none along with test_dset_size
         then roughly 70% of the dataset will be in the calibration set.
         @param test_dset_size: The size of the test set. If this is None along with calib_dset_size, then 30%
@@ -52,18 +51,18 @@ class InputFormatter(ABC):
         else:
             raise Exception("calib_dset_size is None and test_dset_size is not None")
 
-        self.llm_bundle = llm_bundle
-        self.dataset = dataset
-        self.prompt_formatter = prompt_formatter
+        self.__llm_bundle = llm_bundle
+        self.__dataset = dataset
+        self.__prompt_formatter = prompt_formatter
+        self.__loss_fn = loss_fn
 
-        self.target_dir = (Path(RESULTS_PATH) /
-                           self.llm_bundle.llm_name /
-                           self.__class__.__name__ /
-                           self.prompt_formatter.__class__.__name__)
         self.target_dir.mkdir(parents=True, exist_ok=True)
 
-        self.calibrator: Optional[Calibrator] = None
+        self.__calibrator_type: Type[Calibrator] = calibrator_type
+        self.__calibrator: Optional[Calibrator] = None
 
+        #reset seed to get same indices
+        torch.manual_seed(0)
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
         test_indices = indices[calib_dset_size: calib_dset_size + test_dset_size]
@@ -71,13 +70,50 @@ class InputFormatter(ABC):
         self.calib_dataset: DictDataset = self.dataset[calib_indices]
         self.test_dataset: DictDataset = self.dataset[test_indices]
 
+    """
+    Properties below make the corresponding attributes read-only while still being accessible through child classes.
+    """
+    @property
+    def target_dir(self):
+        return (Path(RESULTS_PATH) /
+                self.llm_bundle.llm_name /
+                self.__class__.__name__ /
+                self.prompt_formatter.__class__.__name__ /
+                self.loss_fn.name)
+    @property
+    def llm_bundle(self):
+        return self.__llm_bundle
+
+    @property
+    def dataset(self):
+        return self.__dataset
+
+    @property
+    def prompt_formatter(self):
+        return self.__prompt_formatter
+
+    @property
+    def calibrator_type(self):
+        return self.__calibrator_type
+
+    @property
+    def calibrator(self):
+        return self.__calibrator
+
+    @property
+    def loss_fn(self):
+        return self.__loss_fn
+
+    @abstractmethod
+    def load_calibrator(self):
+        pass
+
     @abstractmethod
     def get_calibration_and_test_data(self, batch_size=1, recompute=False) -> tuple[DictDataset, DictDataset]:
         pass
 
     @abstractmethod
     def run_pipeline(self,
-                     calibrator_type: Type[Calibrator],
                      batch_size=1,
                      recompute_logits=False,
                      recalibrate=False,
@@ -96,12 +132,11 @@ class InputFormatter(ABC):
         pass
 
     def test_calibrator(self,
-                        calibrator_type: Type[Calibrator],
                         original_input_formatter: 'InputFormatter',
                         batch_size=4,
                         use_full_dset=True):
         save_path = (original_input_formatter.target_dir /
-                     calibrator_type.__name__ /
+                     self.calibrator_type.__name__ /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data(batch_size)
@@ -115,7 +150,7 @@ class InputFormatter(ABC):
             test_results = dill_load(save_path)
         else:
             print(f"Did not find ood test results at {save_path}. Running pipeline.")
-            original_input_formatter.run_pipeline(calibrator_type, batch_size=4)
+            original_input_formatter.run_pipeline(batch_size=4)
 
             print("Testing calibrator on test_data")
             self.llm_bundle.load_model(silent=True)
@@ -134,13 +169,22 @@ class CoTInputFormatter(InputFormatter, ABC):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
-                 prompt_formatter: CoTPromptFormat,
-                 calib_dset_size=None,
-                 test_dset_size=None):
+                 prompt_formatter: PromptFormat,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
+                 calib_dset_size: Optional[int] = None,
+                 test_dset_size: Optional[int] = None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
         """
-        InputFormatter.__init__(self, llm_bundle, dataset, prompt_formatter, calib_dset_size, test_dset_size)
+        InputFormatter.__init__(self,
+                                llm_bundle,
+                                dataset,
+                                prompt_formatter,
+                                calibrator_type,
+                                loss_fn,
+                                calib_dset_size,
+                                test_dset_size)
 
         # Format the datasets
         self.numeric_conf_fmt, self.worded_conf_fmt = (
@@ -250,7 +294,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.calibrator.save(cw_path)
 
     def run_pipeline(self,
-                     calibrator_type: Type[Calibrator],
                      batch_size=1,
                      recompute_logits=False,
                      recalibrate=False,
@@ -262,6 +305,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         3. Obtain adjusted confidences from calibration and test sets.
         @param calibrator_type:
         @param batch_size:
+        @param loss_fn:
         @param recompute_logits:
         @param recalibrate:
         @param kwargs:
@@ -270,7 +314,6 @@ class CoTInputFormatter(InputFormatter, ABC):
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
 
-        self.calibrator = calibrator_type(self.llm_bundle)
         weights_path = self.target_dir / self.calibrator.get_name()
         self.perform_calibration(calib_data, weights_path, batch_size)
 

@@ -37,26 +37,19 @@ def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion,
 
 def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: str, ood_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
-    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, 200, 200) # NOTE: TEMPORARY DATASET SIZES.
+    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version) # NOTE: TEMPORARY DATASET SIZES.
 
     calibrator_names = ["TemperatureScaling",
                         "PTS_1L",
-                        "PTS_2L",
                         "FrequencyTS",
-                        "FrequencyTSTopOnly",
-                        "FrequencyTSBotOnly",
                         "FrequencyTSMeanOnly",
-                        "FrequencyTSMeanStdOnly",
-                        "FrequencyTSNoRF",
-                        "FrequencyTSNoTF",
-                        "APRICOT_TemperatureScaling",
+                        "FrequencyTSNoStd",
+                        "FrequencyTSNoRFR",
                         "APRICOT_FrequencyTS",
-                        "APRICOT_FrequencyTSTopOnly",
-                        "APRICOT_FrequencyTSBotOnly",
                         "APRICOT_FrequencyTSMeanOnly",
-                        "APRICOT_FrequencyTSMeanStdOnly",
-                        "APRICOT_FrequencyTSNoRF",
-                        "APRICOT_FrequencyTSNoTF"]
+                        "APRICOT_FrequencyTSNoStd",
+                        "APRICOT_FrequencyTSNoRFR"
+                        ]
 
     collection = ModelMetricsCollection()
     collection.details = {
@@ -66,7 +59,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
         "Test Input Formatter": ood_if_name
     }
     for calibrator_name in calibrator_names:
-        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version, 200, 200) # NOTE: TEMPORARY DATASET SIZES.
+        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version) # NOTE: TEMPORARY DATASET SIZES.
         print(sc.red(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
         test_results = ood_if.test_calibrator(calibrator_type, id_if)

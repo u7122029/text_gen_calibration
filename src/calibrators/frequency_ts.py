@@ -106,21 +106,19 @@ class FrequencyTS(LogitCalibrator):
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    def __init__(self, llm_bundle, score_thresh=0.8, _calibrator_model=None):
+    def __init__(self, llm_bundle, loss_fn=None, score_thresh=0.8, _calibrator_model=None):
         if _calibrator_model is None:
             _calibrator_model = TieredTSModel()
 
         self.score_thresh = score_thresh
-        #self.top_token_values = self.top_token_ids = self.bot_token_values = self.bot_token_ids = None
         self.top_token_ids = None
 
-        super().__init__(llm_bundle, _calibrator_model)
+        super().__init__(llm_bundle, _calibrator_model, loss_fn=loss_fn)
 
     def calibrate(self, calibration_dset: DictDataset, **kwargs):
         df_top, df_bot = compute_top_bot_dfs(calibration_dset, self.llm_bundle, self.metric)
 
         df_top = df_top[df_top["token_values"] >= self.score_thresh]
-        print(df_top)
         self.top_token_ids = torch.as_tensor(df_top["token_ids"].to_numpy())
 
         #self.top_token_values = torch.as_tensor(df_top["token_values"].to_numpy())

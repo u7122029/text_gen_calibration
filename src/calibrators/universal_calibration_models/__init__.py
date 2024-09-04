@@ -119,7 +119,7 @@ class PTSModel(nn.Module):
 
     def forward(self, inp, tokens):
         t, _ = torch.sort(torch.topk(inp, self.first_layer_size, dim=1).values, dim=1, descending=True)
-        t = torch.clip(self.layers(t), min=1e-8, max=1e+8)
+        t = torch.clip(nn.functional.softplus(self.layers(t)), min=1e-5)
 
         x = inp / t
         x = torch.softmax(x, dim=1)

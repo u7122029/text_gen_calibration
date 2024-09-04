@@ -20,7 +20,6 @@ class LHSModel(nn.Module):
         # x.shape: [hidden_feature_vecs, num_hidden_features]
         # tokens.shape: [hidden_feature_vecs]
 
-
         temperatures = nn.functional.softplus(self.fc(x)) # vector of temperatures.
         temperatures = torch.clip(temperatures, min=1e-5)
 
@@ -37,8 +36,8 @@ class LHSModel(nn.Module):
 
 
 class LastHiddenStateCalibrator(LogitCalibrator):
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle, LHSModel(llm_bundle), "final_hidden_states")
+    def __init__(self, llm_bundle, loss_fn):
+        super().__init__(llm_bundle, LHSModel(llm_bundle), loss_fn, "final_hidden_states")
 
     def calibrate(self, calibration_dset: DictDataset, *args, **kwargs):
         super().calibrate(calibration_dset, *args, _postprocess_fn=lhs_token_repeat_label_key(self.label_key))

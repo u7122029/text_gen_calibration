@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Optional
+
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from tqdm import tqdm
@@ -22,9 +24,28 @@ class Calibrator(ABC):
     You may use the save method to save the parts of the calibrator that require persistence.
     Note that the save method may not do anything at all if there is nothing to save.
     """
-    def __init__(self, llm_bundle: LLMBundle):
-        self.llm_bundle = llm_bundle
-        self.calibrator_model = None
+    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module, calibrator_model: Optional[nn.Module]):
+        if isinstance(calibrator_model, nn.Module):
+            calibrator_model.eval()
+
+        self.__llm_bundle = llm_bundle
+        self.__loss_fn = loss_fn
+        self.__calibrator_model = calibrator_model
+
+        self.loss_fn.to(DEVICE)
+        self.tuned = False
+
+    @property
+    def llm_bundle(self):
+        return self.__llm_bundle
+
+    @property
+    def loss_fn(self):
+        return self.__loss_fn
+
+    @property
+    def calibrator_model(self):
+        return self.__calibrator_model
 
     def get_name(self):
         return self.__class__.__name__
@@ -34,8 +55,23 @@ class Calibrator(ABC):
         pass
 
     @abstractmethod
-    def test(self, test_dset: DictDataset, **kwargs) -> dict:
+    def test_loop(self, test_dset: DictDataset):
         pass
+
+    def test(self, test_dset: DictDataset, **kwargs) -> dict:
+        self.llm_bundle.llm_model.lm_head.float()
+        if not self.tuned:
+            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
+
+        with torch.no_grad():
+            confs_after_calibration = self.test_loop(test_dset)
+
+        out_dict = {
+            "calibrated_confs": torch.Tensor(confs_after_calibration),
+            "calibrated_successful": torch.ones(len(test_dset)).bool()
+        }
+        self.llm_bundle.llm_model.lm_head.half()
+        return out_dict
 
     @abstractmethod
     def save(self, filepath, **kwargs):
@@ -51,14 +87,15 @@ class LogitCalibrator(Calibrator, ABC):
     Calibrator Class that focuses on tuning response confidences based on the logits of the responses.
     """
     @abstractmethod
-    def __init__(self, llm_bundle, calibrator_model, input_key="logits", label_key="correct", loss_fn=None):
-        super().__init__(llm_bundle)
-        if loss_fn is None:
-            self.loss_fn = nn.MSELoss() # Correctness-Aware loss with l2 norm squared.
-        else:
-            self.loss_fn = loss_fn
+    def __init__(self,
+                 llm_bundle,
+                 calibrator_model,
+                 loss_fn: nn.Module,
+                 input_key="logits",
+                 label_key="correct"):
+        super().__init__(llm_bundle, loss_fn, calibrator_model)
+        self.calibrator_model.to(DEVICE)
 
-        self.calibrator_model = calibrator_model.to(DEVICE)
         self.calibrator_model.eval()
         self.label_key = label_key
         self.input_key = input_key
@@ -68,6 +105,7 @@ class LogitCalibrator(Calibrator, ABC):
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
         torch.autograd.set_detect_anomaly(True)
+
         for i, batch in enumerate(pbar):
             label_batch = batch[self.label_key].to(DEVICE)
             logits_batch = batch[self.input_key].to(DEVICE).float()
@@ -112,9 +150,6 @@ class LogitCalibrator(Calibrator, ABC):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        self.loss_fn.to(DEVICE)
-
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
         print("Training Calibrator")
@@ -150,25 +185,10 @@ class LogitCalibrator(Calibrator, ABC):
     def test_loop(self, test_dset):
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            logits = self.llm_bundle.final_hs_to_logits(batch["final_hidden_states"].to(DEVICE).to(self.llm_bundle.llm_model.dtype)).to(DEVICE)
+            inp = batch["final_hidden_states"].to(DEVICE).to(self.llm_bundle.llm_model.dtype)
+            logits = self.llm_bundle.final_hs_to_logits(inp).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
             out = torch.mean(token_confs)
             confs_after_calibration.append(out)
         return confs_after_calibration
-
-    def test(self, test_dset: DictDataset, **kwargs):
-        self.llm_bundle.llm_model.lm_head.float()
-        if not self.tuned:
-            warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
-
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        with torch.no_grad():
-            confs_after_calibration = self.test_loop(test_dset)
-
-        out_dict = {
-            "calibrated_confs": torch.Tensor(confs_after_calibration),
-            "calibrated_successful": torch.ones(len(test_dset)).bool()
-        }
-        self.llm_bundle.llm_model.lm_head.half()
-        return out_dict

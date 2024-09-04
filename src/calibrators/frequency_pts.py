@@ -13,12 +13,6 @@ class FrequencyPTS(FrequencyTS):
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    def __init__(self, llm_bundle, top_k=10, bot_k=10):
-        super().__init__(llm_bundle, top_k, bot_k, TieredPTSModel())
+    def __init__(self, llm_bundle, loss_fn=None, score_thresh=0.8):
+        super().__init__(llm_bundle, loss_fn, score_thresh, TieredPTSModel())
 
-    def load(self, filepath):
-        super().load(filepath)
-        try:
-            self.calibrator_model.ready = True
-        except:
-            pass

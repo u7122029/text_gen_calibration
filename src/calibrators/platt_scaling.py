@@ -17,16 +17,16 @@ class LogitConfsPlattScaling(LogitCalibrator):
     The calibrator will use platt scaling on each of these confidences before taking the mean of all of them which gives
     the overall response confidence.
     """
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle, PlattScalerLogits())
+    def __init__(self, llm_bundle, loss_fn):
+        super().__init__(llm_bundle, PlattScalerLogits(), loss_fn)
 
 
 class MeanLogitConfsPlattScaling(LogitCalibrator):
     """
     Performs platt scaling after the mean token confidence has been taken for the response.
     """
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle, PlattScalerConfs())
+    def __init__(self, llm_bundle, loss_fn):
+        super().__init__(llm_bundle, PlattScalerConfs(), loss_fn)
 
     def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
         postfix["total_loss_last_epoch"] = 0
@@ -57,11 +57,8 @@ class MeanLogitConfsPlattScaling(LogitCalibrator):
 
 
 class VCPlattScaling(Calibrator):
-    def __init__(self, llm_bundle):
-        super().__init__(llm_bundle)
-        self.calibrator_model = PlattScalerConfs()
-        self.calibrator_model.eval()
-        self.loss_fn = nn.MSELoss()
+    def __init__(self, llm_bundle, loss_fn):
+        super().__init__(llm_bundle, loss_fn, PlattScalerConfs())
 
     def __get_input_confs_and_correctness(self, batch):
         batch = {k: torch.Tensor(v) for k, v in batch.items()}
@@ -120,9 +117,6 @@ class VCPlattScaling(Calibrator):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
-        self.loss_fn.to(DEVICE)
-
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
 
         print("Training Calibrator")
@@ -166,7 +160,6 @@ class VCPlattScaling(Calibrator):
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
 
-        self.calibrator_model = self.calibrator_model.to(DEVICE)
         test_dl = DataLoader(test_dset,
                              collate_fn=test_dset.collate_fn("numeric_confs",
                                                              "numeric_successful",

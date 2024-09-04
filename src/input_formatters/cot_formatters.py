@@ -1,32 +1,29 @@
+from typing import Type
+
 import torch
 from evaluate import load
 
-from data import get_dataset, DatasetType
-from prompt_formatters.cot import (
-    CoTPromptFormat,
-    MCQCoTPromptFormat,
-    PromptVersion,
-    AltCoTPromptFormat,
-    AltMCQCoTPromptFormat
-)
-from .generic import CoTInputFormatter
+from calibrators import Calibrator
+from data import DatasetType
 from llm_models.textgen import TextGenLLMBundle
+from prompt_formatters.cot import PromptVersion
+from utils import LossFunc
+from .generic import CoTInputFormatter
 
 
 class GSMCoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if prompt_version == PromptVersion.ALT:
-            prompt_formatter = AltCoTPromptFormat(llm_bundle)
-        else:
-            prompt_formatter = CoTPromptFormat(llm_bundle)
-
         super().__init__(llm_bundle,
-                         get_dataset(DatasetType.GSM),
-                         prompt_formatter,
+                         DatasetType.GSM(),
+                         prompt_version(),
+                         calibrator_type,
+                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 
@@ -43,16 +40,15 @@ class MATHCoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if prompt_version == PromptVersion.ALT:
-            prompt_formatter = AltCoTPromptFormat(llm_bundle)
-        else:
-            prompt_formatter = CoTPromptFormat(llm_bundle)
-
         super().__init__(llm_bundle,
-                         get_dataset(DatasetType.MATH),
-                         prompt_formatter,
+                         DatasetType.MATH(),
+                         prompt_version(),
+                         calibrator_type,
+                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
         self.__evl = None
@@ -77,15 +73,15 @@ class AQUARATCoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if prompt_version == PromptVersion.ALT:
-            prompt_formatter = AltMCQCoTPromptFormat(llm_bundle)
-        else:
-            prompt_formatter = MCQCoTPromptFormat(llm_bundle)
         super().__init__(llm_bundle,
-                         get_dataset(DatasetType.AQUARAT),
-                         prompt_formatter,
+                         DatasetType.AQUARAT(),
+                         prompt_version(mcq=True),
+                         calibrator_type,
+                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 
@@ -105,15 +101,15 @@ class TRIVIAQACoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
-        if prompt_version == PromptVersion.ALT:
-            prompt_formatter = AltCoTPromptFormat(llm_bundle)
-        else:
-            prompt_formatter = CoTPromptFormat(llm_bundle)
         super().__init__(llm_bundle,
-                         get_dataset(DatasetType.TRIVIAQA),
-                         prompt_formatter,
+                         DatasetType.TRIVIAQA(),
+                         prompt_version(),
+                         calibrator_type,
+                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 

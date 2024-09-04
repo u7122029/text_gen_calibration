@@ -10,9 +10,9 @@ class APRICOT_TemperatureScaling(APRICOT, LogitCalibrator):
     Uses the APRICOT method to determine the target confidences for each question, then performs temperature scaling on
     each of the logits corresponding to their responses to match these targets.
     """
-    def __init__(self, llm_bundle: LLMBundle):
-        APRICOT.__init__(self, llm_bundle)
-        LogitCalibrator.__init__(self, llm_bundle, TSModel(), "logits", "target_confs")
+    def __init__(self, llm_bundle: LLMBundle, loss_fn):
+        APRICOT.__init__(self)
+        LogitCalibrator.__init__(self, llm_bundle, TSModel(), label_key="target_confs", loss_fn=loss_fn)
 
     def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=30, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, batch_size)
