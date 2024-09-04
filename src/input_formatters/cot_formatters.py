@@ -21,7 +21,7 @@ class GSMCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.GSM(),
-                         prompt_version(),
+                         prompt_version()(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -46,7 +46,7 @@ class MATHCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.MATH(),
-                         prompt_version(),
+                         prompt_version()(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -79,7 +79,7 @@ class AQUARATCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.AQUARAT(),
-                         prompt_version(mcq=True),
+                         prompt_version(mcq=True)(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -107,7 +107,7 @@ class TRIVIAQACoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.TRIVIAQA(),
-                         prompt_version(),
+                         prompt_version()(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,

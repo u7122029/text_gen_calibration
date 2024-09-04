@@ -10,7 +10,6 @@ from data import DictDataset
 from utils import dill_load, dill_save, RESULTS_PATH, LossFunc
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
-from prompt_formatters.cot import CoTPromptFormat
 import simple_colors as sc
 
 
@@ -56,12 +55,21 @@ class InputFormatter(ABC):
         self.__prompt_formatter = prompt_formatter
         self.__loss_fn = loss_fn
 
-        self.target_dir.mkdir(parents=True, exist_ok=True)
+        self.__logits_dir = (Path(RESULTS_PATH) /
+                             self.llm_bundle.llm_name /
+                             self.__class__.__name__ /
+                             self.prompt_formatter.__class__.__name__)
+
+        self.logits_dir.mkdir(parents=True, exist_ok=True)
 
         self.__calibrator_type: Type[Calibrator] = calibrator_type
-        self.__calibrator: Optional[Calibrator] = None
+        self.__calibrator: Optional[Calibrator] = self.calibrator_type(self.llm_bundle, self.loss_fn())
 
-        #reset seed to get same indices
+        self.__calibrator_dir = self.__logits_dir / self.loss_fn.name / self.calibrator_type.__name__
+
+        self.calibrator_dir.mkdir(parents=True, exist_ok=True)
+
+        # reset seed to get same indices
         torch.manual_seed(0)
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
@@ -74,12 +82,13 @@ class InputFormatter(ABC):
     Properties below make the corresponding attributes read-only while still being accessible through child classes.
     """
     @property
-    def target_dir(self):
-        return (Path(RESULTS_PATH) /
-                self.llm_bundle.llm_name /
-                self.__class__.__name__ /
-                self.prompt_formatter.__class__.__name__ /
-                self.loss_fn.name)
+    def logits_dir(self):
+        return self.__logits_dir
+
+    @property
+    def calibrator_dir(self):
+        return self.__calibrator_dir
+
     @property
     def llm_bundle(self):
         return self.__llm_bundle
@@ -103,10 +112,6 @@ class InputFormatter(ABC):
     @property
     def loss_fn(self):
         return self.__loss_fn
-
-    @abstractmethod
-    def load_calibrator(self):
-        pass
 
     @abstractmethod
     def get_calibration_and_test_data(self, batch_size=1, recompute=False) -> tuple[DictDataset, DictDataset]:
@@ -135,8 +140,7 @@ class InputFormatter(ABC):
                         original_input_formatter: 'InputFormatter',
                         batch_size=4,
                         use_full_dset=True):
-        save_path = (original_input_formatter.target_dir /
-                     self.calibrator_type.__name__ /
+        save_path = (original_input_formatter.calibrator_dir /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data(batch_size)
@@ -175,7 +179,14 @@ class CoTInputFormatter(InputFormatter, ABC):
                  calib_dset_size: Optional[int] = None,
                  test_dset_size: Optional[int] = None):
         """
-        Abstract constructor to ensure that this class cannot be instantiated.
+
+        @param llm_bundle:
+        @param dataset:
+        @param prompt_formatter:
+        @param calibrator_type:
+        @param loss_fn:
+        @param calib_dset_size:
+        @param test_dset_size:
         """
         InputFormatter.__init__(self,
                                 llm_bundle,
@@ -203,8 +214,8 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.target_dir / "calib_data"
-        test_filepath = self.target_dir / "test_data"
+        calib_filepath = self.logits_dir / "calib_data"
+        test_filepath = self.logits_dir / "test_data"
 
         if (calib_filepath / "data.dill").exists() and not recompute:
             print(f"Found existing calibration data in {calib_filepath}")
@@ -314,7 +325,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         calib_data, test_data = self.get_calibration_and_test_data(batch_size,
                                                                    recompute=recompute_logits)
 
-        weights_path = self.target_dir / self.calibrator.get_name()
+        weights_path = self.calibrator_dir
         self.perform_calibration(calib_data, weights_path, batch_size)
 
         # Test the calibrator.
