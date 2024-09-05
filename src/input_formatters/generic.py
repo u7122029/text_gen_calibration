@@ -63,6 +63,7 @@ class InputFormatter(ABC):
         self.logits_dir.mkdir(parents=True, exist_ok=True)
 
         self.__calibrator_type: Type[Calibrator] = calibrator_type
+        print(self.__calibrator_type)
         self.__calibrator: Optional[Calibrator] = self.calibrator_type(self.llm_bundle, self.loss_fn())
 
         self.__calibrator_dir = self.__logits_dir / self.loss_fn.name / self.calibrator_type.__name__
@@ -337,7 +338,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         else:
             print(f"Did not find existing calibration results in {cr_path}")
             self.llm_bundle.load_model(silent=True, lm_head_only=True)
-
+            assert self.llm_bundle.llm_model is None
             calib_results = self.calibrator.test(test_dset=calib_data,
                                                  batch_size=batch_size)
             dill_save(calib_results, cr_path)
@@ -349,6 +350,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         else:
             print(f"Did not find existing test results in {tr_path}")
             self.llm_bundle.load_model(silent=True, lm_head_only=True)
+            assert self.llm_bundle.llm_model is None
             test_results = self.calibrator.test(test_dset=test_data,
                                                 batch_size=batch_size)
             dill_save(test_results, tr_path)

@@ -32,8 +32,8 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="GSMCoT",
-         calibrator_name="TemperatureScaling",
-         loss_fn="CALIB_AWARE",
+         calibrator_name="APRICOT_FrequencyTS",
+         loss_fn="BCE",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,

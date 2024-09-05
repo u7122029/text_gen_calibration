@@ -169,6 +169,7 @@ class LogitCalibrator(Calibrator, ABC):
             should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
             if should_stop:
                 break
+            torch.cuda.empty_cache()
 
         es.load_checkpoint(self.calibrator_model)
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()

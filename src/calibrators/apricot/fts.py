@@ -4,7 +4,7 @@ from .base import APRICOT
 from ..frequency_ts import FrequencyTS, FrequencyTSMeanOnly, FrequencyTSNoRFR, FrequencyTSNoStd
 
 
-class APRICOT_FrequencyTS(APRICOT, FrequencyTS):
+class APRICOT_FrequencyTS(FrequencyTS, APRICOT):
     def calibrate(self, calibration_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
