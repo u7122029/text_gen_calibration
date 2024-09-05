@@ -190,7 +190,7 @@ class LogitCalibrator(Calibrator, ABC):
     def test_loop(self, test_dset):
         confs_after_calibration = []
         for batch in tqdm(test_dset):
-            inp = batch["final_hidden_states"].to(DEVICE).to(self.llm_bundle.llm_model.dtype)
+            inp = batch["final_hidden_states"].to(DEVICE).float()
             logits = self.llm_bundle.final_hs_to_logits(inp).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
