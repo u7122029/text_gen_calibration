@@ -97,6 +97,32 @@ class TieredTSModel(nn.Module):
         self.ready = True
 
 
+class TokenZeroer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.top_token_ids = None
+        self.ready = False
+
+        # This is never used. It ensures the optimiser doesn't get empty parameter list.
+        #self.dummy_param = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x, tokens=None):
+        # x.shape: [logit_vec, vocab size]
+        if self.top_token_ids is not None:
+            x[:, self.top_token_ids] = 0
+
+        x = torch.softmax(x, dim=1)
+        if tokens is not None:
+            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        else:
+            x = torch.max(x, dim=1).values
+        return x  # [confs]
+
+    def set_tokens(self, top_token_ids: Optional[torch.Tensor]):
+        self.top_token_ids = top_token_ids
+        self.ready = True
+
+
 class PTSModel(nn.Module):
     def __init__(self, *layer_sizes):
         """
@@ -186,6 +212,7 @@ class TokenCalibratorModel(nn.Module):
         self.device = device
         self.model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-v3-base")
         self.tokeniser = AutoTokenizer.from_pretrained("microsoft/deberta-v3-base")
+        self.to(device)
 
     def forward(self, x):
         # x is a list of string inputs.

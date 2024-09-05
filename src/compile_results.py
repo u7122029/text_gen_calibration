@@ -5,8 +5,8 @@ from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters import PromptVersion
-import simple_colors as sc
 from metrics import ModelMetrics, ModelMetricsCollection
+from utils import LossFunc
 
 
 def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
@@ -35,9 +35,13 @@ def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion,
     print(collection.generate_tables("Test Formatter").to_markdown(index=False))
 
 
-def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: str, ood_if_name: str):
+def vary_calibrator(model_name: str,
+                    prompt_version: PromptVersion,
+                    loss_func: LossFunc,
+                    id_if_name: str,
+                    ood_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
-    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version) # NOTE: TEMPORARY DATASET SIZES.
+    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, loss_func) # NOTE: TEMPORARY DATASET SIZES.
 
     calibrator_names = ["TemperatureScaling",
                         "PTS_1L",
@@ -48,8 +52,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
                         "APRICOT_FrequencyTS",
                         "APRICOT_FrequencyTSMeanOnly",
                         "APRICOT_FrequencyTSNoStd",
-                        "APRICOT_FrequencyTSNoRFR"
-                        ]
+                        "APRICOT_FrequencyTSNoRFR"]
 
     collection = ModelMetricsCollection()
     collection.details = {
@@ -58,11 +61,15 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
         "Calib. Input Formatter": id_if_name,
         "Test Input Formatter": ood_if_name
     }
+
     for calibrator_name in calibrator_names:
-        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version) # NOTE: TEMPORARY DATASET SIZES.
-        print(sc.red(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
-        test_results = ood_if.test_calibrator(calibrator_type, id_if)
+        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle,
+                                                                   prompt_version,
+                                                                   calibrator_type,
+                                                                   loss_func)
+
+        test_results = ood_if.test_calibrator(id_if)
 
         details = {"Calibrator": calibrator_name}
         collection.append(ModelMetrics(test_results, **details))
@@ -74,6 +81,7 @@ def vary_calibrator(model_name: str, prompt_version: PromptVersion, id_if_name: 
 
 def main(model_name: str="google/gemma-1.1-2b-it",
          calibrator_name: str=None,
+         loss_func: str="CALIB_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="GSMCoT",
          ood_input_formatter_name: Optional[str]="MATHCoT"):
@@ -91,14 +99,16 @@ def main(model_name: str="google/gemma-1.1-2b-it",
     assert sum([1 if x is None else 0
                 for x in [model_name,
                           calibrator_name,
+                          loss_func,
                           prompt_version,
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1
-
     if ood_input_formatter_name is None:
+        loss_func = LossFunc.from_string(loss_func)
         vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
     elif calibrator_name is None:
-        vary_calibrator(model_name, prompt_version, id_input_formatter_name, ood_input_formatter_name)
+        loss_func = LossFunc.from_string(loss_func)
+        vary_calibrator(model_name, prompt_version, loss_func, id_input_formatter_name, ood_input_formatter_name)
 
     """input_formatter: InputFormatter = input_formatter_dict[id_input_formatter_name]
     results_root = Path(RESULTS_PATH)

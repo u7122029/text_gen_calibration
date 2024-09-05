@@ -59,7 +59,7 @@ class Calibrator(ABC):
         pass
 
     def test(self, test_dset: DictDataset, **kwargs) -> dict:
-        self.llm_bundle.llm_model.lm_head.float()
+        self.llm_bundle.lm_head.float()
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
 
@@ -70,7 +70,7 @@ class Calibrator(ABC):
             "calibrated_confs": torch.Tensor(confs_after_calibration),
             "calibrated_successful": torch.ones(len(test_dset)).bool()
         }
-        self.llm_bundle.llm_model.lm_head.half()
+        self.llm_bundle.lm_head.half()
         return out_dict
 
     @abstractmethod
@@ -137,8 +137,14 @@ class LogitCalibrator(Calibrator, ABC):
         :param kwargs:
         :return:
         """
-        self.llm_bundle.load_model(silent=True)
-        self.llm_bundle.llm_model.lm_head.float()
+        # If the model has no learnable parameters, then it is already calibrated.
+        if not any(param.numel() > 0 for param in self.calibrator_model.parameters()):
+            print("Model has no parameters, so no calibration performed.")
+            self.tuned = True
+            return
+
+        self.llm_bundle.load_model(silent=True, lm_head_only=True)
+        self.llm_bundle.lm_head.float()
         if _postprocess_fn is None:
             _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
 
@@ -159,7 +165,6 @@ class LogitCalibrator(Calibrator, ABC):
             pbar = tqdm(calibration_dl,
                         desc=f"Epoch {epoch_idx + 1}/{epochs}",
                         postfix=postfix)
-
             self.calibration_epoch(pbar, postfix, optimiser)
             should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
             if should_stop:
@@ -169,7 +174,7 @@ class LogitCalibrator(Calibrator, ABC):
         calibration_dset["calibrated_successful"] = torch.ones(len(calibration_dset)).bool()
 
         self.tuned = True
-        self.llm_bundle.llm_model.lm_head.half()
+        self.llm_bundle.lm_head.half()
 
     def load(self, filepath):
         self.calibrator_model.load_state_dict(dill_load(filepath)["state_dict"])

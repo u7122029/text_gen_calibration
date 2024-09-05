@@ -16,6 +16,8 @@ class TextGenLLMBundle(LLMBundle):
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
+        self.lm_head = self.llm_model.lm_head
+
         # Freeze all the parameters
         for parameter in self.llm_model.parameters():
             parameter.requires_grad = False
@@ -67,7 +69,7 @@ class TextGenLLMBundle(LLMBundle):
             model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
 
             #tqdm.write(f"{final_hs.shape}")
-            #test_logits = self.llm_model.lm_head(final_hs).cpu()
+            #test_logits = self.lm_head(final_hs).cpu()
 
             #tqdm.write(f"{torch.norm(test_logits - model_logits)}")
 

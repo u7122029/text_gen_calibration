@@ -433,5 +433,25 @@ class WATCCalibrator(Calibrator):
         return all_preds, confs_before_calib, confs_after_calib, None"""
 
 
+class NullCalibrator(Calibrator, ABC):
+    """
+    Calibrator that does nothing. Practical as a placeholder that should never be used.
+    """
+    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module):
+        super().__init__(llm_bundle, loss_fn, None)
+
+    def calibrate(self, calibration_dset: DictDataset, **kwargs) -> None:
+        pass
+
+    def test_loop(self, test_dset: DictDataset):
+        pass
+
+    def save(self, filepath, **kwargs):
+        pass
+
+    def load(self, filepath):
+        pass
+
+
 classes = inspect.getmembers(sys.modules[__name__], class_predicate(Calibrator))
 calibrator_dict: dict[str, Calibrator.__class__] = {x: y for x, y in classes}

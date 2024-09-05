@@ -290,6 +290,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.test_dataset.save(test_filepath / "data.dill")
             print("Test Data done.")
 
+        self.llm_bundle.unload_model()
         return self.calib_dataset, self.test_dataset
 
     def perform_calibration(self, calib_data, weights_path, batch_size):
@@ -335,7 +336,8 @@ class CoTInputFormatter(InputFormatter, ABC):
             calib_results = dill_load(cr_path)
         else:
             print(f"Did not find existing calibration results in {cr_path}")
-            self.llm_bundle.load_model(silent=True)
+            self.llm_bundle.load_model(silent=True, lm_head_only=True)
+
             calib_results = self.calibrator.test(test_dset=calib_data,
                                                  batch_size=batch_size)
             dill_save(calib_results, cr_path)
@@ -346,6 +348,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             test_results = dill_load(tr_path)
         else:
             print(f"Did not find existing test results in {tr_path}")
+            self.llm_bundle.load_model(silent=True, lm_head_only=True)
             test_results = self.calibrator.test(test_dset=test_data,
                                                 batch_size=batch_size)
             dill_save(test_results, tr_path)

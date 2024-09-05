@@ -32,8 +32,8 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="GSMCoT",
-         calibrator_name="FrequencyTS",
-         loss_fn="CALIB_AWARE",
+         calibrator_name="TemperatureScaling",
+         loss_fn="BCE",
          cot_version="DEFAULT",
          model_name="google/gemma-1.1-2b-it",
          batch_size=4,
@@ -58,11 +58,9 @@ def main(input_formatter_name: str="GSMCoT",
                                                             calib_dset_size,
                                                             test_dset_size)
 
-    calib_data, test_data = input_formatter.run_pipeline(
-        batch_size,
-        recompute_logits=recompute_logits,
-        recalibrate=retrain_calibrator
-    )
+    calib_data, test_data = input_formatter.run_pipeline(batch_size,
+                                                         recompute_logits=recompute_logits,
+                                                         recalibrate=retrain_calibrator)
 
     show_results(calib_data, test_data, model_name, calibrator_name, input_formatter_name)
 

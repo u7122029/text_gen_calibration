@@ -7,7 +7,7 @@ from data import DictDataset
 from llm_models import TextGenLLMBundle
 from utils import dill_load
 from .generic import LogitCalibrator
-from .universal_calibration_models import TieredTSModel
+from .universal_calibration_models import TieredTSModel, TokenZeroer
 
 
 def std_proc(std, p=2):
@@ -58,7 +58,6 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
         "stds_proc": [],
         "response_props": []
     }
-    #total_tokens = sum([len(v) for _, v in token_confs.items()])
 
     for k, v in token_confs.items():
         v = torch.Tensor(v)
@@ -74,7 +73,6 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
 
         m = torch.mean(v)
         s = torch.std(v, correction=0 if len(v) == 1 else 1)
-        #fv = len(v) / total_tokens
 
         df_top["token_values"].append(metric_func(m, s, n_response_proportion).item())
         df_bot["token_values"].append(metric_func((1 - m), s, n_response_proportion).item())
@@ -106,7 +104,7 @@ class FrequencyTS(LogitCalibrator):
 
     Make sure to initialise this class, then either load() or calibrate() the model.
     """
-    def __init__(self, llm_bundle, loss_fn=None, score_thresh=0.8, _calibrator_model=None):
+    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8, _calibrator_model=None):
         if _calibrator_model is None:
             _calibrator_model = TieredTSModel()
 
@@ -137,10 +135,6 @@ class FrequencyTS(LogitCalibrator):
         d = dill_load(filepath)
         self.score_thresh = d["score_thresh"]
         self.top_token_ids = d["top_token_ids"]
-        #self.top_token_values = d["top_token_values"]
-        #self.bot_token_ids = d["bot_token_ids"]
-        #self.bot_token_values = d["bot_token_values"]
-
         self.calibrator_model.set_tokens(self.top_token_ids)
         super().load(filepath)
 
@@ -161,14 +155,12 @@ class FrequencyTS(LogitCalibrator):
         }
 
 
-"""class FrequencyTSTopOnly(FrequencyTS):
-    def __init__(self, llm_bundle, top_k=10):
-        super().__init__(llm_bundle, top_k, bot_k=0)"""
-
-
-"""class FrequencyTSBotOnly(FrequencyTS):
-    def __init__(self, llm_bundle, bot_k=10):
-        super().__init__(llm_bundle, top_k=0, bot_k=bot_k)"""
+class FrequencyTokenZero(FrequencyTS):
+    """
+    Sets all the tokens that fall above the threshold to 0 confidence.
+    """
+    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8, _calibrator_model=None):
+        super().__init__(llm_bundle, loss_fn, score_thresh, TokenZeroer())
 
 
 class FrequencyTSMeanOnly(FrequencyTS):

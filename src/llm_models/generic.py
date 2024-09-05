@@ -84,6 +84,7 @@ class LLMBundle(ABC):
                                                        token=HF_TOKEN,
                                                        padding_side="left")
         self.llm_model = None
+        self.lm_head = None
         self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
 
     def vocab_size(self):
@@ -101,27 +102,37 @@ class LLMBundle(ABC):
         @param final_hs: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
         @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
         """
-        self.load_model(silent=True) # Don't overload with "model already loaded" messages.
-        return self.llm_model.lm_head(final_hs)
+        self.load_model(silent=True, lm_head_only=True) # Don't overload with "model already loaded" messages.
+        return self.lm_head(final_hs)
 
     @abstractmethod
     def get_model(self):
+        """
+        Loads the entire model, and sets the lm head.
+        @return: None.
+        """
         pass
 
-    def load_model(self, silent=False):
+    def unload_model(self):
+        # Really free up GPU space, but keep the attribute existent.
+        del self.llm_model
+        self.llm_model = None
+
+    def load_model(self, silent=False, lm_head_only=False):
         """
         Calls the function to load the model into the program. This is a whole separate method because a user might only
         need the tokeniser.
         :return:
         """
+        if lm_head_only:
+            if self.lm_head is None:
+                self.get_model()
+                self.unload_model() # unload the feature layers.
+            return
+
         if self.llm_model is None:
             print(f"Loading model {self.llm_name}")
             self.get_model()
         elif not silent:
             print(f"Model {self.llm_name} already loaded.")
-
-    def __del__(self):
-        # free up memory.
-        del self.tokeniser, self.llm_model
-
 

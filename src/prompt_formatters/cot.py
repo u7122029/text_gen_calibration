@@ -44,7 +44,6 @@ class CoTPromptFormat(PromptFormat):
                  explanation_tag="**Explanation:**",
                  confidence_tag="**Confidence:**"):
         super().__init__()
-        print(llm_bundle)
         self.llm_bundle = llm_bundle
         self.cot_format = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
 
