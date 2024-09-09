@@ -1,6 +1,6 @@
 from os import PathLike
 from pathlib import Path
-from typing import Union, Iterable
+from typing import Union
 
 import dill
 import torch
@@ -13,6 +13,7 @@ class DictDataset(Dataset):
     """
     Convert this to also extend from a dictionary.
     """
+
     def __init__(self, data_dict: dict):
         assert isinstance(data_dict, dict)
         assert len(data_dict.keys()) > 0
@@ -34,7 +35,7 @@ class DictDataset(Dataset):
             d = dill.load(f)
         return cls(d)
 
-    def save(self, path: PathLike):
+    def save(self, path: Path):
         dill_save(self.data_dict, path)
 
     def join(self, other: 'DictDataset'):
@@ -68,7 +69,12 @@ class DictDataset(Dataset):
         return len(self.data_dict[self.ref_key])
 
     def __getitem__(self,
-                    item: str | int | list[int] | slice | torch.Tensor | tuple[str | int | list[int] | slice | torch.Tensor, bool]):
+                    item: str |
+                          int |
+                          list[int] |
+                          slice |
+                          torch.Tensor |
+                          tuple[str | int | list[int] | slice | torch.Tensor, bool]):
         raw = False
         if isinstance(item, tuple):
             raw = item[1]
@@ -127,7 +133,7 @@ class DictDataset(Dataset):
                 if isinstance(out_dict[k], Path):
                     out_dict[k] = dill_load(out_dict[k])
 
-        return out_dict #{k: self.data_dict[k][item] for k in self.keys()}
+        return out_dict  #{k: self.data_dict[k][item] for k in self.keys()}
 
     def __setitem__(self, key: str, value):
         assert isinstance(key, str)
@@ -164,6 +170,7 @@ class DictDataset(Dataset):
         @param postprocess_fn: The postprocessing function. Should take in the batched dictionary and output a processed version.
         @return: The batched dictionary.
         """
+
         def fn(data_list):
             out_dict = {k: [] for k in keys}
             for d in data_list:
@@ -172,4 +179,5 @@ class DictDataset(Dataset):
             if postprocess_fn is not None:
                 out_dict = postprocess_fn(out_dict)
             return out_dict
+
         return fn

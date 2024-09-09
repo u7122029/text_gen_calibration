@@ -16,6 +16,7 @@ class TextGenLLMBundle(LLMBundle):
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
+        self.llm_model.eval()
         self.lm_head = self.llm_model.lm_head
 
         # Freeze all the parameters
@@ -26,7 +27,7 @@ class TextGenLLMBundle(LLMBundle):
                                 dset: DictDataset,
                                 storage_root: Path,
                                 batch_size=1,
-                                max_new_tokens=550,
+                                max_new_tokens=400,
                                 desc=None) -> DictDataset:
         """
         Generate the
@@ -59,14 +60,14 @@ class TextGenLLMBundle(LLMBundle):
             inputs = self.tokeniser(formatted, return_tensors="pt", padding=True).to("cuda")
             generated = self.llm_model.generate(**inputs,
                                                 max_new_tokens=max_new_tokens,
-                                                output_logits=True,
+                                                #output_logits=True,
                                                 output_hidden_states=True,
                                                 return_dict_in_generate=True,
                                                 pad_token_id=self.tokeniser.eos_token_id)
 
             # Compute the final hidden state of the model for each token outputted.
-            final_hs = torch.stack([h[-1][:, -1, :] for h in generated.hidden_states], dim=1).cpu()
-            model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
+            final_hs = torch.stack([h[-1][:, -1, :] for h in generated.hidden_states], dim=1)
+            #model_logits = torch.stack(generated.logits).permute(1, 0, 2).cpu()
 
             #tqdm.write(f"{final_hs.shape}")
             #test_logits = self.lm_head(final_hs).cpu()
@@ -77,12 +78,13 @@ class TextGenLLMBundle(LLMBundle):
             sequences = generated.sequences.cpu()
             responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:].cpu()
 
-            for logits, final_hs_response, response in zip(model_logits, final_hs, responses): # final_hs used to be model_logits
+            for final_hs_response, response in zip(final_hs, responses): # final_hs used to be model_logits
                 eos_mask = response != self.tokeniser.eos_token_id
 
-                processed_logits = logits[eos_mask]
                 processed_final_hs = final_hs_response[eos_mask]
-                tokens = response[eos_mask]
+                processed_logits = self.final_hs_to_logits(processed_final_hs.to(DEVICE)).cpu()
+                print(processed_logits.shape)
+                tokens = response[eos_mask].cpu()
 
                 idx_name = str(file_idx).zfill(4)
                 final_hs_path = storage_root / idx_name / f"final_hs.dill"
@@ -109,7 +111,7 @@ class TextGenLLMBundle(LLMBundle):
 
         return dset
 
-    def get_verbalised_confs_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=30, desc=None):
+    def get_verbalised_confs_from_dset(self, dset: DictDataset, batch_size=1, max_new_tokens=10, desc=None):
         """
 
         :param dset:

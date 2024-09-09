@@ -1,5 +1,3 @@
-import os
-
 import fire
 import torch
 
@@ -32,10 +30,10 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="GSMCoT",
-         calibrator_name="APRICOT_FrequencyTS",
-         loss_fn="BCE",
+         calibrator_name="TemperatureScaling",
+         loss_fn="CALIB_AWARE",
          cot_version="DEFAULT",
-         model_name="google/gemma-1.1-2b-it",
+         model_name="microsoft/Phi-3-mini-128k-instruct",
          batch_size=4,
          calib_dset_size=None,
          test_dset_size=None,

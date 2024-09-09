@@ -24,7 +24,7 @@ class Calibrator(ABC):
     You may use the save method to save the parts of the calibrator that require persistence.
     Note that the save method may not do anything at all if there is nothing to save.
     """
-    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module, calibrator_model: Optional[nn.Module]):
+    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module, calibrator_model: Optional[nn.Module]=None):
         if isinstance(calibrator_model, nn.Module):
             calibrator_model.eval()
 
@@ -60,6 +60,9 @@ class Calibrator(ABC):
 
     def test(self, test_dset: DictDataset, **kwargs) -> dict:
         self.llm_bundle.lm_head.float()
+        self.calibrator_model.to(DEVICE)
+        self.calibrator_model.eval()
+
         if not self.tuned:
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
 
@@ -94,9 +97,7 @@ class LogitCalibrator(Calibrator, ABC):
                  input_key="logits",
                  label_key="correct"):
         super().__init__(llm_bundle, loss_fn, calibrator_model)
-        self.calibrator_model.to(DEVICE)
 
-        self.calibrator_model.eval()
         self.label_key = label_key
         self.input_key = input_key
 
@@ -126,7 +127,7 @@ class LogitCalibrator(Calibrator, ABC):
                   epochs=30,
                   lr=0.01,
                   _postprocess_fn=None,
-                  **kwargs):
+                  **kwargs) -> Optional[EarlyStopping]:
         """
         Tunes the calibrator model given a dictionary dataset.
         :param batch_size:
@@ -141,10 +142,14 @@ class LogitCalibrator(Calibrator, ABC):
         if not any(param.numel() > 0 for param in self.calibrator_model.parameters()):
             print("Model has no parameters, so no calibration performed.")
             self.tuned = True
-            return
+            return None
 
         self.llm_bundle.load_model(silent=True, lm_head_only=True)
         self.llm_bundle.lm_head.float()
+
+        self.calibrator_model.to(DEVICE)
+        self.calibrator_model.eval()
+
         if _postprocess_fn is None:
             _postprocess_fn = logit_token_repeat_label_key(self.label_key, self.llm_bundle)
 
@@ -176,6 +181,7 @@ class LogitCalibrator(Calibrator, ABC):
 
         self.tuned = True
         self.llm_bundle.lm_head.half()
+        return es
 
     def load(self, filepath):
         self.calibrator_model.load_state_dict(dill_load(filepath)["state_dict"])

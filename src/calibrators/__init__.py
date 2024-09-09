@@ -8,6 +8,7 @@ from .pts import *
 from .frequency_pts import *
 from .temperature_scaling import TemperatureScaling
 from .frequency_ts import *
+from .frequency_ts_scaling import *
 from .platt_scaling import *
 from .token_response_scaler import *
 from .lhs_ts import *

@@ -160,10 +160,17 @@ class ModelMetricsCollection(list[ModelMetrics]):
         super().__init__(*args)
         self.details = {}
 
-    def make_details_table(self):
-        return tabulate(list(self.details.items()), tablefmt="github")
+    #def make_details_table(self):
+    #    return tabulate(list(self.details.items()), tablefmt="github")
 
-    def generate_tables(self, key: str):
+    def generate_tables(self, key: str, control_keys: Optional[list[str]]=None):
+        """
+        Generate the tables.
+        @param key: The name of the independent variable.
+        @param control_keys: The keys that are known to be constant in associated value.
+        @return:
+        """
+
         table = {
             key: [],
             "ece_logits": [],
@@ -196,5 +203,8 @@ class ModelMetricsCollection(list[ModelMetrics]):
             table["auprc_logits"].append(x.auprc_logits)
             table["auprc_verbalised"].append(x.auprc_verbalised)
             table["auprc_calib"].append(x.auprc_calibrated)
-
-        return pd.DataFrame(table)
+        if control_keys is not None:
+            for control_key in control_keys:
+                self.details[control_key] = table[control_key][0]
+                del table[control_key]
+        return pd.DataFrame(table), tabulate(list(self.details.items()), tablefmt="github")

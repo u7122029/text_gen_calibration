@@ -115,10 +115,11 @@ class LLMBundle(ABC):
 
     def unload_model(self):
         # Really free up GPU space, but keep the attribute existent.
-        print("Unloading model.")
-        del self.llm_model
-        self.llm_model = None
-        torch.cuda.empty_cache()
+        if self.llm_model is not None:
+            print("Unloading model.")
+            del self.llm_model
+            self.llm_model = None
+            torch.cuda.empty_cache()
 
     def load_model(self, silent=False, lm_head_only=False):
         """

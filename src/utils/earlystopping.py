@@ -37,14 +37,19 @@ class EarlyStopping:
                 tqdm.write(f'Train loss decreased ({self.best_train_loss:.6f} --> {train_loss:.6f}).  Saving model.')
             self.best_train_loss = train_loss
 
-            torch.save(model.state_dict(), str(temp_dir / "checkpoint.pt"))
+            torch.save(model.state_dict(), str(temp_dir / "es_checkpoint.pt"))
             self.counter = 0
         return False
 
     def load_checkpoint(self, model: nn.Module):
+        """
+        Loads a model with the best performing state dict.
+        @param model:
+        @return:
+        """
         if self.verbose:
             tqdm.write("Loading checkpoint model weights.")
-        model.load_state_dict(torch.load(f"{TEMP_DIR}/checkpoint.pt"))
+        model.load_state_dict(torch.load(f"{TEMP_DIR}/es_checkpoint.pt"))
 
 
 """

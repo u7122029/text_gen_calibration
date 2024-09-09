@@ -23,6 +23,7 @@ QUALITATIVE_SCALE = {
     "Very high": 1,
 }
 RESULTS_PATH = "results"
+FIGURES_PATH = "figures"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 try:

@@ -1,16 +1,20 @@
+from pathlib import Path
 from typing import List
 
 import pandas as pd
 import torch
+import optuna
+from tqdm import tqdm
 
 from data import DictDataset
 from llm_models import TextGenLLMBundle
-from utils import dill_load
+from utils import dill_load, EarlyStopping
+from utils.earlystopping import TEMP_DIR
 from .generic import LogitCalibrator
-from .universal_calibration_models import TieredTSModel, TokenZeroer
+from .universal_calibration_models.tiered_models import TieredTSModel
 
 
-def std_proc(std, p=2):
+def std_proc(std, p=1):
     """
     Standard deviation processor.
     Higher standard deviations are given lower scores (penalised). The penalisation factor is controlled by p.
@@ -18,7 +22,7 @@ def std_proc(std, p=2):
     @param p:
     @return:
     """
-    return torch.abs((2*(std - 0.5)) ** p)
+    return torch.abs((-2*(std - 0.5)) ** p)
 
 
 def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBundle, metric_func):
@@ -114,17 +118,13 @@ class FrequencyTS(LogitCalibrator):
         super().__init__(llm_bundle, _calibrator_model, loss_fn=loss_fn)
 
     def calibrate(self, calibration_dset: DictDataset, **kwargs):
-        df_top, df_bot = compute_top_bot_dfs(calibration_dset, self.llm_bundle, self.metric)
-
-        df_top = df_top[df_top["token_values"] >= self.score_thresh]
-        self.top_token_ids = torch.as_tensor(df_top["token_ids"].to_numpy())
-
-        #self.top_token_values = torch.as_tensor(df_top["token_values"].to_numpy())
-        #self.bot_token_ids = torch.as_tensor(df_bot["token_ids"].to_numpy())
-        #self.bot_token_values = torch.as_tensor(df_bot["token_values"].to_numpy())
+        df_top, _ = compute_top_bot_dfs(calibration_dset, self.llm_bundle, self.metric)
+        df_top_modified = df_top[df_top["token_values"] >= self.score_thresh]
+        self.top_token_ids = torch.as_tensor(df_top_modified["token_ids"].to_numpy())
 
         self.calibrator_model.set_tokens(self.top_token_ids)
         assert self.calibrator_model.ready
+
         super().calibrate(calibration_dset, **kwargs)
 
     def metric(self, mean, std, response_frequency_ratio):
@@ -134,7 +134,9 @@ class FrequencyTS(LogitCalibrator):
     def load(self, filepath):
         d = dill_load(filepath)
         self.score_thresh = d["score_thresh"]
+        #self.bot_score_thresh = d["bot_score_thresh"]
         self.top_token_ids = d["top_token_ids"]
+        #self.bot_token_ids = d["bot_token_ids"]
         self.calibrator_model.set_tokens(self.top_token_ids)
         super().load(filepath)
 
@@ -144,23 +146,16 @@ class FrequencyTS(LogitCalibrator):
 
     def get_frequency_dict(self):
         assert self.score_thresh is not None
+        #assert self.bot_score_thresh is not None
         assert self.top_token_ids is not None
         #assert self.bot_token_ids is not None
-        #assert self.top_token_values is not None
-        #assert self.bot_token_values is not None
 
         return {
             "score_thresh": self.score_thresh,
-            "top_token_ids": self.top_token_ids
+            #"bot_score_thresh": self.bot_score_thresh,
+            "top_token_ids": self.top_token_ids,
+            #"bot_token_ids": self.bot_token_ids
         }
-
-
-class FrequencyTokenZero(FrequencyTS):
-    """
-    Sets all the tokens that fall above the threshold to 0 confidence.
-    """
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8, _calibrator_model=None):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TokenZeroer())
 
 
 class FrequencyTSMeanOnly(FrequencyTS):
@@ -185,3 +180,8 @@ class FrequencyTSNoStd(FrequencyTS):
     """
     def metric(self, mean, std, response_frequency_ratio):
         return mean * response_frequency_ratio
+
+
+class FrequencyTSNoMean(FrequencyTS):
+    def metric(self, mean, std, response_frequency_ratio):
+        return std_proc(std) * response_frequency_ratio
