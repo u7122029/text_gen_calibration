@@ -8,7 +8,7 @@ from llm_models.textgen import TextGenLLMBundle
 
 from metrics import ModelMetrics
 from prompt_formatters import PromptVersion
-from utils import LossFunc
+from utils.loss_functions import LossFunc
 
 
 def show_results(calib_data: DictDataset,
@@ -31,7 +31,7 @@ def show_results(calib_data: DictDataset,
 
 def main(input_formatter_name: str="GSMCoT",
          calibrator_name="TemperatureScaling",
-         loss_fn="CALIB_AWARE",
+         loss_fn="CORRECT_AWARE",
          cot_version="DEFAULT",
          model_name="microsoft/Phi-3-mini-128k-instruct",
          batch_size=4,

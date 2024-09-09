@@ -22,13 +22,14 @@ class TSModel(nn.Module):
     def forward(self, x, tokens):
         # x.shape: [logit_vec, vocab size]
         x = x / self.temperature
-        x = torch.softmax(x, dim=1)
-        x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
         return x  # [confs]
 
 
 class PlattScalerLogits(nn.Module):
+    """
+    TODO: Fix this function to accomodate for the new loss function structure.
+    """
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(1, 1)
@@ -42,6 +43,9 @@ class PlattScalerLogits(nn.Module):
 
 
 class PlattScalerConfs(nn.Module):
+    """
+    TODO: This one too.
+    """
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(1, 1)
@@ -84,8 +88,8 @@ class PTSModel(nn.Module):
         t = torch.clip(nn.functional.softplus(self.layers(t)), min=1e-5)
 
         x = inp / t
-        x = torch.softmax(x, dim=1)
-        x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        #x = torch.softmax(x, dim=1)
+        #x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
         return x
 
@@ -114,15 +118,15 @@ class TieredPTSModel(nn.Module):
             top_temp = self.top_linear(x[:, self.top_token_ids])
             x[:, self.top_token_ids] = x[:, self.top_token_ids] / top_temp
 
-        if self.bot_token_ids is not None:
-            bot_temp = self.bot_linear(x[:, self.bot_token_ids])
-            x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / bot_temp
+        #if self.bot_token_ids is not None:
+        #    bot_temp = self.bot_linear(x[:, self.bot_token_ids])
+        #    x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / bot_temp
 
-        x = torch.softmax(x, dim=1)
-        if tokens is not None:
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-        else:
-            x = torch.max(x, dim=1).values
+        #x = torch.softmax(x, dim=1)
+        #if tokens is not None:
+        #    x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        #else:
+        #    x = torch.max(x, dim=1).values
         return x  # [confs]
 
     def set_tokens(self, top_token_ids: Optional[torch.Tensor], bot_token_ids: Optional[torch.Tensor]):
@@ -141,6 +145,7 @@ class TieredPTSModel(nn.Module):
 class TokenCalibratorModel(nn.Module):
     """
     Uses a sequence classification model that takes a question + its response, then outputs the calibrated confidence.
+    TODO: THIS ONE TOO!
     """
 
     def __init__(self, device=DEVICE):

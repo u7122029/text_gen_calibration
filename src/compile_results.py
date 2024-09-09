@@ -6,7 +6,7 @@ from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
-from utils import LossFunc
+from utils.loss_functions import LossFunc
 
 
 def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
@@ -86,14 +86,13 @@ def vary_calibrator_ood(model_name: str,
     print(table)
 
 
-def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
+def vary_calibrator_id(model_name: str, prompt_version: PromptVersion, input_formatter: str):
     calib_collection = ModelMetricsCollection()
     calib_collection.details = {
         "Split": "Calibration",
         "LLM": model_name,
         "Prompt Version": prompt_version.name,
         "Input Formatter": input_formatter,
-        "Loss Function": loss_func_name
     }
 
     test_collection = ModelMetricsCollection()
@@ -102,20 +101,18 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
         "LLM": model_name,
         "Prompt Version": prompt_version.name,
         "Input Formatter": input_formatter,
-        "Loss Function": loss_func_name
     }
 
-    calibrator_names = ["LastHiddenStateCalibrator", "TemperatureScaling", "FrequencyTS", "FrequencyScaler", "FrequencyTSNoMean", "FrequencyTSNoRFR", "FrequencyTSNoStd"]
+    #calibrator_names = ["LastHiddenStateCalibrator", "TemperatureScaling", "FrequencyTS", "FrequencyScaler", "FrequencyTSNoMean", "FrequencyTSNoRFR", "FrequencyTSNoStd"]
+    calibrator_names = ["LHS_CA", "LHS_BCE"]
 
     llm_bundle = TextGenLLMBundle(model_name)
-    loss_func = LossFunc.from_string(loss_func_name)
 
     for calibrator_name in calibrator_names:
         calibrator_type = calibrator_dict[calibrator_name]
         id_if: InputFormatter = input_formatter_dict[input_formatter](llm_bundle,
                                                                       prompt_version,
-                                                                      calibrator_type,
-                                                                      loss_func)  # NOTE: TEMPORARY DATASET SIZES.
+                                                                      calibrator_type)  # NOTE: TEMPORARY DATASET SIZES.
         # run the pipeline to ensure that all the calib and test results have been acquired.
         calib_data, test_data = id_if.run_pipeline(batch_size=4)
 
@@ -143,7 +140,6 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
 
 def main(model_name: str="microsoft/Phi-3-mini-128k-instruct",
          calibrator_name: str=None,
-         loss_func_name: str="CALIB_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="GSMCoT",
          ood_input_formatter_name: Optional[str]=None):
@@ -168,11 +164,11 @@ def main(model_name: str="microsoft/Phi-3-mini-128k-instruct",
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
     if ood_input_formatter_name is None and calibrator_name is None:
-        vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
+        vary_calibrator_id(model_name, prompt_version, id_input_formatter_name)
     elif ood_input_formatter_name is None:
         vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
     elif calibrator_name is None:
-        vary_calibrator_ood(model_name, prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
+        vary_calibrator_ood(model_name, prompt_version, id_input_formatter_name, ood_input_formatter_name)
 
     """input_formatter: InputFormatter = input_formatter_dict[id_input_formatter_name]
     results_root = Path(RESULTS_PATH)

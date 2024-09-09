@@ -75,11 +75,11 @@ class TieredTSModel(nn.Module):
         if self.top_token_ids is not None:
             x[:, self.top_token_ids] = x[:, self.top_token_ids] / self.top_temp
 
-        x = torch.softmax(x, dim=1)
-        if tokens is not None:
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-        else:
-            x = torch.max(x, dim=1).values
+        #x = torch.softmax(x, dim=1)
+        #if tokens is not None:
+        #    x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        #else:
+        #    x = torch.max(x, dim=1).values
         return x  # [confs]
 
     def set_tokens(self, top_token_ids: Optional[torch.Tensor]):
@@ -103,11 +103,11 @@ class TieredScalerModel(nn.Module):
         # x.shape: [logit_vec, vocab size]
         x = x / self.general_temp
 
-        x = torch.softmax(x, dim=1)
-        if tokens is not None:
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-        else:
-            x = torch.max(x, dim=1).values
+        #x = torch.softmax(x, dim=1)
+        #if tokens is not None:
+        #    x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        #else:
+        #    x = torch.max(x, dim=1).values
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))

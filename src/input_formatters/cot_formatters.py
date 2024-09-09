@@ -7,7 +7,7 @@ from calibrators import Calibrator
 from data import DatasetType
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters.cot import PromptVersion
-from utils import LossFunc
+from utils.loss_functions import LossFunc
 from .generic import CoTInputFormatter
 
 
@@ -16,14 +16,12 @@ class GSMCoT(CoTInputFormatter):
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
-                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.GSM(),
                          prompt_version()(llm_bundle),
                          calibrator_type,
-                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 
@@ -41,14 +39,12 @@ class MATHCoT(CoTInputFormatter):
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
-                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.MATH(),
                          prompt_version()(llm_bundle),
                          calibrator_type,
-                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
         self.__evl = None
@@ -74,14 +70,12 @@ class AQUARATCoT(CoTInputFormatter):
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
-                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.AQUARAT(),
                          prompt_version(mcq=True)(llm_bundle),
                          calibrator_type,
-                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 
@@ -102,14 +96,12 @@ class TRIVIAQACoT(CoTInputFormatter):
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
-                 loss_fn: LossFunc,
                  calib_dset_size=None,
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.TRIVIAQA(),
                          prompt_version()(llm_bundle),
                          calibrator_type,
-                         loss_fn,
                          calib_dset_size,
                          test_dset_size)
 
