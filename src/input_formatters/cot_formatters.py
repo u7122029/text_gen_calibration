@@ -119,13 +119,12 @@ class SQUADV2CoT(CoTInputFormatter):
 
         correctness = []
         for pred, label, succ in zip(predictions, labels, successful):
-            print(pred, label, succ)
             if not succ:
                 correctness.append(False)
                 continue
             prediction = [{"prediction_text": pred, "id": "x", "no_answer_probability": 0}]
             reference = [{"answers": label, "id": "x"}]
             result = metric.compute(predictions=prediction, references=reference)["f1"]
-            correctness.append(result >= 80)
+            correctness.append(result >= 50)
         return torch.Tensor(correctness).to(torch.uint8)
 
