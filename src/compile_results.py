@@ -141,7 +141,7 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_table)
 
 
-def main(model_name: str="microsoft/Phi-3-mini-128k-instruct",
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: str="CALIB_AWARE",
          prompt_version: str="DEFAULT",

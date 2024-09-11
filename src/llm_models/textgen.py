@@ -12,10 +12,20 @@ from utils import HF_TOKEN, dill_save, DEVICE
 
 class TextGenLLMBundle(LLMBundle):
     def get_model(self):
-        self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
-                                                              device_map="auto",
-                                                              torch_dtype=torch.float16,
-                                                              token=HF_TOKEN)
+        try:
+            print("Attempting to use flash attention 2")
+            self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                                  device_map="auto",
+                                                                  torch_dtype=torch.float16,
+                                                                  token=HF_TOKEN,
+                                                                  attn_implementation="flash_attention_2")
+            print("Successfully loaded model with flash attention 2.")
+        except:
+            print("Failed to use flash attention 2. Loading default model.")
+            self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                                  device_map="auto",
+                                                                  torch_dtype=torch.float16,
+                                                                  token=HF_TOKEN)
         self.llm_model.eval()
         self.lm_head = self.llm_model.lm_head
 
@@ -51,7 +61,7 @@ class TextGenLLMBundle(LLMBundle):
         all_tokens_paths = []
         all_logit_confs = []
 
-        dl = DataLoader(dset, batch_size=batch_size)
+        dl = DataLoader(dset, batch_size=batch_size, collate_fn=dset.collate_fn("response_formatted"))
 
         # Logits and Output Tokens
         file_idx = 0
@@ -77,13 +87,13 @@ class TextGenLLMBundle(LLMBundle):
             # get the tokens, then remove the ones that made up the input.
             sequences = generated.sequences.cpu()
             responses: torch.Tensor = sequences[:, inputs.input_ids.shape[1]:].cpu()
+            #print(self.tokeniser.batch_decode(responses))
 
             for final_hs_response, response in zip(final_hs, responses): # final_hs used to be model_logits
                 eos_mask = response != self.tokeniser.eos_token_id
 
                 processed_final_hs = final_hs_response[eos_mask]
                 processed_logits = self.final_hs_to_logits(processed_final_hs.to(DEVICE)).cpu()
-                print(processed_logits.shape)
                 tokens = response[eos_mask].cpu()
 
                 idx_name = str(file_idx).zfill(4)

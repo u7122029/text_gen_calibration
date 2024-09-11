@@ -21,8 +21,8 @@ class CoTModelConfig(Enum):
             "google/gemma-2-9b-it": cls.USER_CHAT,
             "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
-            "microsoft/Phi-3-small-128k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-128k-instruct": cls.USER_CHAT
+            "microsoft/Phi-3-small-8k-instruct": cls.USER_CHAT,
+            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
 
             # defunct models.
             # "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,
@@ -67,9 +67,9 @@ class CoTPromptFormat(PromptFormat):
         self.worded_conf_prompt = (f"Provide your confidence in the above answer only as one of "
                                    f"{' / '.join([f'{exp}' for exp in self.qualitative_scale.keys()])}.\n"
                                    f"{self.confidence_tag}")
-        self.system_prompt = (f"You are a friendly chatbot that only outputs in the form:\n"
+        self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
                               f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <A single number>")
+                              f"{self.final_answer_tag} <A single number>\n")
 
         self.final_answer_format = f"{self.final_answer_tag} " + "{answer}"
         self.question_format = f"{self.question_tag} " + "{question}"
@@ -152,7 +152,8 @@ class CoTPromptFormat(PromptFormat):
         if self.cot_format == CoTModelConfig.SYSTEM_USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "system", "content": self.system_prompt},
-                 {"role": "user", "content": f"{context_formatted}"
+                 {"role": "user", "content": f"{context_formatted}\n"
+                                             f"Provide ONLY the exact answer to the following question:\n"
                                              f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
@@ -160,16 +161,46 @@ class CoTPromptFormat(PromptFormat):
         elif self.cot_format == CoTModelConfig.USER_CHAT:
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "user", "content": f"{self.system_prompt}\n\n"
-                                             f"{context_formatted}"
+                                             f"{context_formatted}\n"
+                                             f"Provide ONLY the exact answer to the following question:\n"
                                              f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
                 return_tensors="pt"
             )
         else:
-            formatted_q = f"{self.system_prompt}\n\n{context_formatted}{question_formatted}"
+            formatted_q = (f"{self.system_prompt}\n\n{context_formatted}\n"
+                           f"Provide ONLY the exact answer to the following question:\n"
+                           f"{question_formatted}")
 
         return formatted_q
+
+
+class WordAnswerCoTPromptFormat(CoTPromptFormat):
+    def __init__(self, llm_bundle):
+        super().__init__(llm_bundle)
+
+        self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
+                              f"{self.explanation_tag} <Your explanation>\n"
+                              f"{self.final_answer_tag} <Only the exact answer, nothing more>")
+
+    def obtain_answers(self, decoded_responses):
+        final_answer_tag_lower = self.final_answer_tag.lower()
+        final_preds = []
+        all_successful = []
+        for decoded_response in decoded_responses:
+            decoded_response = decoded_response.lower()
+            try:
+                _, final_prediction = decoded_response.split(final_answer_tag_lower)
+                #final_prediction = re.findall(r"\d+", final_answer_raw)[0]
+                successful = True
+            except:
+                final_prediction = "-1"  # Indicates a failed response.
+                successful = False
+
+            final_preds.append(final_prediction)
+            all_successful.append(successful)
+        return final_preds, all_successful
 
 
 class MCQCoTPromptFormat(CoTPromptFormat):
@@ -179,7 +210,7 @@ class MCQCoTPromptFormat(CoTPromptFormat):
             self.mcq_options = {'a', 'b', 'c', 'd', 'e'}
         else:
             self.mcq_options = mcq_options
-        self.system_prompt = ("You are a friendly chatbot that only outputs in the form:\n"
+        self.system_prompt = ("You are a chatbot that only outputs in the form:\n"
                               f"{self.explanation_tag} <Your explanation>\n"
                               f"{self.final_answer_tag} <A single letter>")
 
@@ -219,6 +250,17 @@ class AltCoTPromptFormat(CoTPromptFormat):
                          "Confidence:")
 
 
+class AltWordAnswerCoTPromptFormat(WordAnswerCoTPromptFormat, AltCoTPromptFormat):
+    def __init__(self, llm_bundle):
+        AltCoTPromptFormat.__init__(self, llm_bundle)
+        self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
+                              f"{self.explanation_tag} <Your explanation>\n"
+                              f"{self.final_answer_tag} <Your final answer only>")
+
+    def obtain_answers(self, decoded_responses):
+        return WordAnswerCoTPromptFormat.obtain_answers(self, decoded_responses)
+
+
 class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
     """
     Alternative CoT Prompt Format without the *s.
@@ -244,7 +286,18 @@ class PromptVersion(Enum):
         except KeyError:
             raise ValueError(f"{name} is not a valid {cls.__name__}")
 
-    def __call__(self, mcq=False):
-        mcq = 1 if mcq else 0
-        formatters = [CoTPromptFormat, AltCoTPromptFormat, MCQCoTPromptFormat, AltMCQCoTPromptFormat]
-        return formatters[mcq * len(self.__class__.__members__) + self.value]
+    def __call__(self, variant=None):
+        mult = 0
+        if variant == "mcq":
+            mult = 1
+        elif variant == "worded":
+            mult = 2
+        elif variant is not None:
+            assert False, f"variant {variant} unrecognised."
+        formatters = [CoTPromptFormat,
+                      AltCoTPromptFormat,
+                      MCQCoTPromptFormat,
+                      AltMCQCoTPromptFormat,
+                      WordAnswerCoTPromptFormat,
+                      AltWordAnswerCoTPromptFormat]
+        return formatters[mult * len(self.__class__.__members__) + self.value]

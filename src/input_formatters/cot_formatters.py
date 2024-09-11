@@ -79,7 +79,7 @@ class AQUARATCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.AQUARAT(),
-                         prompt_version(mcq=True)(llm_bundle),
+                         prompt_version(variant="mcq")(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -97,7 +97,7 @@ class AQUARATCoT(CoTInputFormatter):
         return torch.Tensor(correctness).to(torch.uint8)
 
 
-class TRIVIAQACoT(CoTInputFormatter):
+class SQUADV2CoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  prompt_version: PromptVersion,
@@ -106,8 +106,8 @@ class TRIVIAQACoT(CoTInputFormatter):
                  calib_dset_size=None,
                  test_dset_size=None):
         super().__init__(llm_bundle,
-                         DatasetType.TRIVIAQA(),
-                         prompt_version()(llm_bundle),
+                         DatasetType.SQUADV2(),
+                         prompt_version(variant="worded")(llm_bundle),
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -115,12 +115,17 @@ class TRIVIAQACoT(CoTInputFormatter):
 
     def correctness(self, predictions: list[str], labels: list, successful: torch.Tensor):
         assert len(predictions) == len(labels)
+        metric = load("squad_v2")
+
         correctness = []
         for pred, label, succ in zip(predictions, labels, successful):
+            print(pred, label, succ)
             if not succ:
                 correctness.append(False)
                 continue
-            pred = pred.lower()
-            correctness.append(pred in label)
+            prediction = [{"prediction_text": pred, "id": "x", "no_answer_probability": 0}]
+            reference = [{"answers": label, "id": "x"}]
+            result = metric.compute(predictions=prediction, references=reference)["f1"]
+            correctness.append(result >= 80)
         return torch.Tensor(correctness).to(torch.uint8)
 

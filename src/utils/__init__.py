@@ -34,12 +34,32 @@ except:
     HF_TOKEN = None
 
 
+class WeightedMSELoss(nn.Module):
+    """
+    Weighted MSE loss which takes labels that transforms a label of 1 to the weight, and a label of 0 to the
+    """
+    def __init__(self, weight):
+        super().__init__()
+        assert 0 <= weight <= 1
+
+        self.weight = weight
+        self.criterion = nn.MSELoss(reduction="sum")
+
+    def forward(self, confs, labels):
+        mask = labels == 1
+
+        correct_losses = self.criterion(confs[mask], labels[mask])
+        incorrect_losses = self.criterion(confs[~mask], labels[~mask])
+        return 1/len(confs) * ((1 - self.weight) * correct_losses + self.weight * incorrect_losses)
+
+
 class LossFunc(Enum):
     CALIB_AWARE = 0
     BCE = 1
+    WEIGHTED_CALIB_AWARE = 2
 
-    def __call__(self):
-        losses = [nn.MSELoss(), nn.BCELoss()]
+    def __call__(self, *args, **kwargs):
+        losses = [nn.MSELoss(), nn.BCELoss(), WeightedMSELoss(*args, **kwargs)]
         return losses[self.value]
 
     @classmethod

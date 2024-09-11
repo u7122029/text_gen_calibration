@@ -239,7 +239,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                              batch_size=batch_size,
                                                                              desc="Get Logits + Tokens (Calib)")
             all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
-                self.llm_bundle.tokeniser.batch_decode(self.calib_dataset["tokens"])
+                self.llm_bundle.tokeniser.batch_decode(self.calib_dataset["tokens"], skip_special_tokens=True)
             )
             self.calib_dataset["correct"] = self.correctness(all_predictions,
                                                              self.calib_dataset["answer"],
@@ -277,7 +277,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                             desc="Get Logits + Tokens (Test)")
 
             all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
-                self.llm_bundle.tokeniser.batch_decode(self.test_dataset["tokens"])
+                self.llm_bundle.tokeniser.batch_decode(self.test_dataset["tokens"], skip_special_tokens=True)
             )
             self.test_dataset["correct"] = self.correctness(all_predictions,
                                                             self.test_dataset["answer"],
@@ -337,7 +337,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                    recompute=recompute_logits)
 
         weights_path = self.calibrator_dir
-        calibrator = self.calibrator_type(self.llm_bundle, self.loss_fn())
+        calibrator = self.calibrator_type(self.llm_bundle, self.loss_fn(weight=torch.mean(calib_data["correct"].float())))
         self.perform_calibration(calibrator, calib_data, weights_path, batch_size)
 
         # Test the calibrator.

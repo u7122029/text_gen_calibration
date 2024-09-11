@@ -29,11 +29,11 @@ def show_results(calib_data: DictDataset,
     test_results.display()
 
 
-def main(input_formatter_name: str="GSMCoT",
+def main(input_formatter_name: str="SQUADV2CoT",
          calibrator_name="TemperatureScaling",
          loss_fn="CALIB_AWARE",
          cot_version="DEFAULT",
-         model_name="microsoft/Phi-3-mini-128k-instruct",
+         model_name="microsoft/Phi-3-mini-4k-instruct",
          batch_size=4,
          calib_dset_size=None,
          test_dset_size=None,
