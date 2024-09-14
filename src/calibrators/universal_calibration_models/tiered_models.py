@@ -118,3 +118,44 @@ class TieredScalerModel(TieredModel):
             x[mask] = 1 / (1 + torch.exp(self.a * x[mask] + self.b))
 
         return x  # [confs]
+
+
+class TieredPTSModel(TieredModel):
+    """
+    Performs regular temperature scaling on the logits, then performs two separate parametric temperature scaling
+    instances on the top and bottom tokens.
+    """
+    def __init__(self):
+        super().__init__()
+        self.top_token_ids = None
+
+        self.top_linear = None
+        self.general_temp = nn.Parameter(torch.tensor(1.0))
+
+        self.ready = False
+
+    def forward(self, x, tokens=None):
+        assert self.ready
+        # x.shape: [logit_vec, vocab size]
+        x = x / self.general_temp
+        if self.top_token_ids is not None:
+            top_temp = self.top_linear(x[:, self.top_token_ids])
+            x[:, self.top_token_ids] = x[:, self.top_token_ids] / top_temp
+
+        # if self.bot_token_ids is not None:
+        #     bot_temp = self.bot_linear(x[:, self.bot_token_ids])
+        #     x[:, self.bot_token_ids] = x[:, self.bot_token_ids] / bot_temp
+
+        x = torch.softmax(x, dim=1)
+        if tokens is not None:
+            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        else:
+            x = torch.max(x, dim=1).values
+        return x  # [confs]
+
+    def set_tokens(self, top_token_ids: Optional[torch.Tensor]):
+        super().set_tokens(top_token_ids)
+
+        if self.top_token_ids is not None:
+            self.top_linear = nn.Linear(in_features=len(self.top_token_ids), out_features=1)
+

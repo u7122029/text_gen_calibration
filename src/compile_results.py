@@ -1,6 +1,8 @@
 from typing import Optional
 
 import fire
+import simple_colors as sc
+
 from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
@@ -105,19 +107,45 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
         "Loss Function": loss_func_name
     }
 
-    calibrator_names = ["LastHiddenStateCalibrator",
+    calibrator_names = ["APRICOT_Original",
+                        "TokenCalibrator",
+                        "APRICOT_TemperatureScaling",
+                        "FrequencyPTS_MSR",
+                        "FrequencyPTS_M",
+                        "FrequencyPTS_S",
+                        "FrequencyPTS_R",
+                        "FrequencyPTS_MS",
+                        "FrequencyPTS_MR",
+                        "FrequencyPTS_SR",
+                        "LastHiddenStateCalibrator",
                         "TemperatureScaling",
                         "FrequencyTS_MSR",
                         "FrequencyTS_M",
-                        "FrequencyTS_SR",
+                        "FrequencyTS_S",
                         "FrequencyTS_R",
                         "FrequencyTS_MR",
-                        "FrequencyTS_MS"]
+                        "FrequencyTS_SR",
+                        "FrequencyTS_MS",
+                        "APRICOT_FrequencyTS_MSR",
+                        "APRICOT_FrequencyTS_M",
+                        "APRICOT_FrequencyTS_S",
+                        "APRICOT_FrequencyTS_R",
+                        "APRICOT_FrequencyTS_MS",
+                        "APRICOT_FrequencyTS_SR",
+                        "APRICOT_FrequencyTS_MR",
+                        "FLHS_MSR",
+                        "FLHS_M",
+                        "FLHS_S",
+                        "FLHS_R",
+                        "FLHS_SR",
+                        "FLHS_MS",
+                        "FLHS_MR"]
 
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
 
     for calibrator_name in calibrator_names:
+        print(sc.green(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
         id_if: InputFormatter = input_formatter_dict[input_formatter](llm_bundle,
                                                                       prompt_version,
@@ -141,11 +169,11 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
 
     print(calib_details)
     print()
-    print(calib_table)
+    print(calib_table.sort_values("ece_calib"))
     print()
     print(test_details)
     print()
-    print(test_table)
+    print(test_table.sort_values("ece_calib"))
 
 
 def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",

@@ -208,3 +208,11 @@ class FrequencyTS_R(LogitTokenFrequencyCalibrator):
 
     def metric(self, mean, std, response_frequency_ratio):
         return torch.tensor(response_frequency_ratio)
+
+
+class FrequencyTS_S(LogitTokenFrequencyCalibrator):
+    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
+        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
+
+    def metric(self, mean, std, response_frequency_ratio):
+        return std_proc(std)

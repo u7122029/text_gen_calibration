@@ -53,12 +53,12 @@ class FrequencyLastHiddenStateCalibrator(LastHiddenStateCalibrator, TokenFrequen
 
 class FLHS_MSR(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return mean * std_proc(std) * rfr
+        return torch.tensor(mean * std_proc(std) * rfr)
 
 
 class FLHS_M(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return mean
+        return torch.tensor(mean)
 
 
 class FLHS_S(FrequencyLastHiddenStateCalibrator):
@@ -68,7 +68,7 @@ class FLHS_S(FrequencyLastHiddenStateCalibrator):
 
 class FLHS_R(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return rfr
+        return torch.tensor(rfr)
 
 
 class FLHS_SR(FrequencyLastHiddenStateCalibrator):
@@ -78,4 +78,9 @@ class FLHS_SR(FrequencyLastHiddenStateCalibrator):
 
 class FLHS_MR(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return mean * rfr
+        return torch.tensor(mean * rfr)
+
+
+class FLHS_MS(FrequencyLastHiddenStateCalibrator):
+    def metric(self, mean, std, rfr):
+        return torch.tensor(mean * std_proc(std))

@@ -95,7 +95,7 @@ def main(model_name="microsoft/Phi-3-mini-4k-instruct",
          input_formatter="SQUADV2CoT",
          loss_type="CORRECT_AWARE",
          prompt_formatter="WordAnswerCoTPromptFormat",
-         calibrator_name="APRICOT_Original"):
+         calibrator_name="FLHS_S"):
 
     data_path = Path(RESULTS_PATH) / model_name / input_formatter / prompt_formatter
     figures_path = Path(FIGURES_PATH)
