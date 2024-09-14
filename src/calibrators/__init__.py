@@ -12,6 +12,7 @@ from .frequency_ts_scaling import *
 from .platt_scaling import *
 from .token_response_scaler import *
 from .lhs_ts import *
+from .lhs_fts import *
 
 
 """class TemperatureWithLinearity(LogitCalibrator):
@@ -432,26 +433,6 @@ class WATCCalibrator(Calibrator):
         confs_after_calib = torch.Tensor(all_calibrated_confs)
         confs_before_calib = torch.Tensor(all_uncalibrated_confs)
         return all_preds, confs_before_calib, confs_after_calib, None"""
-
-
-class NullCalibrator(Calibrator, ABC):
-    """
-    Calibrator that does nothing. Practical as a placeholder that should never be used.
-    """
-    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module):
-        super().__init__(llm_bundle, loss_fn, None)
-
-    def calibrate(self, calibration_dset: DictDataset, **kwargs) -> None:
-        pass
-
-    def test_loop(self, test_dset: DictDataset):
-        pass
-
-    def save(self, filepath, **kwargs):
-        pass
-
-    def load(self, filepath):
-        pass
 
 
 classes = inspect.getmembers(sys.modules[__name__], class_predicate(Calibrator))

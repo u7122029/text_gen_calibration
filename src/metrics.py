@@ -30,7 +30,7 @@ class BrierScore(Metric):
         self.total += targets.numel()
 
     def compute(self) -> torch.Tensor:
-        return torch.sum((self.preds - self.targets) ** 2) / self.total
+        return torch.sum((self.preds - self.targets)**2) / self.total
 
 
 class ModelMetrics:
@@ -173,6 +173,7 @@ class ModelMetricsCollection(list[ModelMetrics]):
 
         table = {
             key: [],
+            "accuracy": [],
             "ece_logits": [],
             "ece_verbalised": [],
             "ece_calib": [],
@@ -188,6 +189,9 @@ class ModelMetricsCollection(list[ModelMetrics]):
         }
         for x in self:
             table[key].append(x.extra_details[key])
+
+            table["accuracy"].append(x.accuracy)
+
             table["ece_logits"].append(x.ece_logits)
             table["ece_verbalised"].append(x.ece_verbalised),
             table["ece_calib"].append(x.ece_calibrated)

@@ -12,7 +12,7 @@ from utils import HF_TOKEN, dill_save, DEVICE
 
 class TextGenLLMBundle(LLMBundle):
     def get_model(self):
-        try:
+        """try:
             print("Attempting to use flash attention 2")
             self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
                                                                   device_map="auto",
@@ -21,11 +21,11 @@ class TextGenLLMBundle(LLMBundle):
                                                                   attn_implementation="flash_attention_2")
             print("Successfully loaded model with flash attention 2.")
         except:
-            print("Failed to use flash attention 2. Loading default model.")
-            self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
-                                                                  device_map="auto",
-                                                                  torch_dtype=torch.float16,
-                                                                  token=HF_TOKEN)
+            print("Failed to use flash attention 2. Loading default model.")"""
+        self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
+                                                              device_map="auto",
+                                                              torch_dtype=torch.float16,
+                                                              token=HF_TOKEN)
         self.llm_model.eval()
         self.lm_head = self.llm_model.lm_head
 

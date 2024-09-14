@@ -5,6 +5,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Type, Any
 import simple_colors as sc
+from torchmetrics.classification import BinaryCalibrationError
 
 from torch import nn
 
@@ -53,13 +54,47 @@ class WeightedMSELoss(nn.Module):
         return 1/len(confs) * ((1 - self.weight) * correct_losses + self.weight * incorrect_losses)
 
 
+class L2ECELoss(nn.Module):
+    """
+    Manual implementation of the L2 ECE because the torchmetrics version cannot be backpropagated.
+    """
+    def __init__(self, n_bins=15, device='cuda'):
+        super(L2ECELoss, self).__init__()
+        self.n_bins = n_bins
+        self.device = device
+
+    def forward(self, confidences, accuracies):
+        bin_boundaries = torch.linspace(0, 1, self.n_bins + 1, device=self.device)
+        bin_lowers = bin_boundaries[:-1]
+        bin_uppers = bin_boundaries[1:]
+
+        ece = torch.tensor(0.0, device=self.device)
+        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+            in_bin = confidences.gt(bin_lower.item()) * confidences.le(bin_upper.item())
+            prop_in_bin = in_bin.float().mean()
+            if prop_in_bin.item() > 0:
+                accuracy_in_bin = accuracies[in_bin].float().mean()
+                avg_confidence_in_bin = confidences[in_bin].mean()
+                ece += torch.square(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+
+        return ece
+
+
 class LossFunc(Enum):
-    CALIB_AWARE = 0
+    """
+    Loss Function Enum
+    Note that the Calibration Aware Loss is already weighted by confidence bins.
+    """
+    CORRECT_AWARE = 0
     BCE = 1
-    WEIGHTED_CALIB_AWARE = 2
+    WEIGHTED_CORRECT_AWARE = 2
+    CALIB_AWARE = 3
 
     def __call__(self, *args, **kwargs):
-        losses = [nn.MSELoss(), nn.BCELoss(), WeightedMSELoss(*args, **kwargs)]
+        losses = [nn.MSELoss(),
+                  nn.BCELoss(),
+                  WeightedMSELoss(*args, **kwargs),
+                  L2ECELoss()]
         return losses[self.value]
 
     @classmethod

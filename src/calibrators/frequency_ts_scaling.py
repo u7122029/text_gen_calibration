@@ -1,8 +1,8 @@
-from .frequency_ts import FrequencyTS, compute_top_bot_dfs, std_proc
+from .frequency_ts import *
 from .universal_calibration_models.tiered_models import TieredScalerModel
 
 
-class FrequencyScaler(FrequencyTS):
+class FrequencyScaler(LogitTokenFrequencyCalibrator):
     """
     Calibrates a model by using token confidences across all responses.
 

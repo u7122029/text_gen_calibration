@@ -266,7 +266,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         if (test_filepath / "data.dill").exists() and not recompute:
             print(f"Found existing test data in {test_filepath}")
             test_conf_dset = dill_load(test_filepath / "data.dill")
-            print(sc.green(len(self.test_dataset)))
+            #print(sc.green(len(self.test_dataset)))
             self.test_dataset.update(test_conf_dset)
         else:
             print(f"test data at ({test_filepath}) not found.")
@@ -316,7 +316,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             calibrator.save(cw_path)
 
     def run_pipeline(self,
-                     batch_size=1,
+                     batch_size=4,
                      recompute_logits=False,
                      recalibrate=False,
                      **kwargs) -> Tuple[DictDataset, DictDataset]:

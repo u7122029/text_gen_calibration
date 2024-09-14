@@ -105,7 +105,14 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
         "Loss Function": loss_func_name
     }
 
-    calibrator_names = ["LastHiddenStateCalibrator", "TemperatureScaling", "FrequencyTS", "FrequencyScaler", "FrequencyTSNoMean", "FrequencyTSNoRFR", "FrequencyTSNoStd"]
+    calibrator_names = ["LastHiddenStateCalibrator",
+                        "TemperatureScaling",
+                        "FrequencyTS_MSR",
+                        "FrequencyTS_M",
+                        "FrequencyTS_SR",
+                        "FrequencyTS_R",
+                        "FrequencyTS_MR",
+                        "FrequencyTS_MS"]
 
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
@@ -126,7 +133,7 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
         calib_collection.append(calib_results)
         test_collection.append(test_results)
 
-    control_keys = []
+    control_keys = ["accuracy"]
     for name in ["ece", "brier", "auroc", "auprc"]:
         control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
     calib_table, calib_details = calib_collection.generate_tables("Calibrator", control_keys)
@@ -141,11 +148,11 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_table)
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
-         loss_func_name: str="CALIB_AWARE",
+         loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="GSMCoT",
+         id_input_formatter_name: str="SQUADV2CoT",
          ood_input_formatter_name: Optional[str]=None):
     """
 

@@ -1,13 +1,8 @@
-import pandas as pd
-import torch
-
-from calibrators.frequency_ts import FrequencyTS
+from calibrators.frequency_ts import FrequencyTS_MSR
 from calibrators.universal_calibration_models import TieredPTSModel
-from data import DictDataset
-from utils import dill_load
 
 
-class FrequencyPTS(FrequencyTS):
+class FrequencyPTS(FrequencyTS_MSR):
     """
     Calibrates a model by using token confidences across all responses.
 

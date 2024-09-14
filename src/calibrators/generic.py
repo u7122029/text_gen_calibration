@@ -124,7 +124,7 @@ class LogitCalibrator(Calibrator, ABC):
     def calibrate(self,
                   calibration_dset: DictDataset,
                   batch_size=1,
-                  epochs=30,
+                  epochs=50,
                   lr=0.01,
                   _postprocess_fn=None,
                   **kwargs) -> Optional[EarlyStopping]:
