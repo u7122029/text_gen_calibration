@@ -42,10 +42,25 @@ calibrator_names = ["APRICOT_Original",
                     "FLHS_R",
                     "FLHS_SR",
                     "FLHS_MS",
-                    "FLHS_MR"]
+                    "FLHS_MR",
+                    "FLHS_MSR",
+                    "APRICOT_FLHS_M",
+                    "APRICOT_FLHS_S",
+                    "APRICOT_FLHS_R",
+                    "APRICOT_FLHS_SR",
+                    "APRICOT_FLHS_MS",
+                    "APRICOT_FLHS_MR"]
 
 
 def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
+    """
+    @deprecated
+    @param model_name:
+    @param calibrator_name:
+    @param prompt_version:
+    @param id_if_name:
+    @return:
+    """
     llm_bundle = TextGenLLMBundle(model_name)
     id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
     ood_if_names = set(input_formatter_dict.keys()) - {id_if_name}
@@ -166,7 +181,7 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_table.sort_values("ece_calib"))
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
          loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
