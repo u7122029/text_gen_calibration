@@ -147,10 +147,12 @@ class InputFormatter(ABC):
         @param use_full_dset: Whether the full dataset should be used.
         @return:
         """
+        self.llm_bundle.load_model(silent=True, lm_head_only=True)
         save_path = (original_input_formatter.calibrator_dir /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calibration_and_test_data(batch_size)
+        accuracy = torch.mean(calib_data["correct"].float())
         if use_full_dset:
             test_data = test_data.join(calib_data)
         del calib_data
@@ -164,7 +166,7 @@ class InputFormatter(ABC):
             original_input_formatter.run_pipeline(batch_size=4)
 
             calibrator = original_input_formatter.calibrator_type(original_input_formatter.llm_bundle,
-                                                                  original_input_formatter.loss_fn())
+                                                                  original_input_formatter.loss_fn(weight=accuracy))
             calibrator.load(original_input_formatter.calibrator_dir / "calib_weights.dill")
 
             print("Testing calibrator on test_data")

@@ -61,8 +61,6 @@ def reliability_diagram(preds, confs, title, n_bins=15):
     # Create a color map and normalize bin_total values
     cmap = colormaps["Wistia"]
     norm = Normalize(vmin=0, vmax=np.sum(bin_total))
-
-    # Plot bars with different shades of blue
     bars = ax.bar(bar_centers, prob_true, width=bar_width, alpha=0.7, edgecolor='black',
                   color=[cmap(norm(count)) for count in bin_total])
 
@@ -95,21 +93,23 @@ def main(model_name="microsoft/Phi-3-mini-4k-instruct",
          input_formatter="SQUADV2CoT",
          loss_type="CORRECT_AWARE",
          prompt_formatter="WordAnswerCoTPromptFormat",
-         calibrator_name="FLHS_S"):
+         calibrator_name="APRICOT_Original"):
 
     data_path = Path(RESULTS_PATH) / model_name / input_formatter / prompt_formatter
-    figures_path = Path(FIGURES_PATH)
-    test_data = DictDataset.from_file(data_path / "calib_data" / "data.dill")
-    test_results = dill_load(data_path / loss_type / calibrator_name / "calib_results.dill")
+    figures_path = Path(FIGURES_PATH) / model_name / input_formatter / prompt_formatter / loss_type / calibrator_name
+    test_data = DictDataset.from_file(data_path / "test_data" / "data.dill")
+    test_results = dill_load(data_path / loss_type / calibrator_name / "test_results.dill")
     test_data = test_data.update(test_results)
     print(test_data.keys())
+
+    # Plot and save figures
     fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"], f"Logit-based Confidences ({model_name})")
-    fig.savefig(figures_path / "example_logits.png", dpi=600)
+    fig.savefig(figures_path / "logits.png", dpi=600)
     fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"], f"Verbalised Confidences ({model_name})")
-    fig1.savefig(figures_path / "example_verbalised.png", dpi=600)
+    fig1.savefig(figures_path / "verbalised.png", dpi=600)
     fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
                                     f"Calibrated Confidences ({model_name}, {calibrator_name})")
-    fig2.savefig(figures_path / "example_FLHS_MSR.png", dpi=600)
+    fig2.savefig(figures_path / "calibrated.png", dpi=600)
     plt.show()
 
 

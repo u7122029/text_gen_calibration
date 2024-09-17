@@ -10,6 +10,40 @@ from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
 from utils import LossFunc
 
+calibrator_names = ["APRICOT_Original",
+                    "TokenCalibrator",
+                    "APRICOT_TemperatureScaling",
+                    "FrequencyPTS_MSR",
+                    "FrequencyPTS_M",
+                    "FrequencyPTS_S",
+                    "FrequencyPTS_R",
+                    "FrequencyPTS_MS",
+                    "FrequencyPTS_MR",
+                    "FrequencyPTS_SR",
+                    "LastHiddenStateCalibrator",
+                    "TemperatureScaling",
+                    "FrequencyTS_MSR",
+                    "FrequencyTS_M",
+                    "FrequencyTS_S",
+                    "FrequencyTS_R",
+                    "FrequencyTS_MR",
+                    "FrequencyTS_SR",
+                    "FrequencyTS_MS",
+                    "APRICOT_FrequencyTS_MSR",
+                    "APRICOT_FrequencyTS_M",
+                    "APRICOT_FrequencyTS_S",
+                    "APRICOT_FrequencyTS_R",
+                    "APRICOT_FrequencyTS_MS",
+                    "APRICOT_FrequencyTS_SR",
+                    "APRICOT_FrequencyTS_MR",
+                    "FLHS_MSR",
+                    "FLHS_M",
+                    "FLHS_S",
+                    "FLHS_R",
+                    "FLHS_SR",
+                    "FLHS_MS",
+                    "FLHS_MR"]
+
 
 def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
@@ -44,18 +78,7 @@ def vary_calibrator_ood(model_name: str,
                         ood_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
-    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, loss_func) # NOTE: TEMPORARY DATASET SIZES.
 
-    calibrator_names = ["TemperatureScaling",
-                        "PTS_1L",
-                        "FrequencyTS",
-                        "FrequencyTSMeanOnly",
-                        "FrequencyTSNoStd",
-                        "FrequencyTSNoRFR",
-                        "APRICOT_FrequencyTS",
-                        "APRICOT_FrequencyTSMeanOnly",
-                        "APRICOT_FrequencyTSNoStd",
-                        "APRICOT_FrequencyTSNoRFR"]
 
     collection = ModelMetricsCollection()
     collection.details = {
@@ -68,6 +91,7 @@ def vary_calibrator_ood(model_name: str,
 
     for calibrator_name in calibrator_names:
         calibrator_type = calibrator_dict[calibrator_name]
+        id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, calibrator_type, loss_func)
         ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle,
                                                                    prompt_version,
                                                                    calibrator_type,
@@ -79,13 +103,13 @@ def vary_calibrator_ood(model_name: str,
         collection.append(ModelMetrics(test_results, **details))
         del test_results
 
-    control_keys = []
+    control_keys = ["accuracy"]
     for name in ["ece", "brier", "auroc", "auprc"]:
         control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
     table, details_tab = collection.generate_tables("Calibrator", control_keys)
     print(details_tab)
     print()
-    print(table)
+    print(table.sort_values("ece_calib"))
 
 
 def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
@@ -106,40 +130,6 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
         "Input Formatter": input_formatter,
         "Loss Function": loss_func_name
     }
-
-    calibrator_names = ["APRICOT_Original",
-                        "TokenCalibrator",
-                        "APRICOT_TemperatureScaling",
-                        "FrequencyPTS_MSR",
-                        "FrequencyPTS_M",
-                        "FrequencyPTS_S",
-                        "FrequencyPTS_R",
-                        "FrequencyPTS_MS",
-                        "FrequencyPTS_MR",
-                        "FrequencyPTS_SR",
-                        "LastHiddenStateCalibrator",
-                        "TemperatureScaling",
-                        "FrequencyTS_MSR",
-                        "FrequencyTS_M",
-                        "FrequencyTS_S",
-                        "FrequencyTS_R",
-                        "FrequencyTS_MR",
-                        "FrequencyTS_SR",
-                        "FrequencyTS_MS",
-                        "APRICOT_FrequencyTS_MSR",
-                        "APRICOT_FrequencyTS_M",
-                        "APRICOT_FrequencyTS_S",
-                        "APRICOT_FrequencyTS_R",
-                        "APRICOT_FrequencyTS_MS",
-                        "APRICOT_FrequencyTS_SR",
-                        "APRICOT_FrequencyTS_MR",
-                        "FLHS_MSR",
-                        "FLHS_M",
-                        "FLHS_S",
-                        "FLHS_R",
-                        "FLHS_SR",
-                        "FLHS_MS",
-                        "FLHS_MR"]
 
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
@@ -176,11 +166,11 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_table.sort_values("ece_calib"))
 
 
-def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="SQUADV2CoT",
+         id_input_formatter_name: str="GSMCoT",
          ood_input_formatter_name: Optional[str]=None):
     """
 
@@ -203,47 +193,14 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
     if ood_input_formatter_name is None and calibrator_name is None:
+        print("vary_calibrator_id")
         vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
     elif ood_input_formatter_name is None:
+        print("vary_ood_if")
         vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
     elif calibrator_name is None:
+        print("vary_calibrator_ood")
         vary_calibrator_ood(model_name, prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
-
-    """input_formatter: InputFormatter = input_formatter_dict[id_input_formatter_name]
-    results_root = Path(RESULTS_PATH)
-    metric_results_calib = ModelMetricsCollection()
-    metric_results_test = ModelMetricsCollection()
-
-    llm_bundle = TextGenLLMBundle(model_name)
-    input_formatter = input_formatter(llm_bundle, 300, 300)
-    for calibrator_name in ['TemperatureScaling',
-                            'FrequencyTS',
-                            'FrequencyTSBotOnly',
-                            'FrequencyTSMeanOnly',
-                            'FrequencyTSMeanStdOnly',
-                            'FrequencyTSNoRF',
-                            'FrequencyTSTopOnly']:
-        calibrator = calibrator_dict[calibrator_name]
-        calib_data, test_data = input_formatter.run_pipeline(calibrator)
-        results_dir = results_root / model_name / input_formatter.__class__.__name__ / calibrator_name
-        calib_results = dill_load(results_dir / "calib_results.dill")
-        test_results = dill_load(results_dir / "test_results.dill")
-        calib_data.update(calib_results)
-        test_results.update(test_results)
-
-        metric_results_calib.append(ModelMetrics(calib_data, calibrator_name))
-        metric_results_test.append(ModelMetrics(test_data, calibrator_name))
-
-    #for metric_result in metric_results_calib:
-    #    print(len(metric_result))
-    pd.set_option('display.expand_frame_repr', False)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.width', None)
-    pd.set_option('display.max_colwidth', None)
-    with open("temp_output.txt", "w") as f:
-        f.write(metric_results_calib.generate_tables().to_markdown(index=False) + "\n\n")
-        f.write(metric_results_test.generate_tables().to_markdown(index=False))"""
 
 
 if __name__ == "__main__":
