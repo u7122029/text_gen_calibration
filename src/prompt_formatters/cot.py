@@ -18,6 +18,7 @@ class CoTModelConfig(Enum):
 
             # confirmed models.
             "google/gemma-2-2b-it": cls.USER_CHAT,
+            "stabilityai/stablelm-zephyr-3b": cls.SYSTEM_USER_CHAT,
             "google/gemma-2-9b-it": cls.USER_CHAT,
             "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,

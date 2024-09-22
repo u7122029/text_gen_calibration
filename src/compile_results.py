@@ -94,7 +94,6 @@ def vary_calibrator_ood(model_name: str,
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
 
-
     collection = ModelMetricsCollection()
     collection.details = {
         "LLM": model_name,
@@ -185,7 +184,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
          loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="GSMCoT",
+         id_input_formatter_name: str="SQUADV2CoT",
          ood_input_formatter_name: Optional[str]=None):
     """
 
@@ -204,7 +203,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
                 for x in [model_name,
                           calibrator_name,
                           loss_func_name,
-                          prompt_version,
+                          prompt_format,
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
     if ood_input_formatter_name is None and calibrator_name is None:

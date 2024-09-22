@@ -1,6 +1,13 @@
+from typing import Optional
+
 import fire
 from pathlib import Path
-from utils import dill_load, RESULTS_PATH, FIGURES_PATH
+
+from calibrators import calibrator_dict
+from input_formatters import input_formatter_dict
+from llm_models import TextGenLLMBundle
+from prompt_formatters import PromptVersion
+from utils import dill_load, RESULTS_PATH, FIGURES_PATH, LossFunc
 from data import DictDataset
 import torch
 
@@ -84,19 +91,55 @@ def reliability_diagram(preds, confs, title, n_bins=15):
     # Add a colorbar
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    cbar = plt.colorbar(sm, ax=ax, label='Samples in bin')
+    #cbar = plt.colorbar(sm, ax=ax, label='Samples in bin')
 
     return fig, ax
 
 
-def main(model_name="microsoft/Phi-3-mini-4k-instruct",
-         input_formatter="SQUADV2CoT",
-         loss_type="CORRECT_AWARE",
-         prompt_formatter="WordAnswerCoTPromptFormat",
-         calibrator_name="APRICOT_Original"):
+def plot_ood(model_name: str,
+             calibrator_name: str,
+             #prompt_version: str,
+             ood_prompt_version: str,
+             loss_func_name: str,
+             id_if_name: str,
+             ood_if_name: str):
+    ood_prompt_version = PromptVersion.from_string(ood_prompt_version)
+    figures_path = Path(FIGURES_PATH) / model_name / id_if_name / ood_prompt_version.name / loss_func_name / calibrator_name / ood_if_name
+    figures_path.mkdir(parents=True, exist_ok=True)
 
-    data_path = Path(RESULTS_PATH) / model_name / input_formatter / prompt_formatter
-    figures_path = Path(FIGURES_PATH) / model_name / input_formatter / prompt_formatter / loss_type / calibrator_name
+    llm_bundle = TextGenLLMBundle(model_name)
+    loss_func = LossFunc.from_string(loss_func_name)
+
+    calibrator_type = calibrator_dict[calibrator_name]
+    id_if = input_formatter_dict[id_if_name](llm_bundle, ood_prompt_version, calibrator_type, loss_func)
+    ood_if = input_formatter_dict[ood_if_name](llm_bundle,
+                                               ood_prompt_version,
+                                               calibrator_type,
+                                               loss_func)
+
+    test_data = ood_if.test_calibrator(id_if)
+
+    # Plot and save figures
+    fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"],
+                                  f"Logit-based Confidences ({model_name})")
+    fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"],
+                                    f"Verbalised Confidences ({model_name})")
+    fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
+                                    f"{model_name}, {calibrator_name}")
+    fig2.savefig(figures_path / "calibrated.png", dpi=600)
+    plt.show()
+
+
+def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
+            input_formatter="SQUADV2CoT",
+            loss_type="CORRECT_AWARE",
+            prompt_version="DEFAULT",
+            calibrator_name="APRICOT_TemperatureScaling"):
+
+    data_path = Path(RESULTS_PATH) / model_name / input_formatter / prompt_version
+    figures_path = Path(FIGURES_PATH) / model_name / input_formatter / prompt_version
+    (figures_path / loss_type / calibrator_name).mkdir(exist_ok=True, parents=True)
+
     test_data = DictDataset.from_file(data_path / "test_data" / "data.dill")
     test_results = dill_load(data_path / loss_type / calibrator_name / "test_results.dill")
     test_data = test_data.update(test_results)
@@ -109,8 +152,49 @@ def main(model_name="microsoft/Phi-3-mini-4k-instruct",
     fig1.savefig(figures_path / "verbalised.png", dpi=600)
     fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
                                     f"Calibrated Confidences ({model_name}, {calibrator_name})")
+    fig2.savefig(figures_path / loss_type / calibrator_name / "calibrated.png", dpi=600)
+    plt.show()
+
+
+def plot_id1(model_name="microsoft/Phi-3-mini-4k-instruct",
+             input_formatter_name="SQUADV2CoT",
+             loss_func_name="CORRECT_AWARE",
+             prompt_version="DEFAULT",
+             calibrator_name="APRICOT_TemperatureScaling"):
+    prompt_version = PromptVersion.from_string(prompt_version)
+    figures_path = Path(FIGURES_PATH) / model_name / input_formatter_name / prompt_version.name / loss_func_name / calibrator_name
+    figures_path.mkdir(parents=True, exist_ok=True)
+
+    llm_bundle = TextGenLLMBundle(model_name)
+    loss_func = LossFunc.from_string(loss_func_name)
+
+    calibrator_type = calibrator_dict[calibrator_name]
+    input_formatter = input_formatter_dict[input_formatter_name](llm_bundle, prompt_version, calibrator_type, loss_func)
+    _, test_data = input_formatter.run_pipeline()
+    print(test_data.keys())
+
+    # Plot and save figures
+    fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"], f"Logit-based Confidences ({model_name})")
+    #fig.savefig(figures_path / "logits.png", dpi=600)
+    fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"], f"Verbalised Confidences ({model_name})")
+    #fig1.savefig(figures_path / "verbalised.png", dpi=600)
+    fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
+                                    f"Calibrated Confidences ({model_name}, {calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
     plt.show()
+
+
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
+         calibrator_name: str="APRICOT_TemperatureScaling",
+         prompt_version: str="DEFAULT",
+         #ood_prompt_version: str= "CoTPromptFormat",
+         loss_func_name: str="CORRECT_AWARE",
+         id_if_name: str="SQUADV2CoT",
+         ood_if_name: Optional[str]="GSMCoT"):
+    if ood_if_name is None:
+        plot_id1(model_name, id_if_name, loss_func_name, prompt_version, calibrator_name)
+    else:
+        plot_ood(model_name, calibrator_name, prompt_version, loss_func_name, id_if_name, ood_if_name)
 
 
 if __name__ == "__main__":

@@ -20,14 +20,14 @@ def get_squad_v2():
     extraction_indices = []
 
     del dataset["title"]
-    lengths = []
+    #lengths = []
     for i, (context, answer) in enumerate(zip(dataset["context"], dataset["answer"])):
         if len(answer["text"]) == 0:
             continue
 
         extraction_indices.append(i)
-        lengths.append(len(context.split()))
+        #lengths.append(len(context.split()))
 
-    print(f"Average context length: {torch.Tensor(lengths).mean().item()}")
+    #print(f"Average context length: {torch.Tensor(lengths).mean().item()}")
     dataset = dataset[extraction_indices]
     return dataset
