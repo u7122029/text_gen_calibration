@@ -77,13 +77,13 @@ class TieredTSModel(TieredModel):
 
     def top_temp_scale(self, x):
         if self.top_token_ids is not None:
-            x[:, self.top_token_ids] = x[:, self.top_token_ids] / self.top_temp
+            x[:, self.top_token_ids].div_(self.top_temp)
 
         return x
 
     def forward(self, x, tokens=None):
         # x.shape: [logit_vec, vocab size]
-        x = x / self.general_temp
+        x.div_(self.general_temp)
 
         x = self.top_temp_scale(x)
 
@@ -105,7 +105,7 @@ class TieredScalerModel(TieredModel):
 
     def forward(self, x, tokens=None):
         # x.shape: [logit_vec, vocab size]
-        x = x / self.general_temp
+        x.div_(self.general_temp)
 
         x = torch.softmax(x, dim=1)
         if tokens is not None:
@@ -115,7 +115,7 @@ class TieredScalerModel(TieredModel):
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask] = 1 / (1 + torch.exp(self.a * x[mask] + self.b))
+            x[mask] = torch.div(1, 1 + torch.exp(self.a * x[mask] + self.b))
 
         return x  # [confs]
 
@@ -137,10 +137,10 @@ class TieredPTSModel(TieredModel):
     def forward(self, x, tokens=None):
         assert self.ready
         # x.shape: [logit_vec, vocab size]
-        x = x / self.general_temp
+        x.div_(self.general_temp)
         if self.top_token_ids is not None:
             top_temp = self.top_linear(x[:, self.top_token_ids])
-            x[:, self.top_token_ids] = x[:, self.top_token_ids] / top_temp
+            x[:, self.top_token_ids].div_(top_temp)
 
         # if self.bot_token_ids is not None:
         #     bot_temp = self.bot_linear(x[:, self.bot_token_ids])

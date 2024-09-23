@@ -19,7 +19,7 @@ class TSModel(nn.Module):
 
     def forward(self, x, tokens):
         # x.shape: [logit_vec, vocab size]
-        x = x / self.temperature
+        x.div_(self.temperature)
         x = torch.softmax(x, dim=1)
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 
@@ -81,7 +81,7 @@ class PTSModel(nn.Module):
         t, _ = torch.sort(torch.topk(inp, self.first_layer_size, dim=1).values, dim=1, descending=True)
         t = torch.clip(nn.functional.softplus(self.layers(t)), min=1e-5)
 
-        x = inp / t
+        x = torch.div(inp, t)
         x = torch.softmax(x, dim=1)
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 

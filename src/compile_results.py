@@ -185,7 +185,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]=None):
+         ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
 
     @param model_name:
