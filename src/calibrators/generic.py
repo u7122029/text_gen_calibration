@@ -77,7 +77,7 @@ class Calibrator(ABC):
 
         out_dict = {
             "calibrated_confs": torch.Tensor(response_confs),
-            "token_calibrated_confs": token_confs,
+            "calibrated_token_probs": token_confs,
             "calibrated_successful": torch.ones(len(test_dset)).bool()
         }
         self.llm_bundle.lm_head.half()

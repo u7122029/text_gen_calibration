@@ -60,6 +60,7 @@ class TextGenLLMBundle(LLMBundle):
         all_final_hs_paths = []
         all_tokens_paths = []
         all_logit_confs = []
+        all_token_probs_paths = []
 
         dl = DataLoader(dset, batch_size=batch_size, collate_fn=dset.collate_fn("response_formatted"))
 
@@ -112,11 +113,17 @@ class TextGenLLMBundle(LLMBundle):
                 token_confidences = torch.take_along_dim(prob_vecs,
                                                          tokens.unsqueeze(1),
                                                          dim=1).squeeze(1)
+
+                token_probs_path = storage_root / idx_name / f"token_probs.dill"
+                dill_save(token_confidences, token_probs_path)
+                all_token_probs_paths.append(token_probs_path)
+
                 response_confidence = torch.mean(token_confidences).item()
                 all_logit_confs.append(response_confidence)
 
         dset = dset.update({"final_hidden_states": all_final_hs_paths,
                             "logits_confs": all_logit_confs,
+                            "token_probs": all_token_probs_paths,
                             "tokens": all_tokens_paths})
 
         return dset
