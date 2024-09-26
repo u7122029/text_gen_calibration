@@ -98,6 +98,35 @@ class AQUARATCoT(CoTInputFormatter):
         return torch.Tensor(correctness).to(torch.uint8)
 
 
+class MMLUCoT(CoTInputFormatter):
+    def __init__(self,
+                 llm_bundle: TextGenLLMBundle,
+                 prompt_version: PromptVersion,
+                 calibrator_type: Type[Calibrator],
+                 loss_fn: LossFunc,
+                 calib_dset_size=None,
+                 test_dset_size=None):
+        super().__init__(llm_bundle,
+                         DatasetType.MMLU(),
+                         prompt_version,
+                         calibrator_type,
+                         loss_fn,
+                         calib_dset_size,
+                         test_dset_size,
+                         _pf_variant="mcq")
+
+    def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
+        assert len(predictions) == len(labels)
+        correctness = []
+        for pred, label, succ in zip(predictions, labels, successful):
+            if not succ:
+                correctness.append(False)
+                continue
+            pred = pred.upper()
+            correctness.append(pred == label)
+        return torch.Tensor(correctness).to(torch.uint8)
+
+
 class SQUADV2CoT(CoTInputFormatter):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
