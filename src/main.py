@@ -29,8 +29,8 @@ def show_results(calib_data: DictDataset,
     test_results.display()
 
 
-def main(input_formatter_name: str="SQUADV2CoT",
-         calibrator_name="APRICOT_Original",
+def main(input_formatter_name: str="GSMCoT",
+         calibrator_name="LastHiddenStateCalibrator",
          loss_fn="CORRECT_AWARE",
          cot_version="DEFAULT",
          model_name="microsoft/Phi-3-mini-4k-instruct",

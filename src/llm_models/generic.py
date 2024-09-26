@@ -130,7 +130,7 @@ class LLMBundle(ABC):
         if lm_head_only:
             if self.lm_head is None:
                 self.get_model()
-            self.unload_model() # unload the feature layers.
+                self.unload_model() # unload the feature layers.
             return
 
         if self.llm_model is None:

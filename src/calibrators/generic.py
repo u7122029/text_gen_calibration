@@ -55,7 +55,13 @@ class Calibrator(ABC):
         pass
 
     @abstractmethod
-    def test_loop(self, test_dset: DictDataset):
+    def test_loop(self, test_dset: DictDataset) -> tuple:
+        """
+        Performs the test loop.
+        @param test_dset: The dataset to test the calibrator on.
+        @return: First argument is the response confidences i.e: the mean calibrated token confidences (given in the 2nd
+        argument if available). If the calibrator is not token/logit based, the 2nd argument should be a list of None.
+        """
         pass
 
     def test(self, test_dset: DictDataset, **kwargs) -> dict:
@@ -67,10 +73,11 @@ class Calibrator(ABC):
             warnings.warn("Calibrator model has not been loaded or trained. Expect dubious results.")
 
         with torch.no_grad():
-            confs_after_calibration = self.test_loop(test_dset)
+            response_confs, token_confs = self.test_loop(test_dset)
 
         out_dict = {
-            "calibrated_confs": torch.Tensor(confs_after_calibration),
+            "calibrated_confs": torch.Tensor(response_confs),
+            "token_calibrated_confs": token_confs,
             "calibrated_successful": torch.ones(len(test_dset)).bool()
         }
         self.llm_bundle.lm_head.half()
@@ -195,12 +202,14 @@ class LogitCalibrator(Calibrator, ABC):
         dill_save(_other_entries, filepath)
 
     def test_loop(self, test_dset):
-        confs_after_calibration = []
+        response_confs_after_calib = []
+        token_confs_after_calib = []
         for batch in tqdm(test_dset):
             inp = batch["final_hidden_states"].to(DEVICE).float()
             logits = self.llm_bundle.final_hs_to_logits(inp).to(DEVICE)
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(logits, tokens).cpu()
-            out = torch.mean(token_confs)
-            confs_after_calibration.append(out)
-        return confs_after_calibration
+
+            token_confs_after_calib.append(token_confs)
+            response_confs_after_calib.append(torch.mean(token_confs))
+        return response_confs_after_calib, token_confs_after_calib

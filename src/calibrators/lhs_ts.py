@@ -15,6 +15,7 @@ class LHSModel(nn.Module):
         self.llm_bundle = llm_bundle
         self.llm_bundle.load_model(silent=True)
         self.fc = nn.Linear(in_features=llm_bundle.llm_model.config.hidden_size, out_features=1)
+        self.llm_bundle.unload_model()
 
     def temp_scale(self, x):
         temperatures = nn.functional.softplus(self.fc(x))  # vector of temperatures.
@@ -50,12 +51,12 @@ class LastHiddenStateCalibrator(LogitCalibrator):
         super().calibrate(calibration_dset, *args, _postprocess_fn=lhs_token_repeat_label_key(self.label_key), **kwargs)
 
     def test_loop(self, test_dset):
-        print("here")
-        confs_after_calibration = []
+        response_confs_after_calib = []
+        token_confs_after_calib = []
         for batch in tqdm(test_dset):
             final_hidden_states = batch[self.input_key].to(DEVICE).float()
             tokens = batch["tokens"].to(DEVICE)
             token_confs = self.calibrator_model(final_hidden_states, tokens).cpu()
-            out = torch.mean(token_confs)
-            confs_after_calibration.append(out)
-        return confs_after_calibration
+            token_confs_after_calib.append(token_confs)
+            response_confs_after_calib.append(torch.mean(token_confs))
+        return response_confs_after_calib, token_confs_after_calib

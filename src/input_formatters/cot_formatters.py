@@ -21,7 +21,7 @@ class GSMCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.GSM(),
-                         prompt_version()(llm_bundle),
+                         prompt_version,
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -46,7 +46,7 @@ class MATHCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.MATH(),
-                         prompt_version()(llm_bundle),
+                         prompt_version,
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
@@ -79,11 +79,12 @@ class AQUARATCoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.AQUARAT(),
-                         prompt_version(variant="mcq")(llm_bundle),
+                         prompt_version,
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
-                         test_dset_size)
+                         test_dset_size,
+                         _pf_variant="mcq")
 
     def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
         assert len(predictions) == len(labels)
@@ -107,11 +108,12 @@ class SQUADV2CoT(CoTInputFormatter):
                  test_dset_size=None):
         super().__init__(llm_bundle,
                          DatasetType.SQUADV2(),
-                         prompt_version(variant="worded")(llm_bundle),
+                         prompt_version,
                          calibrator_type,
                          loss_fn,
                          calib_dset_size,
-                         test_dset_size)
+                         test_dset_size,
+                         _pf_variant="worded")
 
     def correctness(self, predictions: list[str], labels: list, successful: torch.Tensor):
         assert len(predictions) == len(labels)

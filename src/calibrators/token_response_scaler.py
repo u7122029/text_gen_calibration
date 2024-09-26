@@ -72,9 +72,11 @@ class TokenCalibrator(Calibrator):
         dill_save(_other_entries, filepath)
 
     def test_loop(self, test_dset):
-        confs_after_calibration = []
+        response_confs_after_calib = []
+        token_confs_after_calib = []
         for batch in tqdm(test_dset):
             input_batch = [f"{batch["question"]}\n{self.llm_bundle.tokeniser.decode(batch["tokens"], skip_special_tokens=True)}"]
             confs = self.calibrator_model(input_batch).cpu()
-            confs_after_calibration.extend(confs)
-        return confs_after_calibration
+            response_confs_after_calib.extend(confs)
+            token_confs_after_calib.extend([None] * len(confs))
+        return response_confs_after_calib, token_confs_after_calib

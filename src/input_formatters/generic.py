@@ -7,6 +7,7 @@ import torch
 
 from calibrators import Calibrator
 from data import DictDataset
+from prompt_formatters import PromptVersion
 from utils import dill_load, dill_save, RESULTS_PATH, LossFunc
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters.generic import PromptFormat
@@ -18,17 +19,18 @@ class InputFormatter(ABC):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
-                 prompt_formatter: PromptFormat,
+                 prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
                  loss_fn: LossFunc,
                  calib_dset_size: Optional[int] = None,
-                 test_dset_size: Optional[int] = None):
+                 test_dset_size: Optional[int] = None,
+                 _pf_variant: str = None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
 
         @param llm_bundle: The LLM bundle
         @param dataset: The dataset
-        @param prompt_formatter:
+        @param prompt_version:
         @param calibrator_type:
         @param loss_fn:
         @param calib_dset_size: The size of the calibration set. If this is none along with test_dset_size
@@ -52,13 +54,13 @@ class InputFormatter(ABC):
 
         self.__llm_bundle = llm_bundle
         self.__dataset = dataset
-        self.__prompt_formatter = prompt_formatter
+        self.__prompt_formatter = prompt_version(variant=_pf_variant)(llm_bundle)
         self.__loss_fn = loss_fn
 
         self.__logits_dir = (Path(RESULTS_PATH) /
                              self.llm_bundle.llm_name /
                              self.__class__.__name__ /
-                             self.prompt_formatter.__class__.__name__)
+                             prompt_version.name)
 
         self.logits_dir.mkdir(parents=True, exist_ok=True)
 
@@ -81,6 +83,7 @@ class InputFormatter(ABC):
     """
     Properties below make the corresponding attributes read-only while still being accessible through child classes.
     """
+
     @property
     def logits_dir(self):
         return self.__logits_dir
@@ -185,16 +188,17 @@ class CoTInputFormatter(InputFormatter, ABC):
     def __init__(self,
                  llm_bundle: TextGenLLMBundle,
                  dataset: DictDataset,
-                 prompt_formatter: PromptFormat,
+                 prompt_version: PromptVersion,
                  calibrator_type: Type[Calibrator],
                  loss_fn: LossFunc,
                  calib_dset_size: Optional[int] = None,
-                 test_dset_size: Optional[int] = None):
+                 test_dset_size: Optional[int] = None,
+                 _pf_variant=None):
         """
 
         @param llm_bundle:
         @param dataset:
-        @param prompt_formatter:
+        @param prompt_version:
         @param calibrator_type:
         @param loss_fn:
         @param calib_dset_size:
@@ -203,7 +207,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         InputFormatter.__init__(self,
                                 llm_bundle,
                                 dataset,
-                                prompt_formatter,
+                                prompt_version,
                                 calibrator_type,
                                 loss_fn,
                                 calib_dset_size,
@@ -339,7 +343,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                                                                    recompute=recompute_logits)
 
         weights_path = self.calibrator_dir
-        calibrator = self.calibrator_type(self.llm_bundle, self.loss_fn(weight=torch.mean(calib_data["correct"].float())))
+        calibrator = self.calibrator_type(self.llm_bundle,
+                                          self.loss_fn(weight=torch.mean(calib_data["correct"].float())))
         self.perform_calibration(calibrator, calib_data, weights_path, batch_size)
 
         # Test the calibrator.

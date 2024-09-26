@@ -47,13 +47,16 @@ class MeanLogitConfsPlattScaling(LogitCalibrator):
         super().calibrate(*args, **kwargs)
 
     def test_loop(self, test_dset):
-        confs_after_calibration = []
+        raise Exception("Need to fix this calibrator model. It doesn't work given the new framework for the Calibrator class.")
+        response_confs_after_calib = []
+        token_confs_after_calib = []
         for batch in tqdm(test_dset):
             logits = [batch["logits"].to(DEVICE)]
             tokens = [batch["tokens"].to(DEVICE)]
             out = self.calibrator_model(logits, tokens).cpu()
-            confs_after_calibration.extend(out)
-        return confs_after_calibration
+            response_confs_after_calib.extend(out)
+            token_confs_after_calib.extend([None] * len(out))
+        return response_confs_after_calib
 
 
 class VCPlattScaling(Calibrator):
