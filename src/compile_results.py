@@ -180,12 +180,12 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_table.sort_values("ece_calib"))
 
 
-def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: str="CORRECT_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]="GSMCoT"):
+         ood_input_formatter_name: Optional[str]="MATHCoT"):
     """
 
     @param model_name:

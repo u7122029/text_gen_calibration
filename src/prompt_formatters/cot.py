@@ -14,16 +14,18 @@ class CoTModelConfig(Enum):
     @classmethod
     def from_model_name(cls, name):
         name_dict = {
-            "google/gemma-1.1-2b-it": cls.USER_CHAT, # legacy model already downloaded on home machine for quick testing.
+            #"google/gemma-1.1-2b-it": cls.USER_CHAT, # legacy model already downloaded on home machine for quick testing.
 
             # confirmed models.
             "google/gemma-2-2b-it": cls.USER_CHAT,
-            "stabilityai/stablelm-zephyr-3b": cls.SYSTEM_USER_CHAT,
-            "google/gemma-2-9b-it": cls.USER_CHAT,
-            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT,
+            #"google/gemma-2-9b-it": cls.USER_CHAT, # too big...
+            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT, # deprecated. Have results though, so may use this if not enough time.
+            "meta-llama/Llama-3.1-8B-Instruct": cls.SYSTEM_USER_CHAT, # get results if have time.
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
             "microsoft/Phi-3-small-8k-instruct": cls.USER_CHAT,
-            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT
+            "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT,
+            "Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT,
+            "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT
 
             # defunct models.
             # "HuggingFaceH4/zephyr-7b-beta": cls.SYSTEM_USER_CHAT,

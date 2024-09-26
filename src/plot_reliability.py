@@ -173,14 +173,23 @@ def plot_id1(model_name="microsoft/Phi-3-mini-4k-instruct",
     _, test_data = input_formatter.run_pipeline()
     print(test_data.keys())
 
-    # Plot and save figures
+    # Plot response-based reliability diagrams
     fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"], f"Logit-based Confidences ({model_name})")
-    #fig.savefig(figures_path / "logits.png", dpi=600)
+    fig.savefig(figures_path.parent.parent / "logits.png", dpi=600)
+
     fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"], f"Verbalised Confidences ({model_name})")
-    #fig1.savefig(figures_path / "verbalised.png", dpi=600)
+    fig1.savefig(figures_path.parent.parent / "verbalised.png", dpi=600)
+
     fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
                                     f"Calibrated Confidences ({model_name}, {calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
+
+    # Plot token-based reliability diagrams
+
+    full_outcomes = []
+    for outcome, logits_confs, worded_confs, calibrated_confs in zip(test_data["correct"], test_data["final_hidden_states"], test_data["tokens"]):
+        outcome = torch.tensor(outcome).repeat(len(logit_confs))
+
     plt.show()
 
 
