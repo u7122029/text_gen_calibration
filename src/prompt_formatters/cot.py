@@ -215,7 +215,7 @@ class MCQCoTPromptFormat(CoTPromptFormat):
             self.mcq_options = mcq_options
         self.system_prompt = ("You are a chatbot that only outputs in the form:\n"
                               f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <A single letter>")
+                              f"{self.final_answer_tag} <A single letter indicating your choice, nothing more.>")
 
     def obtain_answers(self, decoded_responses):
         final_answer_tag_lower = self.final_answer_tag.lower()
