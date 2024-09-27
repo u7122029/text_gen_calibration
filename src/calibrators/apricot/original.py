@@ -15,7 +15,7 @@ class APRICOT_Original(APRICOT, TokenCalibrator):
         APRICOT.__init__(self)
         TokenCalibrator.__init__(self, llm_bundle, loss_fn, label_key="target_confs")
 
-    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=50, lr=1e-2, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=35, lr=1e-2, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, batch_size)
         calibration_dset["target_confs"] = target_accuracies
 

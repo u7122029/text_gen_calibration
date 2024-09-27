@@ -98,7 +98,7 @@ class VCPlattScaling(Calibrator):
     def calibrate(self,
                   calibration_dset: DictDataset,
                   batch_size=1,
-                  epochs=50,
+                  epochs=35,
                   lr=0.01,
                   **kwargs):
         """

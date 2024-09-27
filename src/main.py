@@ -15,10 +15,12 @@ def show_results(calib_data: DictDataset,
                  test_data: DictDataset,
                  model_name: str,
                  calibrator_name: str,
-                 input_formatter_name: str):
+                 input_formatter_name: str,
+                 loss_fn_name: str):
     details = {"LLM": model_name,
                "Calibrator": calibrator_name,
-               "Input Formatter": input_formatter_name}
+               "Input Formatter": input_formatter_name,
+               "Loss Function": loss_fn_name}
     calib_results = ModelMetrics(calib_data, **details)
     test_results = ModelMetrics(test_data, **details)
     print("---")
@@ -30,10 +32,10 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="MMLUCoT",
-         calibrator_name="TokenCalibrator",
-         loss_fn="CORRECT_AWARE",
+         calibrator_name="APRICOT_Original",
+         loss_fn="WEIGHTED_CORRECT_AWARE",
          cot_version="DEFAULT",
-         model_name="microsoft/Phi-3-mini-4k-instruct",
+         model_name="google/gemma-2-2b-it",
          batch_size=4,
          calib_dset_size=None,
          test_dset_size=None,
@@ -60,7 +62,7 @@ def main(input_formatter_name: str="MMLUCoT",
                                                          recompute_logits=recompute_logits,
                                                          recalibrate=retrain_calibrator)
 
-    show_results(calib_data, test_data, model_name, calibrator_name, input_formatter_name)
+    show_results(calib_data, test_data, model_name, calibrator_name, input_formatter_name, loss_fn)
 
 
 if __name__ == "__main__":

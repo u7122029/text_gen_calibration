@@ -8,9 +8,10 @@ TEMP_DIR = "temp"
 
 
 class EarlyStopping:
-    def __init__(self, patience=5, verbose=False):
+    def __init__(self, patience=4, tolerance=0.005, verbose=False):
         self.patience = patience
         self.verbose = verbose
+        self.tolerance = tolerance
         self.counter = 0
         self.best_train_loss = torch.inf
 
@@ -25,7 +26,7 @@ class EarlyStopping:
         if not temp_dir.exists():
             temp_dir.mkdir(exist_ok=True, parents=True)
 
-        if train_loss >= self.best_train_loss:
+        if train_loss + self.tolerance >= self.best_train_loss:
             self.counter += 1
             if self.verbose:
                 tqdm.write(f'EarlyStopping counter: {self.counter} out of {self.patience}')
