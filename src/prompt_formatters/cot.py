@@ -227,7 +227,7 @@ class MCQCoTPromptFormat(CoTPromptFormat):
         for decoded_response in decoded_responses:
             decoded_response = decoded_response.lower()
             try:
-                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)[1]
+                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)
                 match = re.search(r'[a-z]', final_answer_raw)
                 final_prediction = match.group(0)
 
