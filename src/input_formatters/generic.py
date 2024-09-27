@@ -24,7 +24,8 @@ class InputFormatter(ABC):
                  loss_fn: LossFunc,
                  calib_dset_size: Optional[int] = None,
                  test_dset_size: Optional[int] = None,
-                 _pf_variant: str = None):
+                 _pf_variant: str = None,
+                 _mcq_options: set[str] = None):
         """
         Abstract constructor to ensure that this class cannot be instantiated.
 
@@ -54,7 +55,7 @@ class InputFormatter(ABC):
 
         self.__llm_bundle = llm_bundle
         self.__dataset = dataset
-        self.__prompt_formatter = prompt_version(variant=_pf_variant)(llm_bundle)
+        self.__prompt_formatter = prompt_version(variant=_pf_variant)(llm_bundle, mcq_options=_mcq_options)
         self.__loss_fn = loss_fn
 
         self.__logits_dir = (Path(RESULTS_PATH) /
@@ -193,7 +194,8 @@ class CoTInputFormatter(InputFormatter, ABC):
                  loss_fn: LossFunc,
                  calib_dset_size: Optional[int] = None,
                  test_dset_size: Optional[int] = None,
-                 _pf_variant=None):
+                 _pf_variant: str = None,
+                 _mcq_options: set[str] = None):
         """
 
         @param llm_bundle:
@@ -211,7 +213,9 @@ class CoTInputFormatter(InputFormatter, ABC):
                                 calibrator_type,
                                 loss_fn,
                                 calib_dset_size,
-                                test_dset_size)
+                                test_dset_size,
+                                _pf_variant=_pf_variant,
+                                _mcq_options=_mcq_options)
 
         # Format the datasets
         self.numeric_conf_fmt, self.worded_conf_fmt = (

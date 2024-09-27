@@ -84,7 +84,8 @@ class AQUARATCoT(CoTInputFormatter):
                          loss_fn,
                          calib_dset_size,
                          test_dset_size,
-                         _pf_variant="mcq")
+                         _pf_variant="mcq",
+                         _mcq_options={"a", "b", "c", "d", "e"})
 
     def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
         assert len(predictions) == len(labels)
@@ -113,7 +114,8 @@ class MMLUCoT(CoTInputFormatter):
                          loss_fn,
                          calib_dset_size,
                          test_dset_size,
-                         _pf_variant="mcq")
+                         _pf_variant="mcq",
+                         _mcq_options={"a", "b", "c", "d"})
 
     def correctness(self, predictions: list[str], labels: list[str], successful: torch.Tensor):
         assert len(predictions) == len(labels)

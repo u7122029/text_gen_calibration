@@ -45,7 +45,8 @@ class CoTPromptFormat(PromptFormat):
                  context_tag="**Context:**",
                  final_answer_tag="**Final Answer:**",
                  explanation_tag="**Explanation:**",
-                 confidence_tag="**Confidence:**"):
+                 confidence_tag="**Confidence:**",
+                 **kwargs):
         super().__init__()
         self.llm_bundle = llm_bundle
         self.cot_format = CoTModelConfig.from_model_name(self.llm_bundle.llm_name)
@@ -180,7 +181,7 @@ class CoTPromptFormat(PromptFormat):
 
 
 class WordAnswerCoTPromptFormat(CoTPromptFormat):
-    def __init__(self, llm_bundle):
+    def __init__(self, llm_bundle, **kwargs):
         super().__init__(llm_bundle)
 
         self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
@@ -224,7 +225,7 @@ class MCQCoTPromptFormat(CoTPromptFormat):
         for decoded_response in decoded_responses:
             decoded_response = decoded_response.lower()
             try:
-                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)
+                _, final_answer_raw = decoded_response.split(final_answer_tag_lower)[1]
                 match = re.search(r'[a-z]', final_answer_raw)
                 final_prediction = match.group(0)
 
@@ -244,7 +245,7 @@ class AltCoTPromptFormat(CoTPromptFormat):
     """
     Alternative CoT Prompt Format without the *s.
     """
-    def __init__(self, llm_bundle: TextGenLLMBundle):
+    def __init__(self, llm_bundle: TextGenLLMBundle, **kwargs):
         super().__init__(llm_bundle,
                          "Question:",
                          "Context:",
@@ -254,7 +255,7 @@ class AltCoTPromptFormat(CoTPromptFormat):
 
 
 class AltWordAnswerCoTPromptFormat(WordAnswerCoTPromptFormat, AltCoTPromptFormat):
-    def __init__(self, llm_bundle):
+    def __init__(self, llm_bundle, **kwargs):
         AltCoTPromptFormat.__init__(self, llm_bundle)
         self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
                               f"{self.explanation_tag} <Your explanation>\n"
@@ -268,7 +269,7 @@ class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
     """
     Alternative CoT Prompt Format without the *s.
     """
-    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None):
+    def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None, **kwargs):
         super().__init__(llm_bundle,
                          mcq_options,
                          question_tag="Question:",
