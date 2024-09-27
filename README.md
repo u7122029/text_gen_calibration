@@ -1,5 +1,14 @@
 # text_gen_calibration
 Calibrating Text Generation Large Language Models
+
+confidence of high frequency tokens don't align with accuracy.
+
+
+Make a separate chapter on experiment settings.
+Talk about the models that were tested, loss functions, training parameters, datasets used, 
+
+Add concrete toy examples in the Methods chapter to demonstrate effectiveness of removing high \xi tokens.
+
 # FrequencyTS Variant Results
 ## google/gemma-1.1-2b-it
 <details>
