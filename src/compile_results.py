@@ -1,41 +1,44 @@
+from pathlib import Path
 from typing import Optional
 
 import fire
+import pandas as pd
 import simple_colors as sc
+from tabulate import tabulate
 
 from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
-from utils import LossFunc
+from utils import LossFunc, RESULTS_PATH
 
 calibrator_names = ["APRICOT_Original",
                     "TokenCalibrator",
-                    "APRICOT_TemperatureScaling",
-                    "FrequencyPTS_MSR",
-                    "FrequencyPTS_M",
-                    "FrequencyPTS_S",
-                    "FrequencyPTS_R",
-                    "FrequencyPTS_MS",
-                    "FrequencyPTS_MR",
-                    "FrequencyPTS_SR",
-                    "LastHiddenStateCalibrator",
-                    "TemperatureScaling",
-                    "FrequencyTS_MSR",
-                    "FrequencyTS_M",
-                    "FrequencyTS_S",
-                    "FrequencyTS_R",
-                    "FrequencyTS_MR",
-                    "FrequencyTS_SR",
-                    "FrequencyTS_MS",
-                    "APRICOT_FrequencyTS_MSR",
-                    "APRICOT_FrequencyTS_M",
-                    "APRICOT_FrequencyTS_S",
-                    "APRICOT_FrequencyTS_R",
-                    "APRICOT_FrequencyTS_MS",
-                    "APRICOT_FrequencyTS_SR",
-                    "APRICOT_FrequencyTS_MR",
+                    # "APRICOT_TemperatureScaling",
+                    # "FrequencyPTS_MSR",
+                    # "FrequencyPTS_M",
+                    # "FrequencyPTS_S",
+                    # "FrequencyPTS_R",
+                    # "FrequencyPTS_MS",
+                    # "FrequencyPTS_MR",
+                    # "FrequencyPTS_SR",
+                    # "LastHiddenStateCalibrator",
+                    # "TemperatureScaling",
+                    # "FrequencyTS_MSR",
+                    # "FrequencyTS_M",
+                    # "FrequencyTS_S",
+                    # "FrequencyTS_R",
+                    # "FrequencyTS_MR",
+                    # "FrequencyTS_SR",
+                    # "FrequencyTS_MS",
+                    # "APRICOT_FrequencyTS_MSR",
+                    # "APRICOT_FrequencyTS_M",
+                    # "APRICOT_FrequencyTS_S",
+                    # "APRICOT_FrequencyTS_R",
+                    # "APRICOT_FrequencyTS_MS",
+                    # "APRICOT_FrequencyTS_SR",
+                    # "APRICOT_FrequencyTS_MR",
                     "FLHS_MSR",
                     "FLHS_M",
                     "FLHS_S",
@@ -52,15 +55,7 @@ calibrator_names = ["APRICOT_Original",
                     "APRICOT_FLHS_MR"]
 
 
-def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
-    """
-    @deprecated
-    @param model_name:
-    @param calibrator_name:
-    @param prompt_version:
-    @param id_if_name:
-    @return:
-    """
+"""def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
     llm_bundle = TextGenLLMBundle(model_name)
     id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
     ood_if_names = set(input_formatter_dict.keys()) - {id_if_name}
@@ -83,7 +78,7 @@ def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion,
         del test_results
     print(collection.make_details_table())
     print()
-    print(collection.generate_tables("Test Formatter").to_markdown(index=False))
+    print(collection.generate_tables("Test Formatter").to_markdown(index=False))"""
 
 
 def vary_calibrator_ood(model_name: str,
@@ -104,6 +99,7 @@ def vary_calibrator_ood(model_name: str,
     }
 
     for calibrator_name in calibrator_names:
+        print(sc.green(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
         id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, calibrator_type, loss_func)
         ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle,
@@ -117,13 +113,52 @@ def vary_calibrator_ood(model_name: str,
         collection.append(ModelMetrics(test_results, **details))
         del test_results
 
+    return collection
+    """control_keys = ["accuracy"]
+    for name in ["ece", "brier", "auroc", "auprc"]:
+        control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
+
+    table = collection.generate_tables("Calibrator", control_keys)
+    print(tabulate(collection.details.items(), tablefmt="github"))
+    print()
+    print(table)"""
+
+
+def merge_dfs(df1, df2):
+    # Merge the dataframes on 'name'
+    merged = pd.merge(df1, df2, on='Calibrator', suffixes=('_1', '_2'), how='left')
+
+    # Create a mask for rows where df2's score is smaller (or df1's score is NaN)
+    mask = (merged['ece_calib_2'] < merged['ece_calib_1']) | (merged['ece_calib_1'].isna())
+
+    # Update result where the mask is True
+    cols = ["ece_calib", "brier_calib", "auroc_calib", "auprc_calib"]
+    for col in cols:
+        df1.loc[mask, col] = merged.loc[mask, f"{col}_2"]
+    #df1.loc[mask, 'loss_fn'] = merged.loc[mask, 'loss_fn_2']
+
+    return df1
+
+
+def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
     control_keys = ["accuracy"]
     for name in ["ece", "brier", "auroc", "auprc"]:
         control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
-    table, details_tab = collection.generate_tables("Calibrator", control_keys)
-    print(details_tab)
-    print()
-    print(table.sort_values("ece_calib"))
+
+    final_dataframe = None
+    for collection in collections:
+        table = collection.generate_tables("Calibrator", control_keys)
+        table["loss_fn"] = [collection.details["Loss Function"]] * len(table)
+
+        if final_dataframe is None:
+            final_dataframe = table
+            continue
+
+        final_dataframe = merge_dfs(final_dataframe, table)
+
+    out_dict = collections[0].details.copy()
+    del out_dict["Loss Function"]
+    return final_dataframe, out_dict
 
 
 def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
@@ -182,10 +217,10 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
 
 def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
-         loss_func_name: str="CORRECT_AWARE",
+         loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]="MATHCoT"):
+         id_input_formatter_name: str="GSMCoT",
+         ood_input_formatter_name: Optional[str]="AQUARATCoT"):
     """
 
     @param model_name:
@@ -209,9 +244,23 @@ def main(model_name: str="google/gemma-2-2b-it",
     if ood_input_formatter_name is None and calibrator_name is None:
         print("vary_calibrator_id")
         vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
-    elif ood_input_formatter_name is None:
-        print("vary_ood_if")
-        vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
+    #elif ood_input_formatter_name is None:
+    #    print("vary_ood_if")
+    #    vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
+    elif calibrator_name is None and loss_func_name is None:
+        collections = []
+        for lfn in ["BCE", "CALIB_AWARE", "WEIGHTED_CALIB_AWARE"]:
+            collections.append(vary_calibrator_ood(model_name,
+                                                   prompt_version,
+                                                   lfn,
+                                                   id_input_formatter_name,
+                                                   ood_input_formatter_name))
+        compiled_df, details = compare_collections_by_loss(collections)
+
+        print(tabulate(details.items(), tablefmt="github"))
+        print()
+        print(compiled_df.sort_values(by="ece_calib", ascending=False))
+
     elif calibrator_name is None:
         print("vary_calibrator_ood")
         vary_calibrator_ood(model_name, prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)

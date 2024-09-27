@@ -211,4 +211,4 @@ class ModelMetricsCollection(list[ModelMetrics]):
             for control_key in control_keys:
                 self.details[control_key] = table[control_key][0]
                 del table[control_key]
-        return pd.DataFrame(table), tabulate(list(self.details.items()), tablefmt="github")
+        return pd.DataFrame(table).sort_values("ece_calib")#, list(self.details.items())#tabulate(, tablefmt="github")
