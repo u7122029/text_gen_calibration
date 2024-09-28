@@ -132,7 +132,7 @@ def merge_dfs(df1, df2):
     mask = (merged['ece_calib_2'] < merged['ece_calib_1']) | (merged['ece_calib_1'].isna())
 
     # Update result where the mask is True
-    cols = ["ece_calib", "brier_calib", "auroc_calib", "auprc_calib"]
+    cols = ["ece_calib", "brier_calib", "auroc_calib", "auprc_calib", "loss_fn"]
     for col in cols:
         df1.loc[mask, col] = merged.loc[mask, f"{col}_2"]
     #df1.loc[mask, 'loss_fn'] = merged.loc[mask, 'loss_fn_2']
@@ -153,7 +153,6 @@ def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
         if final_dataframe is None:
             final_dataframe = table
             continue
-
         final_dataframe = merge_dfs(final_dataframe, table)
 
     out_dict = collections[0].details.copy()
@@ -260,7 +259,7 @@ def main(model_name: str="google/gemma-2-2b-it",
 
         print(tabulate(details.items(), tablefmt="github"))
         print()
-        print(compiled_df.sort_values(by="ece_calib", ascending=False))
+        print(compiled_df.sort_values(by="ece_calib", ascending=True))
 
     elif calibrator_name is None:
         print("vary_calibrator_ood")

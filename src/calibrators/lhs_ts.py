@@ -13,9 +13,8 @@ class LHSModel(nn.Module):
     def __init__(self, llm_bundle: LLMBundle):
         super().__init__()
         self.llm_bundle = llm_bundle
-        self.llm_bundle.load_model(silent=True)
-        self.fc = nn.Linear(in_features=llm_bundle.llm_model.config.hidden_size, out_features=1)
-        self.llm_bundle.unload_model()
+        assert llm_bundle.hidden_features is not None
+        self.fc = nn.Linear(in_features=llm_bundle.hidden_features, out_features=1)
 
     def temp_scale(self, x):
         temperatures = nn.functional.softplus(self.fc(x))  # vector of temperatures.

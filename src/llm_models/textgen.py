@@ -28,6 +28,7 @@ class TextGenLLMBundle(LLMBundle):
                                                               token=HF_TOKEN)
         self.llm_model.eval()
         self.lm_head = self.llm_model.lm_head
+        self.hidden_features = self.llm_model.config.hidden_size
 
         # Freeze all the parameters
         for parameter in self.llm_model.parameters():
