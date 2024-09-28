@@ -99,7 +99,6 @@ class VCPlattScaling(Calibrator):
                   calibration_dset: DictDataset,
                   batch_size=1,
                   epochs=35,
-                  lr=0.01,
                   **kwargs):
         """
         Calibrates the calibrator model. By default, this will use the TokenLogitsDataset. You will need to override
@@ -120,7 +119,7 @@ class VCPlattScaling(Calibrator):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
         print("Training Calibrator")
 

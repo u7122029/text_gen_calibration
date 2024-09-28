@@ -32,13 +32,13 @@ class TokenCalibrator(Calibrator):
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 
-    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=35, lr=0.01, **kwargs) -> None:
+    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=35, **kwargs) -> None:
         calibration_dl = DataLoader(calibration_dset,
                                     collate_fn=calibration_dset.collate_fn("question", "tokens", self.label_key),
                                     batch_size=batch_size,
                                     shuffle=True)
 
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
         tqdm.write("Training Calibrator")
 

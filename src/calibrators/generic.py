@@ -6,7 +6,7 @@ from torch import nn, optim
 from tqdm import tqdm
 import torch, warnings
 
-from utils import EarlyStopping
+from utils import EarlyStopping, LossFunc, LossFunctionDetails
 from collate_postprocess_functions import logit_token_repeat_label_key
 from data import DictDataset
 from utils import DEVICE, dill_save, dill_load
@@ -24,12 +24,12 @@ class Calibrator(ABC):
     You may use the save method to save the parts of the calibrator that require persistence.
     Note that the save method may not do anything at all if there is nothing to save.
     """
-    def __init__(self, llm_bundle: LLMBundle, loss_fn: nn.Module, calibrator_model: Optional[nn.Module]=None):
+    def __init__(self, llm_bundle: LLMBundle, loss_fn: LossFunctionDetails, calibrator_model: Optional[nn.Module]=None):
         if isinstance(calibrator_model, nn.Module):
             calibrator_model.eval()
 
         self.__llm_bundle = llm_bundle
-        self.__loss_fn = loss_fn
+        self.__loss_fn, self.__learning_rate = loss_fn.loss_fn, loss_fn.learning_rate
         self.__calibrator_model = calibrator_model
 
         self.loss_fn.to(DEVICE)
@@ -42,6 +42,10 @@ class Calibrator(ABC):
     @property
     def loss_fn(self):
         return self.__loss_fn
+
+    @property
+    def learning_rate(self):
+        return self.__learning_rate
 
     @property
     def calibrator_model(self):
@@ -100,7 +104,7 @@ class LogitCalibrator(Calibrator, ABC):
     def __init__(self,
                  llm_bundle,
                  calibrator_model,
-                 loss_fn: nn.Module,
+                 loss_fn: LossFunctionDetails,
                  input_key="logits",
                  label_key="correct"):
         super().__init__(llm_bundle, loss_fn, calibrator_model)
@@ -132,7 +136,6 @@ class LogitCalibrator(Calibrator, ABC):
                   calibration_dset: DictDataset,
                   batch_size=1,
                   epochs=35,
-                  lr=0.01,
                   _postprocess_fn=None,
                   **kwargs) -> Optional[EarlyStopping]:
         """
@@ -168,7 +171,7 @@ class LogitCalibrator(Calibrator, ABC):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=lr)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
         print("Training Calibrator")
         es = EarlyStopping(verbose=True)
