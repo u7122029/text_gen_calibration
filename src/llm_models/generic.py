@@ -104,7 +104,7 @@ class LLMBundle(ABC):
         @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
         """
         self.load_model(silent=True, lm_head_only=True) # Don't overload with "model already loaded" messages.
-        self.lm_head.to(DEVICE) # force cuda for lm head
+        self.lm_head.to(final_hs.device) # force cuda for lm head
         return self.lm_head(final_hs)
 
     @abstractmethod
