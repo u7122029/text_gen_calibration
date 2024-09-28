@@ -249,7 +249,8 @@ def main(model_name: str="google/gemma-2-2b-it",
     #    vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
     elif calibrator_name is None and loss_func_name is None:
         collections = []
-        for lfn in ["BCE", "CALIB_AWARE", "WEIGHTED_CALIB_AWARE"]:
+        for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
+            print(sc.blue(lfn))
             collections.append(vary_calibrator_ood(model_name,
                                                    prompt_version,
                                                    lfn,
