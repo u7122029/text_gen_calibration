@@ -15,30 +15,30 @@ from utils import LossFunc, RESULTS_PATH
 
 calibrator_names = ["APRICOT_Original",
                     "TokenCalibrator",
-                    # "APRICOT_TemperatureScaling",
-                    # "FrequencyPTS_MSR",
-                    # "FrequencyPTS_M",
-                    # "FrequencyPTS_S",
-                    # "FrequencyPTS_R",
-                    # "FrequencyPTS_MS",
-                    # "FrequencyPTS_MR",
-                    # "FrequencyPTS_SR",
-                    # "LastHiddenStateCalibrator",
-                    # "TemperatureScaling",
-                    # "FrequencyTS_MSR",
-                    # "FrequencyTS_M",
-                    # "FrequencyTS_S",
-                    # "FrequencyTS_R",
-                    # "FrequencyTS_MR",
-                    # "FrequencyTS_SR",
-                    # "FrequencyTS_MS",
-                    # "APRICOT_FrequencyTS_MSR",
-                    # "APRICOT_FrequencyTS_M",
-                    # "APRICOT_FrequencyTS_S",
-                    # "APRICOT_FrequencyTS_R",
-                    # "APRICOT_FrequencyTS_MS",
-                    # "APRICOT_FrequencyTS_SR",
-                    # "APRICOT_FrequencyTS_MR",
+                    "APRICOT_TemperatureScaling",
+                    "FrequencyPTS_MSR",
+                    "FrequencyPTS_M",
+                    "FrequencyPTS_S",
+                    "FrequencyPTS_R",
+                    "FrequencyPTS_MS",
+                    "FrequencyPTS_MR",
+                    "FrequencyPTS_SR",
+                    "LastHiddenStateCalibrator",
+                    "TemperatureScaling",
+                    "FrequencyTS_MSR",
+                    "FrequencyTS_M",
+                    "FrequencyTS_S",
+                    "FrequencyTS_R",
+                    "FrequencyTS_MR",
+                    "FrequencyTS_SR",
+                    "FrequencyTS_MS",
+                    "APRICOT_FrequencyTS_MSR",
+                    "APRICOT_FrequencyTS_M",
+                    "APRICOT_FrequencyTS_S",
+                    "APRICOT_FrequencyTS_R",
+                    "APRICOT_FrequencyTS_MS",
+                    "APRICOT_FrequencyTS_SR",
+                    "APRICOT_FrequencyTS_MR",
                     "FLHS_MSR",
                     "FLHS_M",
                     "FLHS_S",
@@ -53,32 +53,6 @@ calibrator_names = ["APRICOT_Original",
                     "APRICOT_FLHS_SR",
                     "APRICOT_FLHS_MS",
                     "APRICOT_FLHS_MR"]
-
-
-"""def vary_ood_if(model_name: str, calibrator_name, prompt_version: PromptVersion, id_if_name: str):
-    llm_bundle = TextGenLLMBundle(model_name)
-    id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version)
-    ood_if_names = set(input_formatter_dict.keys()) - {id_if_name}
-
-    collection = ModelMetricsCollection()
-    collection.details = {
-        "LLM": model_name,
-        "Calibrator": calibrator_name,
-        "Prompt Version": prompt_version.name,
-        "Calib. Input Formatter": id_if_name
-    }
-    for ood_if_name in ood_if_names:
-        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle, prompt_version)
-        calibrator_type = calibrator_dict[calibrator_name]
-        test_results = ood_if.test_calibrator(calibrator_type, id_if)
-        details = {
-            "Test Formatter": ood_if_name
-        }
-        collection.append(ModelMetrics(test_results, **details))
-        del test_results
-    print(collection.make_details_table())
-    print()
-    print(collection.generate_tables("Test Formatter").to_markdown(index=False))"""
 
 
 def vary_calibrator_ood(model_name: str,
@@ -198,7 +172,7 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
 
         calib_collection.append(calib_results)
         test_collection.append(test_results)
-
+    """
     control_keys = ["accuracy"]
     for name in ["ece", "brier", "auroc", "auprc"]:
         control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
@@ -212,14 +186,16 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     print(test_details)
     print()
     print(test_table.sort_values("ece_calib"))
+    """
+    return calib_collection, test_collection
 
 
 def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="GSMCoT",
-         ood_input_formatter_name: Optional[str]="AQUARATCoT"):
+         id_input_formatter_name: str="AQUARATCoT",
+         ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
 
     @param model_name:
@@ -240,7 +216,31 @@ def main(model_name: str="google/gemma-2-2b-it",
                           prompt_format,
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
-    if ood_input_formatter_name is None and calibrator_name is None:
+    if ood_input_formatter_name is None and calibrator_name is None and loss_func_name is None:
+        calib_collections = []
+        test_collections = []
+        for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
+            print(sc.blue(lfn))
+            calib_collection, test_collection = vary_calibrator_id(model_name,
+                                                                   lfn,
+                                                                   prompt_version,
+                                                                   id_input_formatter_name)
+            calib_collections.append(calib_collection)
+            test_collections.append(test_collection)
+
+        calib_compiled_df, calib_details = compare_collections_by_loss(calib_collections)
+        test_compiled_df, test_details = compare_collections_by_loss(test_collections)
+
+        print(tabulate(calib_details.items(), tablefmt="github"))
+        print()
+        print(calib_compiled_df.sort_values(by="ece_calib", ascending=True))
+        print()
+        print()
+        print(tabulate(test_details.items(), tablefmt="github"))
+        print()
+        print(test_compiled_df.sort_values(by="ece_calib", ascending=True))
+
+    elif ood_input_formatter_name is None and calibrator_name is None:
         print("vary_calibrator_id")
         vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
     #elif ood_input_formatter_name is None:
