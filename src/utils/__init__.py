@@ -79,6 +79,7 @@ class L2ECELoss(nn.Module):
 
         return ece
 
+
 class LossFunctionDetails:
     def __init__(self, loss_fn, learning_rate):
         self.__loss_fn = loss_fn

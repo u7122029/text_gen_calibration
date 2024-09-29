@@ -29,7 +29,11 @@ class Calibrator(ABC):
             calibrator_model.eval()
 
         self.__llm_bundle = llm_bundle
-        self.__loss_fn, self.__learning_rate = loss_fn.loss_fn, loss_fn.learning_rate
+        self.__loss_fn = loss_fn.loss_fn
+
+        self.__learning_rate = None
+        if calibrator_model is not None:
+            self.__learning_rate = 2e-3 * (sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-0.25)
         self.__calibrator_model = calibrator_model
 
         self.loss_fn.to(DEVICE)

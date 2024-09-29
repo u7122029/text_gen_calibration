@@ -195,7 +195,7 @@ def main(model_name: str="google/gemma-2-2b-it",
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="AQUARATCoT",
-         ood_input_formatter_name: Optional[str]="GSMCoT"):
+         ood_input_formatter_name: Optional[str]=None):
     """
 
     @param model_name:

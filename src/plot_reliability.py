@@ -3,7 +3,7 @@ from typing import Optional
 import fire
 from pathlib import Path
 
-from calibrators import calibrator_dict
+from calibrators import calibrator_dict, compute_top_bot_dfs, std_proc
 from input_formatters import input_formatter_dict
 from llm_models import TextGenLLMBundle
 from prompt_formatters import PromptVersion
@@ -184,22 +184,35 @@ def plot_id1(model_name="microsoft/Phi-3-mini-4k-instruct",
                                     f"Calibrated Confidences ({model_name}, {calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
+    # First get highest tokens by threshold
+    def metric(mean, std, response_frequency_ratio):
+        return torch.tensor(response_frequency_ratio)
+
+    df_top, bot_df = compute_top_bot_dfs(test_data, llm_bundle, metric)
+    df_top = df_top[df_top["token_values"] >= 0.8]
+    token_ids = torch.Tensor(df_top["token_ids"].to_numpy()).int()
+
     # Plot token-based reliability diagrams
 
-    full_outcomes = []
-    for outcome, logits_confs, worded_confs, calibrated_confs in zip(test_data["correct"], test_data["final_hidden_states"], test_data["tokens"]):
-        outcome = torch.tensor(outcome).repeat(len(logit_confs))
+    modified_confs = []
+    for outcome, token_confs, tokens in zip(test_data["correct"], test_data["token_probs"], test_data["tokens"]):
+        mask = torch.isin(tokens, token_ids)
+        modified_confs.append(token_confs[mask].mean())
+    modified_confs = torch.Tensor(modified_confs)
 
+    fig3, ax3 = reliability_diagram(test_data["correct"], modified_confs,
+                                  f"xi-based Confidences ({model_name})")
+    fig3.savefig(figures_path.parent.parent / "xi.png", dpi=600)
     plt.show()
 
 
-def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
-         calibrator_name: str="APRICOT_TemperatureScaling",
+def main(model_name: str="google/gemma-2-2b-it",
+         calibrator_name: str="TokenCalibrator",
          prompt_version: str="DEFAULT",
          #ood_prompt_version: str= "CoTPromptFormat",
          loss_func_name: str="CORRECT_AWARE",
-         id_if_name: str="SQUADV2CoT",
-         ood_if_name: Optional[str]="GSMCoT"):
+         id_if_name: str="GSMCoT",
+         ood_if_name: Optional[str]=None):
     if ood_if_name is None:
         plot_id1(model_name, id_if_name, loss_func_name, prompt_version, calibrator_name)
     else:
