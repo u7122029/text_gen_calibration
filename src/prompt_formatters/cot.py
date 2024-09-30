@@ -22,11 +22,11 @@ class CoTModelConfig(Enum):
             "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT,
             "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT,
 
-            "meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT, # deprecated. Have results though, so may use this if not enough time.
+            #"meta-llama/Meta-Llama-3-8B-Instruct": cls.SYSTEM_USER_CHAT, # deprecated. Have results though, so may use this if not enough time.
             "meta-llama/Llama-3.1-8B-Instruct": cls.SYSTEM_USER_CHAT, # get results if have time.
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT,
-            "microsoft/Phi-3-small-8k-instruct": cls.USER_CHAT,
-            "Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT
+            #"microsoft/Phi-3-small-8k-instruct": cls.USER_CHAT,
+            #"Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT
 
 
             # defunct models.

@@ -97,12 +97,6 @@ class TokenCalibratorModel(nn.Module):
         super().__init__()
         self.device = device
         self.model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-v3-base")
-
-        # Freeze all the layers of the model except for the classification head.
-        for name, param in self.model.named_parameters():
-            if "classifier" not in name:
-                param.requires_grad = False
-
         self.tokeniser = AutoTokenizer.from_pretrained("microsoft/deberta-v3-base")
         self.to(device)
 
