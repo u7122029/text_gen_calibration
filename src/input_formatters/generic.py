@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 
 from pathlib import Path
 from typing import Type, Tuple, Optional
@@ -170,7 +171,7 @@ class InputFormatter(ABC):
         calib_data, test_data = self.get_calib_test_data(batch_size)
         accuracy = torch.mean(calib_data["correct"].float())
         if use_full_dset:
-            test_data = test_data.join(calib_data)
+            test_data = deepcopy(test_data).join(calib_data)
         del calib_data
 
         # Get the test results.
