@@ -170,7 +170,7 @@ def plot_id1(model_name="microsoft/Phi-3-mini-4k-instruct",
 
     calibrator_type = calibrator_dict[calibrator_name]
     input_formatter = input_formatter_dict[input_formatter_name](llm_bundle, prompt_version, calibrator_type, loss_func)
-    _, test_data = input_formatter.run_pipeline()
+    calib_data, test_data = input_formatter.run_pipeline()
     print(test_data.keys())
 
     # Plot response-based reliability diagrams
@@ -188,21 +188,27 @@ def plot_id1(model_name="microsoft/Phi-3-mini-4k-instruct",
     def metric(mean, std, response_frequency_ratio):
         return torch.tensor(response_frequency_ratio)
 
-    df_top, bot_df = compute_top_bot_dfs(test_data, llm_bundle, metric)
+    df_top, bot_df = compute_top_bot_dfs(calib_data, llm_bundle, metric)
     df_top = df_top[df_top["token_values"] >= 0.8]
     token_ids = torch.Tensor(df_top["token_ids"].to_numpy()).int()
 
     # Plot token-based reliability diagrams
 
     modified_confs = []
-    for outcome, token_confs, tokens in zip(test_data["correct"], test_data["token_probs"], test_data["tokens"]):
+    modified_confs1 = []
+    for outcome, token_confs, tokens in zip(calib_data["correct"], calib_data["token_probs"], calib_data["tokens"]):
         mask = torch.isin(tokens, token_ids)
         modified_confs.append(token_confs[mask].mean())
+        modified_confs1.append(token_confs[~mask].mean())
     modified_confs = torch.Tensor(modified_confs)
 
-    fig3, ax3 = reliability_diagram(test_data["correct"], modified_confs,
-                                  f"xi-based Confidences ({model_name})")
+    fig3, ax3 = reliability_diagram(calib_data["correct"], modified_confs,
+                                  f"xi token Confidences ({model_name})")
+    fig4, ax4 = reliability_diagram(calib_data["correct"], modified_confs1,
+                                    f"non-xi token Confidences ({model_name})")
+
     fig3.savefig(figures_path.parent.parent / "xi.png", dpi=600)
+    fig4.savefig(figures_path.parent.parent / "non_xi.png", dpi=600)
     plt.show()
 
 

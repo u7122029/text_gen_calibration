@@ -194,7 +194,7 @@ def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="AQUARATCoT",
+         id_input_formatter_name: str="SQUADV2CoT",
          ood_input_formatter_name: Optional[str]=None):
     """
 

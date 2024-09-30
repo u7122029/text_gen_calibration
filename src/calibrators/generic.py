@@ -39,13 +39,15 @@ class Calibrator(ABC):
         self.__learning_rate = learning_rate
         if calibrator_model is not None and learning_rate is None:
             # Learning rate for largest model (Token Calibrator)
-            const = torch.round(torch.log(torch.tensor(20)) / torch.log(torch.tensor(184423682)), decimals=7).item()
+            #const = torch.log(torch.tensor(5)) / torch.log(torch.tensor(184423682))
 
             # Interpolate learning rate for all other models.
-            self.__learning_rate = 2e-3 * (
-                sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const)
+            """self.__learning_rate = torch.round(
+                1e-2 *
+                (sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const),
+                decimals=7)"""
+            self.__learning_rate = 0.01
             print(f"Learning rate: {self.__learning_rate}")
-
 
         self.__calibrator_model = calibrator_model
 

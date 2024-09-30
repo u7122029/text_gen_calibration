@@ -31,11 +31,11 @@ def show_results(calib_data: DictDataset,
     test_results.display()
 
 
-def main(input_formatter_name: str="MMLUCoT",
+def main(input_formatter_name: str="SQUADV2CoT",
          calibrator_name="APRICOT_Original",
-         loss_fn="WEIGHTED_CORRECT_AWARE",
+         loss_fn="BCE",
          cot_version="DEFAULT",
-         model_name="microsoft/Phi-3-mini-4k-instruct",
+         model_name="google/gemma-2-2b-it",
          batch_size=4,
          calib_dset_size=None,
          test_dset_size=None,
