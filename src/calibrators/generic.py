@@ -150,6 +150,7 @@ class LogitCalibrator(Calibrator, ABC):
             loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
+            postfix["total_loss_last_epoch"] += loss.item()
 
     def calibrate(self,
                   calibration_dset: DictDataset,
