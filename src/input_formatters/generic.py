@@ -69,12 +69,8 @@ class InputFormatter(ABC):
 
         self.logits_dir.mkdir(parents=True, exist_ok=True)
 
-        self.__calibrator_type: Type[Calibrator] = calibrator_type
+        self.calibrator_type: Type[Calibrator] = calibrator_type
         #self.__calibrator: Optional[Calibrator] = self.calibrator_type(self.llm_bundle, self.loss_fn())
-
-        self.__calibrator_dir = self.__logits_dir / self.loss_fn.name / self.calibrator_type.__name__
-
-        self.calibrator_dir.mkdir(parents=True, exist_ok=True)
 
         # reset seed to get same indices
         torch.manual_seed(0)
@@ -126,6 +122,13 @@ class InputFormatter(ABC):
     @property
     def calibrator_type(self):
         return self.__calibrator_type
+
+    @calibrator_type.setter
+    def calibrator_type(self, new_calibrator: Type[Calibrator]):
+        self.__calibrator_type = new_calibrator
+        self.__calibrator_dir = self.__logits_dir / self.loss_fn.name / self.__calibrator_type.__name__
+
+        self.__calibrator_dir.mkdir(parents=True, exist_ok=True)
 
     #@property
     #def calibrator(self):
@@ -250,8 +253,8 @@ class CoTInputFormatter(InputFormatter, ABC):
     def _get_data(self, dset: DictDataset, save_root: Path, batch_size=4, recompute=False):
         if (save_root / "data.dill").exists() and not recompute:
             print(f"Found existing data in {save_root}")
-            calib_conf_dset = dill_load(save_root / "data.dill")
-            dset.update(calib_conf_dset)
+            conf_dset = dill_load(save_root / "data.dill")
+            dset.update(conf_dset)
         else:
             print(f"Data at ({save_root}) not found.")
             with torch.no_grad():
@@ -291,7 +294,7 @@ class CoTInputFormatter(InputFormatter, ABC):
         :return:
         """
         print("Getting Calibration and Test data.")
-        calib_filepath = self.logits_dir / "val_data"
+        calib_filepath = self.logits_dir / "calib_data"
         val_filepath = self.logits_dir / "val_data"
         test_filepath = self.logits_dir / "test_data"
 

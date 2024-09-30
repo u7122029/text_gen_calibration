@@ -1,7 +1,7 @@
 from datasets import load_dataset, concatenate_datasets
 from datasets import get_dataset_config_names
 
-from dictdataset import DictDataset
+from .dictdataset import DictDataset
 
 
 def get_mmlu():

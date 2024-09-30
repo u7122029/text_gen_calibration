@@ -137,7 +137,7 @@ def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
 def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
     calib_collection = ModelMetricsCollection()
     calib_collection.details = {
-        "Split": "Calibration",
+        "Split": "Validation",
         "LLM": model_name,
         "Prompt Version": prompt_version.name,
         "Input Formatter": input_formatter,
@@ -156,13 +156,19 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     llm_bundle = TextGenLLMBundle(model_name)
     loss_func = LossFunc.from_string(loss_func_name)
 
+    id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
-        id_if: InputFormatter = input_formatter_dict[input_formatter](llm_bundle,
-                                                                      prompt_version,
-                                                                      calibrator_type,
-                                                                      loss_func)  # NOTE: TEMPORARY DATASET SIZES.
+        if id_if is None:
+            id_if = input_formatter_dict[input_formatter](llm_bundle,
+                                                          prompt_version,
+                                                          calibrator_type,
+                                                          loss_func)
+        else:
+            # Ensure that the whole dataset doesn't end up being reloaded again.
+            id_if.calibrator_type = calibrator_type
+
         # run the pipeline to ensure that all the calib and test results have been acquired.
         calib_data, test_data = id_if.run_pipeline(batch_size=4)
 
