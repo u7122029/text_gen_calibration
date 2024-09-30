@@ -52,7 +52,8 @@ calibrator_names = ["APRICOT_Original",
                     "APRICOT_FLHS_R",
                     "APRICOT_FLHS_SR",
                     "APRICOT_FLHS_MS",
-                    "APRICOT_FLHS_MR"]
+                    "APRICOT_FLHS_MR",
+                    "LogitConfsPlattScaling"]
 
 
 def vary_calibrator_ood(model_name: str,
