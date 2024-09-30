@@ -23,10 +23,10 @@ class APRICOT(ABC):
         if type(self) is APRICOT:
             raise Exception("This class cannot be instantiated!")
 
-    def get_target_accuracies(self, calibration_dset: DictDataset, batch_size=1, embed_model_name="all-mpnet-base-v2"):
+    def get_target_accuracies(self, dset: DictDataset, batch_size=1, embed_model_name="all-mpnet-base-v2"):
         """
 
-        @param calibration_dset:
+        @param dset:
         @param batch_size:
         @param embed_model_name:
         @return:
@@ -34,10 +34,10 @@ class APRICOT(ABC):
         embedding_model = SentenceTransformer(embed_model_name)
         embedding_model.to(DEVICE)
 
-        dl = DataLoader(calibration_dset,
+        dl = DataLoader(dset,
                         batch_size=batch_size,
                         shuffle=False,
-                        collate_fn=calibration_dset.collate_fn("question",
+                        collate_fn=dset.collate_fn("question",
                                                                "correct"))
 
         # Get question embeddings
@@ -59,14 +59,13 @@ class APRICOT(ABC):
         cluster_labels = clusterer.labels_
 
         def temp_debug(label):
-            # TODO: GET RID OF THIS NESTED FUNCTION!
-            x = torch.Tensor(calibration_dset.data_dict["correct"])[cluster_labels == label].float()
+            x = torch.Tensor(dset.data_dict["correct"])[cluster_labels == label].float()
             return torch.mean(x)
 
         label2target = {label: temp_debug(label)
                         for label in set(cluster_labels)}
 
         target_accuracies = []
-        for i, sample in enumerate(calibration_dset):
+        for i, sample in enumerate(dset):
             target_accuracies.append(label2target[cluster_labels[i]] if cluster_labels[i] > 0 else sample["correct"])
         return embeddings, torch.Tensor(target_accuracies)

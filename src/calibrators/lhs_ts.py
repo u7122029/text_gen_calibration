@@ -46,8 +46,8 @@ class LastHiddenStateCalibrator(LogitCalibrator):
             _calibrator_model = LHSModel(llm_bundle)
         super().__init__(llm_bundle, _calibrator_model, loss_fn, "final_hidden_states")
 
-    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, *args, **kwargs):
-        super().calibrate(calibration_dset, validation_dset, *args, _postprocess_fn=lhs_token_repeat_label_key(self.label_key), **kwargs)
+    def calibrate(self, calibration_dset: DictDataset, *args, **kwargs):
+        super().calibrate(calibration_dset, *args, _postprocess_fn=lhs_token_repeat_label_key(self.label_key), **kwargs)
 
     def test_loop(self, test_dset):
         response_confs_after_calib = []

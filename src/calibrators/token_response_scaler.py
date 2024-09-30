@@ -14,8 +14,8 @@ class TokenCalibrator(Calibrator):
         super().__init__(llm_bundle, loss_fn, TokenCalibratorModel(device=DEVICE))
         self.label_key = label_key
 
-    def calibration_epoch(self, calib_pbar, val_pbar, postfix, optimiser, **kwargs):
-        postfix["total_val_loss_last_epoch"] = 0
+    def calibration_epoch(self, calib_pbar, postfix, optimiser, **kwargs):
+        postfix["total_loss_last_epoch"] = 0
         for batch in calib_pbar:
             label_batch = torch.Tensor(batch[self.label_key]).to(DEVICE)
             tokens_batch = batch["tokens"]
@@ -30,32 +30,13 @@ class TokenCalibrator(Calibrator):
             loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
+            postfix["total_loss_last_epoch"] += loss.item()
 
-        # Evaluate on validation set.
-        with torch.no_grad():
-            for batch in val_pbar:
-                label_batch = torch.Tensor(batch[self.label_key]).to(DEVICE)
-                tokens_batch = batch["tokens"]
-                question_batch = batch["question"]
-
-                response_batch = self.llm_bundle.tokeniser.batch_decode(tokens_batch, skip_special_tokens=True)
-                assert len(question_batch) == len(response_batch)
-                inputs_batch = [f"{question}\n{response}" for question, response in zip(question_batch, response_batch)]
-
-                out_token_confs = self.calibrator_model(inputs_batch)
-                loss = self.loss_fn(out_token_confs, label_batch)
-                postfix["total_val_loss_last_epoch"] += loss.item()
-
-    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, batch_size=1, epochs=35, **kwargs) -> None:
+    def calibrate(self, calibration_dset: DictDataset, batch_size=1, epochs=35, **kwargs) -> None:
         calibration_dl = DataLoader(calibration_dset,
                                     collate_fn=calibration_dset.collate_fn("question", "tokens", self.label_key),
                                     batch_size=batch_size,
                                     shuffle=True)
-
-        validation_dl = DataLoader(validation_dset,
-                                   collate_fn=calibration_dset.collate_fn("question", "tokens", self.label_key),
-                                   batch_size=batch_size,
-                                   shuffle=True)
 
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
@@ -67,11 +48,8 @@ class TokenCalibrator(Calibrator):
             calib_pbar = tqdm(calibration_dl,
                               desc=f"Epoch {epoch_idx + 1}/{epochs}")
 
-            val_pbar = tqdm(validation_dl,
-                            desc=f"Epoch {epoch_idx + 1}/{epochs}")
-
-            self.calibration_epoch(calib_pbar, val_pbar, postfix, optimiser)
-            should_stop = es(postfix["total_val_loss_last_epoch"], self.calibrator_model)
+            self.calibration_epoch(calib_pbar, postfix, optimiser)
+            should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
             if should_stop:
                 print("Stopping.")
                 break

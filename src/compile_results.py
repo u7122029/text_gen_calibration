@@ -71,15 +71,23 @@ def vary_calibrator_ood(model_name: str,
         "Calib. Input Formatter": id_if_name,
         "Test Input Formatter": ood_if_name
     }
-
+    ood_if: Optional[InputFormatter] = None
+    id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
         calibrator_type = calibrator_dict[calibrator_name]
-        id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, calibrator_type, loss_func)
-        ood_if: InputFormatter = input_formatter_dict[ood_if_name](llm_bundle,
-                                                                   prompt_version,
-                                                                   calibrator_type,
-                                                                   loss_func)
+        if id_if is None:
+            id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, calibrator_type, loss_func)
+        else:
+            id_if.calibrator_type = calibrator_type
+
+        if ood_if is None:
+            ood_if = input_formatter_dict[ood_if_name](llm_bundle,
+                                                       prompt_version,
+                                                       calibrator_type,
+                                                       loss_func)
+        else:
+            ood_if.calibrator_type = calibrator_type
 
         test_results = ood_if.test_calibrator(id_if)
 
@@ -137,7 +145,7 @@ def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
 def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
     calib_collection = ModelMetricsCollection()
     calib_collection.details = {
-        "Split": "Validation",
+        "Split": "Calibration",
         "LLM": model_name,
         "Prompt Version": prompt_version.name,
         "Input Formatter": input_formatter,
@@ -201,7 +209,7 @@ def main(model_name: str="google/gemma-2-2b-it",
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]=None):
+         ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
 
     @param model_name:
@@ -223,6 +231,7 @@ def main(model_name: str="google/gemma-2-2b-it",
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
     if ood_input_formatter_name is None and calibrator_name is None and loss_func_name is None:
+        print("Comparing Loss Functions (ID).")
         calib_collections = []
         test_collections = []
         for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
@@ -253,6 +262,7 @@ def main(model_name: str="google/gemma-2-2b-it",
     #    print("vary_ood_if")
     #    vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
     elif calibrator_name is None and loss_func_name is None:
+        print("Comparing loss functions (OOD).")
         collections = []
         for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
             print(sc.blue(lfn))

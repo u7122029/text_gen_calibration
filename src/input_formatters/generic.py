@@ -45,15 +45,11 @@ class InputFormatter(ABC):
             assert (calib_dset_size + test_dset_size <= len(dataset),
                     f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes "
                     f"exceed given dataset size.")
-            val_dset_size = len(dataset) - calib_dset_size - test_dset_size
         elif calib_dset_size is None and test_dset_size is None:
             calib_dset_size = int(0.7 * len(dataset))
-            val_dset_size = int(0.1 * len(dataset))
-            test_dset_size = len(dataset) - calib_dset_size - val_dset_size
+            test_dset_size = len(dataset) - calib_dset_size
         elif calib_dset_size is not None and test_dset_size is None:
-            remaining_elems = len(dataset) - calib_dset_size
-            val_dset_size = int(1/3 * remaining_elems)
-            test_dset_size = remaining_elems - val_dset_size
+            test_dset_size = len(dataset) - calib_dset_size
         else:
             raise Exception("calib_dset_size is None and test_dset_size is not None")
 
@@ -76,11 +72,9 @@ class InputFormatter(ABC):
         torch.manual_seed(0)
         indices = torch.randperm(len(self.dataset))
         calib_indices = indices[:calib_dset_size]
-        val_indices = indices[calib_dset_size: calib_dset_size + val_dset_size]
-        test_indices = indices[calib_dset_size + val_dset_size: calib_dset_size + val_dset_size + test_dset_size]
+        test_indices = indices[calib_dset_size: calib_dset_size + test_dset_size]
 
         self.__calib_dataset: DictDataset = self.dataset[calib_indices]
-        self.__val_dataset: DictDataset = self.dataset[val_indices]
         self.__test_dataset: DictDataset = self.dataset[test_indices]
 
     """
@@ -90,10 +84,6 @@ class InputFormatter(ABC):
     @property
     def calib_dataset(self):
         return self.__calib_dataset
-
-    @property
-    def val_dataset(self):
-        return self.__val_dataset
 
     @property
     def test_dataset(self):
@@ -139,7 +129,7 @@ class InputFormatter(ABC):
         return self.__loss_fn
 
     @abstractmethod
-    def get_calib_val_test_data(self, batch_size=1, recompute=False) -> tuple[DictDataset, DictDataset, DictDataset]:
+    def get_calib_test_data(self, batch_size=1, recompute=False) -> tuple[DictDataset, DictDataset]:
         pass
 
     @abstractmethod
@@ -151,12 +141,11 @@ class InputFormatter(ABC):
         pass
 
     @abstractmethod
-    def perform_calibration(self, calibrator, calib_data, val_data, weights_path, batch_size):
+    def perform_calibration(self, calibrator, calib_data, weights_path, batch_size):
         """
         Calibrate the calibration model. If there already are calibrator weights, we load them in and skip calibration.
         @param calibrator:
         @param calib_data:
-        @param val_data:
         @param weights_path:
         @param batch_size:
         @return:
@@ -178,12 +167,11 @@ class InputFormatter(ABC):
         save_path = (original_input_formatter.calibrator_dir /
                      "ood" /
                      f"{self.__class__.__name__}.dill")
-        calib_data, val_data, test_data = self.get_calib_val_test_data(batch_size)
+        calib_data, test_data = self.get_calib_test_data(batch_size)
         accuracy = torch.mean(calib_data["correct"].float())
         if use_full_dset:
             test_data = test_data.join(calib_data)
-            test_data = test_data.join(val_data)
-        del calib_data, val_data
+        del calib_data
 
         # Get the test results.
         if save_path.exists():
@@ -247,10 +235,9 @@ class CoTInputFormatter(InputFormatter, ABC):
             self.format_verbalised("worded", "worded_conf_formatted")
         )
         self.calib_dataset.update(self.response_fmt(self.calib_dataset))
-        self.val_dataset.update(self.response_fmt(self.val_dataset))
         self.test_dataset.update(self.response_fmt(self.test_dataset))
 
-    def _get_data(self, dset: DictDataset, save_root: Path, batch_size=4, recompute=False):
+    def _get_data(self, dset: DictDataset, save_root: Path, version: str = "Calib", batch_size=4, recompute=False):
         if (save_root / "data.dill").exists() and not recompute:
             print(f"Found existing data in {save_root}")
             conf_dset = dill_load(save_root / "data.dill")
@@ -261,7 +248,7 @@ class CoTInputFormatter(InputFormatter, ABC):
                 dset = self.llm_bundle.get_eval_data_from_dset(dset,
                                                                save_root,
                                                                batch_size=batch_size,
-                                                               desc="Get Logits + Tokens")
+                                                               desc=f"Get Logits + Tokens ({version})")
             all_predictions, all_predictions_successful = self.prompt_formatter.obtain_answers(
                 self.llm_bundle.tokeniser.batch_decode(dset["tokens"], skip_special_tokens=True)
             )
@@ -276,7 +263,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             with torch.no_grad():
                 dset = self.llm_bundle.get_verbalised_confs_from_dset(dset,
                                                                       batch_size=batch_size,
-                                                                      desc="Get Verbalised Confs")
+                                                                      desc=f"Get Verbalised Confs ({version})")
 
             dset.remove_columns(["response_formatted",
                                  "numeric_conf_formatted",
@@ -285,7 +272,7 @@ class CoTInputFormatter(InputFormatter, ABC):
             dset.save(save_root / "data.dill")
         return dset
 
-    def get_calib_val_test_data(self, batch_size=1, recompute=False):
+    def get_calib_test_data(self, batch_size=1, recompute=False):
         """
         Gets the logits and tokens from the llm over the calibration and test datasets.
         No EOS tokens are filtered at all.
@@ -295,22 +282,18 @@ class CoTInputFormatter(InputFormatter, ABC):
         """
         print("Getting Calibration and Test data.")
         calib_filepath = self.logits_dir / "calib_data"
-        val_filepath = self.logits_dir / "val_data"
         test_filepath = self.logits_dir / "test_data"
 
-        calib_dataset = self._get_data(self.calib_dataset, calib_filepath, batch_size, recompute)
+        calib_dataset = self._get_data(self.calib_dataset, calib_filepath, "Calib", batch_size, recompute)
         print("Calibration data done.")
 
-        val_dataset = self._get_data(self.val_dataset, val_filepath, batch_size, recompute)
-        print("Validation data done.")
-
-        test_dataset = self._get_data(self.test_dataset, test_filepath, batch_size, recompute)
+        test_dataset = self._get_data(self.test_dataset, test_filepath, "Test", batch_size, recompute)
         print("Test data done.")
 
         self.llm_bundle.unload_model()
-        return calib_dataset, val_dataset, test_dataset
+        return calib_dataset, test_dataset
 
-    def perform_calibration(self, calibrator, calib_data, val_data, weights_path, batch_size):
+    def perform_calibration(self, calibrator, calib_data, weights_path, batch_size):
         cw_path = weights_path / "calib_weights.dill"
         if cw_path.exists():
             print("Loading calibration weights.")
@@ -319,7 +302,6 @@ class CoTInputFormatter(InputFormatter, ABC):
             print("Performing calibration of model.")
             weights_path.mkdir(parents=True, exist_ok=True)
             calibrator.calibrate(calibration_dset=calib_data,
-                                 validation_dset=val_data,
                                  batch_size=batch_size)
             calibrator.save(cw_path)
 
@@ -341,26 +323,26 @@ class CoTInputFormatter(InputFormatter, ABC):
         @param kwargs:
         @return:
         """
-        calib_data, val_data, test_data = self.get_calib_val_test_data(batch_size,
-                                                                       recompute=recompute_logits)
+        calib_data, test_data = self.get_calib_test_data(batch_size,
+                                                         recompute=recompute_logits)
 
         weights_path = self.calibrator_dir
         calibrator = self.calibrator_type(self.llm_bundle,
                                           self.loss_fn(weight=torch.mean(calib_data["correct"].float())))
-        self.perform_calibration(calibrator, calib_data, val_data, weights_path, batch_size)
+        self.perform_calibration(calibrator, calib_data, weights_path, batch_size)
 
         # Test the calibrator.
-        val_results_path = weights_path / "val_results.dill"
-        if val_results_path.exists():
-            print(f"Found existing validation results in {val_results_path}")
-            val_results = dill_load(val_results_path)
+        calib_results_path = weights_path / "calib_results.dill"
+        if calib_results_path.exists():
+            print(f"Found existing calibration results in {calib_results_path}")
+            calib_results = dill_load(calib_results_path)
         else:
-            print(f"Did not find existing validation results in {val_results_path}")
+            print(f"Did not find existing calibration results in {calib_results_path}")
             self.llm_bundle.load_model(silent=True, lm_head_only=True)
             self.llm_bundle.unload_model()
-            val_results = calibrator.test(test_dset=val_data,
+            calib_results = calibrator.test(test_dset=calib_data,
                                             batch_size=batch_size)
-            dill_save(val_results, val_results_path)
+            dill_save(calib_results, calib_results_path)
 
         test_results_path = weights_path / "test_results.dill"
         if test_results_path.exists():
@@ -374,10 +356,10 @@ class CoTInputFormatter(InputFormatter, ABC):
                                            batch_size=batch_size)
             dill_save(test_results, test_results_path)
 
-        val_data.update(val_results)
+        calib_data.update(calib_results)
         test_data.update(test_results)
 
-        return val_data, test_data
+        return calib_data, test_data
 
     def response_fmt(self, x):
         questions = x['question']
