@@ -39,7 +39,7 @@ class FrequencyLastHiddenStateCalibrator(LastHiddenStateCalibrator, TokenFrequen
         TokenFrequencyCalibrator.__init__(self, score_thresh)
         #super().__init__(llm_bundle, LHSFTSModel(llm_bundle), loss_fn, "final_hidden_states")
 
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         df_top, _ = compute_top_bot_dfs(calibration_dset, self.llm_bundle, self.metric)
         df_top_modified = df_top[df_top["token_values"] >= self.score_thresh]
 
@@ -48,7 +48,7 @@ class FrequencyLastHiddenStateCalibrator(LastHiddenStateCalibrator, TokenFrequen
         self.calibrator_model.set_tokens(self.top_token_ids)
         assert self.calibrator_model.ready
 
-        LastHiddenStateCalibrator.calibrate(self, calibration_dset, **kwargs)
+        LastHiddenStateCalibrator.calibrate(self, calibration_dset, validation_dset, **kwargs)
 
 
 class FLHS_MSR(FrequencyLastHiddenStateCalibrator):

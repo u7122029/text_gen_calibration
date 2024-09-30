@@ -1,7 +1,7 @@
 from datasets import load_dataset, concatenate_datasets
 from datasets import get_dataset_config_names
 
-from .dictdataset import DictDataset
+from dictdataset import DictDataset
 
 
 def get_mmlu():
@@ -17,8 +17,9 @@ def get_mmlu():
 
     dset_name = "cais/mmlu"
     datasets = []
+    subjects = {"machine_learning", "computer_security", "econometrics", "jurisprudence", "philosophy", "prehistory"}
     for name in get_dataset_config_names(dset_name):
-        if (name.startswith("high") or name.startswith("college")) and not name.endswith("mathematics"):
+        if ((name.startswith("high") or name.startswith("college") or name.startswith("professional")) and not name.endswith("mathematics")) or name in subjects:
             print(f"mmlu: loading {name}")
             datasets.append(load_dataset(dset_name, name=name, split="test"))
 
@@ -28,7 +29,9 @@ def get_mmlu():
                           batched=True,
                           input_columns=["question", "choices", "num_answer"],
                           remove_columns=["subject", "choices", "num_answer"])
-    return DictDataset(dataset.to_dict())
+    out = DictDataset(dataset.to_dict())
+    print(f"mmlu length: {len(out)}")
+    return out
 
 
 if __name__ == "__main__":

@@ -74,7 +74,7 @@ class Calibrator(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def calibrate(self, calibration_dset: DictDataset, **kwargs) -> None:
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs) -> None:
         pass
 
     @abstractmethod
@@ -134,11 +134,11 @@ class LogitCalibrator(Calibrator, ABC):
 
         self.tuned = False
 
-    def calibration_epoch(self, pbar, postfix, optimiser, **kwargs):
-        postfix["total_loss_last_epoch"] = 0
+    def calibration_epoch(self, calib_pbar, val_pbar, postfix, optimiser, **kwargs):
+        postfix["total_val_loss_last_epoch"] = 0
         torch.autograd.set_detect_anomaly(True)
 
-        for i, batch in enumerate(pbar):
+        for i, batch in enumerate(calib_pbar):
             label_batch = batch[self.label_key].to(DEVICE)
             logits_batch = batch[self.input_key].to(DEVICE).float()
             tokens_batch = batch["tokens"].to(DEVICE)
@@ -150,18 +150,32 @@ class LogitCalibrator(Calibrator, ABC):
             loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
             optimiser.step()
-            postfix["total_loss_last_epoch"] += loss.item()
+
+        # Evaluate loss on val dset.
+        with torch.no_grad():
+            for i, batch in enumerate(val_pbar):
+                label_batch = batch[self.label_key].to(DEVICE)
+                logits_batch = batch[self.input_key].to(DEVICE).float()
+                tokens_batch = batch["tokens"].to(DEVICE)
+
+                out_token_confs = self.calibrator_model(logits_batch, tokens_batch)
+                label_batch = label_batch.to(out_token_confs.dtype)
+
+                loss = self.loss_fn(out_token_confs, label_batch)
+                postfix["total_val_loss_last_epoch"] += loss.item()
 
     def calibrate(self,
                   calibration_dset: DictDataset,
+                  validation_dset: DictDataset,
                   batch_size=1,
                   epochs=35,
                   _postprocess_fn=None,
                   **kwargs) -> Optional[EarlyStopping]:
         """
         Tunes the calibrator model given a dictionary dataset.
-        :param batch_size:
         :param calibration_dset:
+        :param validation_dset:
+        :param batch_size:
         :param epochs:
         :param lr:
         :param _postprocess_fn:
@@ -190,6 +204,14 @@ class LogitCalibrator(Calibrator, ABC):
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
                                     shuffle=True)
+
+        validation_dl = DataLoader(validation_dset,
+                                   collate_fn=calibration_dset.collate_fn("final_hidden_states",
+                                                                          "tokens",
+                                                                          self.label_key,
+                                                                          postprocess_fn=_postprocess_fn),
+                                   batch_size=batch_size,
+                                   shuffle=True)
         # Optimise llm.
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
@@ -197,12 +219,14 @@ class LogitCalibrator(Calibrator, ABC):
         es = EarlyStopping(verbose=True)
         postfix = {}
         for epoch_idx in range(epochs):
-            pbar = tqdm(calibration_dl,
-                        desc=f"Epoch {epoch_idx + 1}/{epochs}",
-                        postfix=postfix)
-            self.calibration_epoch(pbar, postfix, optimiser)
-            should_stop = es(postfix["total_loss_last_epoch"], self.calibrator_model)
+            calib_pbar = tqdm(calibration_dl,
+                              desc=f"Epoch {epoch_idx + 1}/{epochs}")
+            val_pbar = tqdm(validation_dl,
+                            desc=f"Testing on Validation Set")
+            self.calibration_epoch(calib_pbar, val_pbar, postfix, optimiser)
+            should_stop = es(postfix["total_val_loss_last_epoch"], self.calibrator_model)
             if should_stop:
+                print("Stopping.")
                 break
             torch.cuda.empty_cache()
 

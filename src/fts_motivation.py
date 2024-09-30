@@ -19,7 +19,7 @@ def fts_metric(mean, std, response_frequency_ratio):
 
 
 def zeroing_results(input_formatter_name, model_name):
-    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "CoTPromptFormat" / "calib_data" / "data.dill"
+    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "CoTPromptFormat" / "val_data" / "data.dill"
     llm_bundle = TextGenLLMBundle(model_name)
 
     # First get calibration dset
@@ -64,7 +64,7 @@ def zeroing_results(input_formatter_name, model_name):
 
 
 def show_xi_scores(input_formatter_name, model_name):
-    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "CoTPromptFormat" / "calib_data" / "data.dill"
+    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "CoTPromptFormat" / "val_data" / "data.dill"
     llm_bundle = TextGenLLMBundle(model_name)
 
     # First get calibration dset

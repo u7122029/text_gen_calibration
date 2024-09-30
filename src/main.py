@@ -11,7 +11,7 @@ from prompt_formatters import PromptVersion
 from utils import LossFunc
 
 
-def show_results(calib_data: DictDataset,
+def show_results(val_data: DictDataset,
                  test_data: DictDataset,
                  model_name: str,
                  calibrator_name: str,
@@ -21,11 +21,11 @@ def show_results(calib_data: DictDataset,
                "Calibrator": calibrator_name,
                "Input Formatter": input_formatter_name,
                "Loss Function": loss_fn_name}
-    calib_results = ModelMetrics(calib_data, **details)
+    val_results = ModelMetrics(val_data, **details)
     test_results = ModelMetrics(test_data, **details)
     print("---")
-    print("### Calibration Set Results")
-    calib_results.display()
+    print("### Validation Set Results")
+    val_results.display()
     print("---")
     print("### Test Set Results")
     test_results.display()
@@ -58,11 +58,11 @@ def main(input_formatter_name: str="SQUADV2CoT",
                                                             calib_dset_size,
                                                             test_dset_size)
 
-    calib_data, test_data = input_formatter.run_pipeline(batch_size,
-                                                         recompute_logits=recompute_logits,
-                                                         recalibrate=retrain_calibrator)
+    val_data, test_data = input_formatter.run_pipeline(batch_size,
+                                                       recompute_logits=recompute_logits,
+                                                       recalibrate=retrain_calibrator)
 
-    show_results(calib_data, test_data, model_name, calibrator_name, input_formatter_name, loss_fn)
+    show_results(val_data, test_data, model_name, calibrator_name, input_formatter_name, loss_fn)
 
 
 if __name__ == "__main__":

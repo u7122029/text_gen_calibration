@@ -15,10 +15,10 @@ class APRICOT_FrequencyTS_M(FrequencyTS_M, APRICOT):
     Nothing further needs to be defined here.
     """
 
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_M.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_M.calibrate(self, calibration_dset, validation_dset, **kwargs)
 
 
 class APRICOT_FrequencyTS_S(FrequencyTS_S, APRICOT):
@@ -27,10 +27,10 @@ class APRICOT_FrequencyTS_S(FrequencyTS_S, APRICOT):
     Nothing further needs to be defined here.
     """
 
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_S.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_S.calibrate(self, calibration_dset, validation_dset, **kwargs)
 
 
 class APRICOT_FrequencyTS_MS(FrequencyTS_MS, APRICOT):
@@ -38,10 +38,10 @@ class APRICOT_FrequencyTS_MS(FrequencyTS_MS, APRICOT):
     Uses the mean+std metric with no response frequency ratio and the calibrate function from APRICOT_FrequencyTS.
     Nothing further needs to be defined here.
     """
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_MS.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_MS.calibrate(self, calibration_dset, validation_dset, **kwargs)
 
 
 class APRICOT_FrequencyTS_MR(FrequencyTS_MR, APRICOT):
@@ -49,24 +49,25 @@ class APRICOT_FrequencyTS_MR(FrequencyTS_MR, APRICOT):
     Uses the no std metric and the calibrate function from APRICOT_FrequencyTS.
     Nothing further needs to be defined here.
     """
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_MR.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_MR.calibrate(self, calibration_dset, validation_dset, **kwargs)
+
 
 class APRICOT_FrequencyTS_R(FrequencyTS_R, APRICOT):
     """
     Only uses the relative response frequency metric.
     Nothing further needs to be defined here.
     """
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_R.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_R.calibrate(self, calibration_dset, validation_dset, **kwargs)
 
 
 class APRICOT_FrequencyTS_SR(FrequencyTS_SR, APRICOT):
-    def calibrate(self, calibration_dset: DictDataset, **kwargs):
+    def calibrate(self, calibration_dset: DictDataset, validation_dset: DictDataset, **kwargs):
         embeddings, target_accuracies = self.get_target_accuracies(calibration_dset, kwargs["batch_size"])
         calibration_dset["target_confs"] = target_accuracies
-        FrequencyTS_R.calibrate(self, calibration_dset, **kwargs)
+        FrequencyTS_R.calibrate(self, calibration_dset, validation_dset, **kwargs)
