@@ -46,7 +46,7 @@ class Calibrator(ABC):
                 1e-2 *
                 (sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const),
                 decimals=7)"""
-            self.__learning_rate = 0.01
+            self.__learning_rate = 0.005
             print(f"Learning rate: {self.__learning_rate}")
 
         self.__calibrator_model = calibrator_model
