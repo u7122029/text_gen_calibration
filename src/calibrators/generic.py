@@ -47,8 +47,7 @@ class Calibrator(ABC):
                 (sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const),
                 decimals=7)"""
             self.__learning_rate = 0.01
-            print(f"Learning rate: {self.__learning_rate}")
-
+        print(f"Learning rate: {self.__learning_rate}")
         self.__calibrator_model = calibrator_model
 
         self.loss_fn.to(DEVICE)
@@ -126,8 +125,9 @@ class LogitCalibrator(Calibrator, ABC):
                  calibrator_model,
                  loss_fn: LossFunctionDetails,
                  input_key="logits",
-                 label_key="correct"):
-        super().__init__(llm_bundle, loss_fn, calibrator_model)
+                 label_key="correct",
+                 learning_rate=None):
+        super().__init__(llm_bundle, loss_fn, calibrator_model, learning_rate)
 
         self.label_key = label_key
         self.input_key = input_key

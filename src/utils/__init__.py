@@ -81,7 +81,8 @@ class L2ECELoss(nn.Module):
 
 
 class LossFunctionDetails:
-    def __init__(self, loss_fn, learning_rate):
+    def __init__(self, name, loss_fn, learning_rate):
+        self.name = name
         self.__loss_fn = loss_fn
         self.__learning_rate = learning_rate
 
@@ -110,7 +111,7 @@ class LossFunc(Enum):
                   WeightedMSELoss(*args, **kwargs),
                   L2ECELoss()]
         learning_rates = [0.01, 0.001, 0.01, 0.01]
-        return LossFunctionDetails(losses[self.value], learning_rates[self.value])
+        return LossFunctionDetails(self.name, losses[self.value], learning_rates[self.value])
 
     @classmethod
     def from_string(cls, x):
