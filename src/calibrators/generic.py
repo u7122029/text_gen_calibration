@@ -24,16 +24,27 @@ class Calibrator(ABC):
     You may use the save method to save the parts of the calibrator that require persistence.
     Note that the save method may not do anything at all if there is nothing to save.
     """
-    def __init__(self, llm_bundle: LLMBundle, loss_fn: LossFunctionDetails, calibrator_model: Optional[nn.Module]=None):
+
+    def __init__(self,
+                 llm_bundle: LLMBundle,
+                 loss_fn: LossFunctionDetails,
+                 calibrator_model: Optional[nn.Module] = None,
+                 learning_rate: Optional[float] = None):
         if isinstance(calibrator_model, nn.Module):
             calibrator_model.eval()
 
         self.__llm_bundle = llm_bundle
         self.__loss_fn = loss_fn.loss_fn
 
-        self.__learning_rate = None
-        if calibrator_model is not None:
-            self.__learning_rate = 2e-3 * (sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-0.25)
+        self.__learning_rate = learning_rate
+        if calibrator_model is not None and learning_rate is not None:
+            # Learning rate for largest model (Token Calibrator)
+            const = (torch.log(torch.tensor(2)) / torch.log(torch.tensor(184423682)))
+
+            # Interpolate learning rate for all other models.
+            self.__learning_rate = 2e-3 * (
+                sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const)
+
         self.__calibrator_model = calibrator_model
 
         self.loss_fn.to(DEVICE)
@@ -104,6 +115,7 @@ class LogitCalibrator(Calibrator, ABC):
     """
     Calibrator Class that focuses on tuning response confidences based on the logits of the responses.
     """
+
     @abstractmethod
     def __init__(self,
                  llm_bundle,
@@ -175,7 +187,7 @@ class LogitCalibrator(Calibrator, ABC):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
         print("Training Calibrator")
         es = EarlyStopping(verbose=True)
