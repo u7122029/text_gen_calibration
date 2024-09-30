@@ -37,13 +37,15 @@ class Calibrator(ABC):
         self.__loss_fn = loss_fn.loss_fn
 
         self.__learning_rate = learning_rate
-        if calibrator_model is not None and learning_rate is not None:
+        if calibrator_model is not None and learning_rate is None:
             # Learning rate for largest model (Token Calibrator)
-            const = (torch.log(torch.tensor(2)) / torch.log(torch.tensor(184423682)))
+            const = torch.round(torch.log(torch.tensor(20)) / torch.log(torch.tensor(184423682)), decimals=7).item()
 
             # Interpolate learning rate for all other models.
             self.__learning_rate = 2e-3 * (
                 sum(p.numel() for p in calibrator_model.parameters() if p.requires_grad)) ** (-const)
+            print(f"Learning rate: {self.__learning_rate}")
+
 
         self.__calibrator_model = calibrator_model
 
@@ -187,7 +189,7 @@ class LogitCalibrator(Calibrator, ABC):
                                     batch_size=batch_size,
                                     shuffle=True)
         # Optimise llm.
-        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
         print("Training Calibrator")
         es = EarlyStopping(verbose=True)

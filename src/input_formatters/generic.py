@@ -46,7 +46,11 @@ class InputFormatter(ABC):
                     f"size of calibration ({calib_dset_size}) + test dataset ({test_dset_size}) sizes "
                     f"exceed given dataset size.")
         elif calib_dset_size is None and test_dset_size is None:
-            calib_dset_size = int(0.7 * len(dataset))
+            # first try to split such that 10000 elements are in the calibration set.
+            if 11000 <= len(dataset) <= 14286:
+                calib_dset_size = 10000
+            else:
+                calib_dset_size = int(0.7 * len(dataset))
             test_dset_size = len(dataset) - calib_dset_size
         elif calib_dset_size is not None and test_dset_size is None:
             test_dset_size = len(dataset) - calib_dset_size
