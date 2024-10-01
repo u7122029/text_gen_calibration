@@ -35,43 +35,6 @@ except:
     HF_TOKEN = None
 
 
-"""class WeightedMSELossOld(nn.Module):
-    """
-    Weighted MSE loss which takes labels that transforms a label of 1 to the weight, and a label of 0 to the
-    """
-    def __init__(self, weight):
-        super().__init__()
-        assert 0 <= weight <= 1
-
-        self.weight = weight
-        self.criterion = nn.MSELoss(reduction="sum")
-
-    def forward(self, confs, labels):
-        mask = labels == 1
-
-        correct_losses = self.criterion(confs[mask], labels[mask])
-        incorrect_losses = self.criterion(confs[~mask], labels[~mask])
-        return 1/len(confs) * ((1 - self.weight) * correct_losses + self.weight * incorrect_losses)"""
-
-
-"""class WeightedMSELoss(nn.Module):
-    def __init__(self, weight):
-        super().__init__()
-        assert 0 <= weight <= 1, "Weight must be between 0 and 1"
-        self.weight = weight
-
-    def forward(self, predictions, targets):
-        assert predictions.shape == targets.shape, "Predictions and targets must have the same shape!"
-
-        squared_errors = (predictions - targets) ** 2
-        weights = torch.where(targets == 1, 1 - self.weight, self.weight)
-        weighted_squared_errors = weights * squared_errors
-        loss = torch.mean(weighted_squared_errors)
-
-        return loss"""
-
-
-
 class WeightedMSELoss(nn.Module):
     def __init__(self, weight):
         super().__init__()
