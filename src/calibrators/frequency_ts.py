@@ -59,6 +59,9 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
         "response_props": []
     }
 
+    means = []
+    stds = []
+    rfrs = []
     for k, v in token_confs.items():
         v = torch.Tensor(v)
         n_response_occurrences = len(response_occurrences[k])
@@ -71,23 +74,30 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
         df_top["token_ids"].append(k)
         df_bot["token_ids"].append(k)
 
-        m = torch.mean(v)
-        s = torch.std(v, correction=0 if len(v) == 1 else 1)
+        m = torch.mean(v).item()
+        s = torch.std(v, correction=0 if len(v) == 1 else 1).item()
+        means.append(m)
+        stds.append(s)
+        rfrs.append(n_response_proportion)
 
-        df_top["token_values"].append(metric_func(m, s, n_response_proportion).item())
-        df_bot["token_values"].append(metric_func((1 - m), s, n_response_proportion).item())
+    means = torch.Tensor(means)
+    stds = torch.Tensor(stds)
+    rfrs = torch.Tensor(rfrs)
 
-        df_top["means"].append(m.item())
-        df_bot["means"].append(m.item())
+    df_top["token_values"] = metric_func(means, stds, rfrs)
+    df_bot["token_values"] = metric_func(1 - means, stds, rfrs)
 
-        df_top["stds"].append(s.item())
-        df_bot["stds"].append(s.item())
+    df_top["means"] = means
+    df_bot["means"] = means
 
-        df_top["stds_proc"].append(std_proc(s).item())
-        df_bot["stds_proc"].append(std_proc(s).item())
+    df_top["stds"] = stds
+    df_bot["stds"] = stds
 
-        df_top["response_props"].append(n_response_proportion)
-        df_bot["response_props"].append(n_response_proportion)
+    df_top["stds_proc"] = std_proc(stds)
+    df_bot["stds_proc"] = std_proc(stds)
+
+    df_top["response_props"] = rfrs
+    df_bot["response_props"] = rfrs
 
     df_top["token_str"] = llm_bundle.tokeniser.batch_decode(df_top["token_ids"])
     df_bot["token_str"] = llm_bundle.tokeniser.batch_decode(df_bot["token_ids"])

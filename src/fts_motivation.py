@@ -13,9 +13,35 @@ import matplotlib as mpl
 mpl.rc('text', usetex=True)
 
 
-def fts_metric(mean, std, response_frequency_ratio):
+def m_metric(mean, std, rfr):
+    return mean
+
+
+def s_metric(mean, std, response_frequency_ratio):
+    sf_std = std_proc(std)
+    return sf_std
+
+
+def r_metric(mean, std, rfr):
+    return rfr
+
+
+def ms_metric(mean, std, rfr):
+    sf_std = std_proc(std)
+    return mean * sf_std
+
+
+def sr_metric(mean, std, response_frequency_ratio):
     sf_std = std_proc(std)
     return sf_std * response_frequency_ratio
+
+
+def mr_metric(mean, std, rfr):
+    return mean * rfr
+
+
+def msr_metric(mean, std, rfr):
+    return mean * std_proc(std) * rfr
 
 
 def zeroing_results(input_formatter_name, model_name):
@@ -63,22 +89,28 @@ def zeroing_results(input_formatter_name, model_name):
     plt.savefig(path / "zeroing.png", dpi=600, transparent=True)
 
 
-def show_xi_scores(input_formatter_name, model_name):
-    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "CoTPromptFormat" / "calib_data" / "data.dill"
-    llm_bundle = TextGenLLMBundle(model_name)
+def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
+    path = Path(RESULTS_PATH) / llm_bundle.llm_name / input_formatter_name / "DEFAULT" / "calib_data" / "data.dill"
 
     # First get calibration dset
     dset = DictDataset.from_file(path)
-    top_df, bot_df = compute_top_bot_dfs(dset, llm_bundle, metric_func=fts_metric)
+    top_df, bot_df = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
+    print(top_df[top_df["token_values"] >= 0.8])
 
-def main(input_formatter_name: str="GSMCoT",
-         model_name="microsoft/Phi-3-mini-128k-instruct"):
+
+def main(input_formatter_name: str="SQUADV2CoT",
+         model_name="google/gemma-2-2b-it"):
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
-    zeroing_results(input_formatter_name, model_name)
+    #zeroing_results(input_formatter_name, model_name)
+    llm_bundle = TextGenLLMBundle(model_name)
+    metrics = [m_metric, s_metric, r_metric, ms_metric, mr_metric, msr_metric]
+    for metric in metrics:
+        print(metric.__name__)
+        show_xi_scores(input_formatter_name, llm_bundle, metric)
     """
     print(len(top_df))
     print(top_df)
