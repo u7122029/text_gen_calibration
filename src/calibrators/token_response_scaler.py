@@ -36,8 +36,7 @@ class TokenCalibrator(Calibrator):
         calibration_dl = DataLoader(calibration_dset,
                                     collate_fn=calibration_dset.collate_fn("question", "tokens", self.label_key),
                                     batch_size=batch_size,
-                                    shuffle=True,
-                                    pin_memory=True)
+                                    shuffle=True)
 
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 

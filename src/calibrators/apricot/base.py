@@ -37,8 +37,7 @@ class APRICOT(ABC):
         dl = DataLoader(dset,
                         batch_size=batch_size,
                         shuffle=False,
-                        collate_fn=dset.collate_fn("question", "correct"),
-                        pin_memory=True)
+                        collate_fn=dset.collate_fn("question", "correct"))
 
         # Get question embeddings
         embeddings = []

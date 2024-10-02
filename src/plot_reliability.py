@@ -54,17 +54,22 @@ def reliability_diagram(preds, confs, title, n_bins=15):
 
     legend_set = False
 
-    cmap_error =
-    for bar_centre, prob, total in zip(bar_centers, prob_true, bin_total):
+    cmap_error = LinearSegmentedColormap.from_list("dense_map",
+                                                   get_cmap('Reds')(np.linspace(0.2, 0.8, 22)), N=22)
+    norm_error = Normalize(vmin=0, vmax=np.sum(bin_total))
+    for i, (bar_centre, prob, total) in enumerate(zip(bar_centers, prob_true, bin_total)):
         if total == 0:
             continue
 
         kwargs = {}
         if not legend_set:
-            kwargs["label"] = "Error"
+            kwargs["label"] = "Misalignment"
             legend_set = True
 
-        ax.plot([bar_centre, bar_centre], [prob, bar_centre], linewidth=2, color="red", **kwargs)
+        ax.plot([bar_centre, bar_centre], [prob, bar_centre],
+                linewidth=2,
+                color=cmap_error(norm_error(total)),
+                **kwargs)
 
     # Create a color map and normalize bin_total values
     colors = ['#FFFFFF', '#E6F2FF', '#CCE5FF', '#99CCFF', '#66B2FF', '#3399FF', '#0080FF', '#0066CC', '#004C99',
@@ -91,13 +96,13 @@ def reliability_diagram(preds, confs, title, n_bins=15):
     ax.set_title(title)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.legend(prop={'size': 22})
+    ax.legend(prop={'size': 22}, colors=["green", "red"])
     ax.set_aspect('equal', adjustable='box')
     fig.tight_layout()
 
     # Add a colorbar
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
+    #sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    #sm.set_array([])
     #cbar = plt.colorbar(sm, ax=ax, label='Samples in bin')
 
     return fig, ax

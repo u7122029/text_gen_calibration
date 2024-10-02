@@ -65,8 +65,7 @@ class TextGenLLMBundle(LLMBundle):
 
         dl = DataLoader(dset,
                         batch_size=batch_size,
-                        collate_fn=dset.collate_fn("response_formatted"),
-                        pin_memory=True)
+                        collate_fn=dset.collate_fn("response_formatted"))
 
         # Logits and Output Tokens
         file_idx = 0
@@ -150,8 +149,7 @@ class TextGenLLMBundle(LLMBundle):
 
         dl = DataLoader(dset,
                         batch_size=batch_size,
-                        collate_fn=dset.collate_fn("numeric_conf_formatted", "worded_conf_formatted"),
-                        pin_memory=True)
+                        collate_fn=dset.collate_fn("numeric_conf_formatted", "worded_conf_formatted"))
 
         for batch_idx, batch in tqdm(enumerate(dl), total=len(dl), desc=desc):
             numeric_formatted = batch["numeric_conf_formatted"]

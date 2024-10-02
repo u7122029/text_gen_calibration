@@ -190,8 +190,7 @@ class LogitCalibrator(Calibrator, ABC):
                                                                            self.label_key,
                                                                            postprocess_fn=_postprocess_fn),
                                     batch_size=batch_size,
-                                    shuffle=True,
-                                    pin_memory=True)
+                                    shuffle=True)
 
         # Optimise llm.
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
