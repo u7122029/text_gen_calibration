@@ -2,7 +2,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
-
+from torch.nn.functional import sigmoid
 
 class PhaseModel(nn.Module):
     """
@@ -99,8 +99,8 @@ class TieredScalerModel(TieredModel):
     def __init__(self):
         super().__init__()
 
-        self.a = nn.Parameter(torch.tensor(-4.0))
-        self.b = nn.Parameter(torch.tensor(-0.5))
+        self.a = nn.Parameter(torch.tensor(1))
+        self.b = nn.Parameter(torch.tensor(0))
         self.general_temp = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x, tokens=None):
@@ -115,7 +115,7 @@ class TieredScalerModel(TieredModel):
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask] = torch.div(1, 1 + torch.exp(self.a * x[mask] + self.b))
+            x[mask] = sigmoid(self.a * x[mask] + self.b)
 
         return x  # [confs]
 

@@ -13,47 +13,49 @@ from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
 from utils import LossFunc, RESULTS_PATH
 
-calibrator_names = ["APRICOT_Original",
-                    "TokenCalibrator",
-                    "APRICOT_TemperatureScaling",
-                    "FrequencyPTS_MSR",
-                    "FrequencyPTS_M",
-                    "FrequencyPTS_S",
-                    "FrequencyPTS_R",
-                    "FrequencyPTS_MS",
-                    "FrequencyPTS_MR",
-                    "FrequencyPTS_SR",
-                    "LastHiddenStateCalibrator",
-                    "TemperatureScaling",
-                    "FrequencyTS_MSR",
-                    "FrequencyTS_M",
-                    "FrequencyTS_S",
-                    "FrequencyTS_R",
-                    "FrequencyTS_MR",
-                    "FrequencyTS_SR",
-                    "FrequencyTS_MS",
-                    "APRICOT_FrequencyTS_MSR",
-                    "APRICOT_FrequencyTS_M",
-                    "APRICOT_FrequencyTS_S",
-                    "APRICOT_FrequencyTS_R",
-                    "APRICOT_FrequencyTS_MS",
-                    "APRICOT_FrequencyTS_SR",
-                    "APRICOT_FrequencyTS_MR",
-                    "FLHS_MSR",
-                    "FLHS_M",
-                    "FLHS_S",
-                    "FLHS_R",
-                    "FLHS_SR",
-                    "FLHS_MS",
-                    "FLHS_MR",
-                    "FLHS_MSR",
-                    "APRICOT_FLHS_M",
-                    "APRICOT_FLHS_S",
-                    "APRICOT_FLHS_R",
-                    "APRICOT_FLHS_SR",
-                    "APRICOT_FLHS_MS",
-                    "APRICOT_FLHS_MR",
-                    "LogitConfsPlattScaling"]
+calibrator_names = [
+    "APRICOT_Original",
+    "TokenCalibrator",
+    "APRICOT_TemperatureScaling",
+    "FrequencyPTS_MSR",
+    "FrequencyPTS_M",
+    "FrequencyPTS_S",
+    "FrequencyPTS_R",
+    "FrequencyPTS_MS",
+    "FrequencyPTS_MR",
+    "FrequencyPTS_SR",
+    "LastHiddenStateCalibrator",
+    "TemperatureScaling",
+    "FrequencyTS_MSR",
+    "FrequencyTS_M",
+    "FrequencyTS_S",
+    "FrequencyTS_R",
+    "FrequencyTS_MR",
+    "FrequencyTS_SR",
+    "FrequencyTS_MS",
+    "APRICOT_FrequencyTS_MSR",
+    "APRICOT_FrequencyTS_M",
+    "APRICOT_FrequencyTS_S",
+    "APRICOT_FrequencyTS_R",
+    "APRICOT_FrequencyTS_MS",
+    "APRICOT_FrequencyTS_SR",
+    "APRICOT_FrequencyTS_MR",
+    "FLHS_MSR",
+    "FLHS_M",
+    "FLHS_S",
+    "FLHS_R",
+    "FLHS_SR",
+    "FLHS_MS",
+    "FLHS_MR",
+    "FLHS_MSR",
+    "APRICOT_FLHS_M",
+    "APRICOT_FLHS_S",
+    "APRICOT_FLHS_R",
+    "APRICOT_FLHS_SR",
+    "APRICOT_FLHS_MS",
+    "APRICOT_FLHS_MR",
+    "LogitConfsPlattScaling"
+]
 
 
 def vary_calibrator_ood(model_name: str,
@@ -97,14 +99,6 @@ def vary_calibrator_ood(model_name: str,
         del test_results
 
     return collection
-    """control_keys = ["accuracy"]
-    for name in ["ece", "brier", "auroc", "auprc"]:
-        control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
-
-    table = collection.generate_tables("Calibrator", control_keys)
-    print(tabulate(collection.details.items(), tablefmt="github"))
-    print()
-    print(table)"""
 
 
 def merge_dfs(df1, df2):
@@ -209,7 +203,7 @@ def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="SQUADV2CoT",
+         id_input_formatter_name: str="MMLUCoT",
          ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
 
@@ -261,11 +255,16 @@ def main(model_name: str="google/gemma-2-2b-it",
         vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
     #elif ood_input_formatter_name is None:
     #    print("vary_ood_if")
-    #    vary_ood_if(model_name, calibrator_name, prompt_version, id_input_formatter_name)
+    #    vary_ood_if(model_name, calibrator_name, id_prompt_version, id_input_formatter_name)
     elif calibrator_name is None and loss_func_name is None:
         print("Comparing loss functions (OOD).")
         collections = []
-        for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
+        loss_names = [
+            "BCE",
+            "CORRECT_AWARE",
+            "WEIGHTED_CORRECT_AWARE"
+        ]
+        for lfn in loss_names:
             print(sc.blue(lfn))
             collections.append(vary_calibrator_ood(model_name,
                                                    prompt_version,

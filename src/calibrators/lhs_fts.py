@@ -21,7 +21,7 @@ class LHSFTSModel(LHSModel, TieredModel):
         # tokens.shape: [hidden_feature_vecs]
 
         # First temperature scale using hidden state, then use fts top temp to further scale selected tokens.
-        logits = LHSModel.temp_scale(self, x)
+        logits = self.temp_scale(x)
         if self.top_token_ids is not None:
             logits[:, self.top_token_ids] = logits[:, self.top_token_ids] / self.top_temp
 
@@ -53,7 +53,7 @@ class FrequencyLastHiddenStateCalibrator(LastHiddenStateCalibrator, TokenFrequen
 
 class FLHS_MSR(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return torch.tensor(mean * std_proc(std) * rfr)
+        return mean * std_proc(std) * rfr
 
 
 class FLHS_M(FrequencyLastHiddenStateCalibrator):

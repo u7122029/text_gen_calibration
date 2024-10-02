@@ -117,7 +117,8 @@ class VCPlattScaling(Calibrator):
                                                                            "worded_successful",
                                                                            "correct"),
                                     batch_size=batch_size,
-                                    shuffle=True)
+                                    shuffle=True,
+                                    pin_memory=True)
         # Optimise llm.
         optimiser = optim.SGD(self.calibrator_model.parameters(), lr=self.learning_rate)
 
@@ -168,7 +169,8 @@ class VCPlattScaling(Calibrator):
                                                              "worded_confs",
                                                              "worded_successful",
                                                              "correct"),
-                             batch_size=batch_size)
+                             batch_size=batch_size,
+                             pin_memory=True)
 
         with torch.no_grad():
             confs_after_calibration, successful_confs = self.test_loop(test_dl)

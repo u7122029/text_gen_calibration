@@ -13,7 +13,8 @@ class LHSModel(nn.Module):
     def __init__(self, llm_bundle: LLMBundle):
         super().__init__()
         self.llm_bundle = llm_bundle
-        assert llm_bundle.hidden_features is not None
+        if llm_bundle.hidden_features is None:
+            llm_bundle.load_model(silent=False, lm_head_only=True)
         self.fc = nn.Linear(in_features=llm_bundle.hidden_features, out_features=1)
 
     def temp_scale(self, x):
