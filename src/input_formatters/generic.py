@@ -180,7 +180,7 @@ class InputFormatter(ABC):
             test_results = dill_load(save_path)
         else:
             print(f"Did not find ood test results at {save_path}. Running pipeline.")
-            original_input_formatter.run_pipeline(batch_size=4)
+            original_input_formatter.run_pipeline(batch_size=batch_size)
 
             calibrator = original_input_formatter.calibrator_type(original_input_formatter.llm_bundle,
                                                                   original_input_formatter.loss_fn(weight=accuracy))
