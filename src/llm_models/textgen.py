@@ -97,7 +97,7 @@ class TextGenLLMBundle(LLMBundle):
                 eos_mask = response != self.tokeniser.eos_token_id
 
                 processed_final_hs = final_hs_response[eos_mask]
-                processed_logits = self.final_hs_to_logits(processed_final_hs.to(DEVICE)).cpu()
+                processed_logits = self.final_hs_to_logits(processed_final_hs).cpu()
                 tokens = response[eos_mask].cpu()
 
                 idx_name = str(file_idx).zfill(4)

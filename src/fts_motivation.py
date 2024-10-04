@@ -60,7 +60,7 @@ def zeroing_results(input_formatter_name, model_name):
 
     llm_bundle.lm_head.cuda()
     for x in dset:
-        logits = llm_bundle.final_hs_to_logits(x["final_hidden_states"].cuda()).cpu()
+        logits = llm_bundle.final_hs_to_logits(x["final_hidden_states"]).cpu()
         tokens = x["tokens"]
         token_confs = torch.take_along_dim(torch.softmax(logits, dim=1), tokens.unsqueeze(1), dim=1).squeeze()
 

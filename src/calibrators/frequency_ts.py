@@ -26,7 +26,7 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
     response_occurrences = {}
 
     for i, item in enumerate(calibration_dset):
-        logits = llm_bundle.final_hs_to_logits(item["final_hidden_states"].cuda()).cpu()
+        logits = llm_bundle.final_hs_to_logits(item["final_hidden_states"]).cpu()
         tokens = item["tokens"].long()
         prob_vecs = torch.softmax(logits, dim=1)
         assert len(tokens) == len(prob_vecs)

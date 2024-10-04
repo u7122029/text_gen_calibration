@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional, Dict, Tuple
 
+from torch import nn
 from transformers import AutoTokenizer
 
 from utils import QUALITATIVE_SCALE, HF_TOKEN, DEVICE
@@ -84,7 +85,7 @@ class LLMBundle(ABC):
                                                        token=HF_TOKEN,
                                                        padding_side="left")
         self.llm_model = None
-        self.lm_head = None
+        self.lm_head: Optional[nn.Module] = None
         self.tokeniser.pad_token_id = self.tokeniser.eos_token_id
         self.hidden_features = None
 
@@ -104,7 +105,8 @@ class LLMBundle(ABC):
         @return: Shape [batch_size (OPTIONAL), num_tokens, num_hidden_layer_features]
         """
         self.load_model(silent=True, lm_head_only=True) # Don't overload with "model already loaded" messages.
-        self.lm_head.to(final_hs.device) # force cuda for lm head
+        #self.lm_head.to(final_hs.device) # force cuda for lm head
+        final_hs.to(self.lm_head.device)
         return self.lm_head(final_hs)
 
     @abstractmethod
