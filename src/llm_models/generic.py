@@ -106,7 +106,7 @@ class LLMBundle(ABC):
         """
         self.load_model(silent=True, lm_head_only=True) # Don't overload with "model already loaded" messages.
         #self.lm_head.to(final_hs.device) # force cuda for lm head
-        final_hs.to(self.lm_head.device)
+        final_hs.to(self.lm_head.bias.device)
         return self.lm_head(final_hs)
 
     @abstractmethod
