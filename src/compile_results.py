@@ -11,7 +11,7 @@ from calibrators import calibrator_dict
 from llm_models.textgen import TextGenLLMBundle
 from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
-from utils import LossFunc, RESULTS_PATH
+from utils import LossFunc
 
 calibrator_names = [
     "APRICOT_Original",
@@ -101,9 +101,8 @@ def vary_calibrator_ood(model_name: str,
     return collection
 
 
-def merge_dfs(df1, df2):
-    # Merge the dataframes on 'name'
-    merged = pd.merge(df1, df2, on='Calibrator', suffixes=('_1', '_2'), how='left')
+def merge_dfs(*dfs):
+    """merged = pd.merge(df1, df2, on='Calibrator', suffixes=('_1', '_2'), how='left')
 
     # Create a mask for rows where df2's score is smaller (or df1's score is NaN)
     mask = (merged['ece_calib_2'] < merged['ece_calib_1']) | (merged['ece_calib_1'].isna())
@@ -114,7 +113,9 @@ def merge_dfs(df1, df2):
         df1.loc[mask, col] = merged.loc[mask, f"{col}_2"]
     #df1.loc[mask, 'loss_fn'] = merged.loc[mask, 'loss_fn_2']
 
-    return df1
+    return df1"""
+    df = pd.concat(*dfs)
+    return df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
 
 
 def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
@@ -122,19 +123,16 @@ def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
     for name in ["ece", "brier", "auroc", "auprc"]:
         control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
 
-    final_dataframe = None
+    dfs = []
     for collection in collections:
         table = collection.generate_tables("Calibrator", control_keys)
         table["loss_fn"] = [collection.details["Loss Function"]] * len(table)
 
-        if final_dataframe is None:
-            final_dataframe = table
-            continue
-        final_dataframe = merge_dfs(final_dataframe, table)
+        dfs.append(table)
 
     out_dict = collections[0].details.copy()
     del out_dict["Loss Function"]
-    return final_dataframe, out_dict
+    return merge_dfs(dfs), out_dict
 
 
 def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: PromptVersion, input_formatter: str):
@@ -181,30 +179,15 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
 
         calib_collection.append(calib_results)
         test_collection.append(test_results)
-    """
-    control_keys = ["accuracy"]
-    for name in ["ece", "brier", "auroc", "auprc"]:
-        control_keys.extend([f"{name}_logits", f"{name}_verbalised"])
-    calib_table, calib_details = calib_collection.generate_tables("Calibrator", control_keys)
-    test_table, test_details = test_collection.generate_tables("Calibrator", control_keys)
-
-    print(calib_details)
-    print()
-    print(calib_table.sort_values("ece_calib"))
-    print()
-    print(test_details)
-    print()
-    print(test_table.sort_values("ece_calib"))
-    """
     return calib_collection, test_collection
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
-         id_input_formatter_name: str="MMLUCoT",
-         ood_input_formatter_name: Optional[str]="GSMCoT"):
+         id_input_formatter_name: str="SQUADV2CoT",
+         ood_input_formatter_name: Optional[str]=None):
     """
 
     @param model_name:
@@ -225,6 +208,10 @@ def main(model_name: str="google/gemma-2-2b-it",
                           prompt_format,
                           id_input_formatter_name,
                           ood_input_formatter_name]]) == 1"""
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_colwidth', None)
+
     if ood_input_formatter_name is None and calibrator_name is None and loss_func_name is None:
         print("Comparing Loss Functions (ID).")
         calib_collections = []

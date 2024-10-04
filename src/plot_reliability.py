@@ -3,19 +3,20 @@ from typing import Optional
 import fire
 from pathlib import Path
 
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+
 from calibrators import calibrator_dict, compute_top_bot_dfs, std_proc
 from input_formatters import input_formatter_dict
 from llm_models import TextGenLLMBundle
 from prompt_formatters import PromptVersion
 from utils import dill_load, RESULTS_PATH, FIGURES_PATH, LossFunc
-from data import DictDataset
+from metrics import ModelMetrics
+
+from torchmetrics.classification import BinaryCalibrationError
 import torch
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize, LinearSegmentedColormap
-from matplotlib.cm import get_cmap
-from matplotlib import colormaps
 import matplotlib.patheffects as path_effects
 
 
@@ -52,19 +53,20 @@ def reliability_diagram(preds, confs, title, n_bins=15):
     bar_width = 1 / n_bins
     bar_centers = bin_edges[:-1] + bar_width / 2
 
-    legend_set = False
+    colors = [(1, 0.7, 0.7), (0.6, 0, 0)]  # light red to dark red
 
-    cmap_error = LinearSegmentedColormap.from_list("dense_map",
-                                                   get_cmap('Reds')(np.linspace(0.2, 0.8, 22)), N=22)
+    # Create the colormap
+    cmap_error = LinearSegmentedColormap.from_list("red_uniform", colors, N=20)
+
     norm_error = Normalize(vmin=0, vmax=np.sum(bin_total))
-    for i, (bar_centre, prob, total) in enumerate(zip(bar_centers, prob_true, bin_total)):
+    largest_bin = np.max(bin_total)
+    for bar_centre, prob, total in zip(bar_centers, prob_true, bin_total):
         if total == 0:
             continue
 
         kwargs = {}
-        if not legend_set:
+        if total == largest_bin:
             kwargs["label"] = "Misalignment"
-            legend_set = True
 
         ax.plot([bar_centre, bar_centre], [prob, bar_centre],
                 linewidth=2,
@@ -76,7 +78,7 @@ def reliability_diagram(preds, confs, title, n_bins=15):
               '#003366', '#001A33']
 
     # Create the colormap
-    cmap = LinearSegmentedColormap.from_list("dense_map", colors, N=22)
+    cmap = LinearSegmentedColormap.from_list("dense_map", colors, N=20)
     #cmap = colormaps["viridis"]
     norm = Normalize(vmin=0, vmax=np.sum(bin_total))
     bars = ax.bar(bar_centers, prob_true, width=bar_width, alpha=0.7, edgecolor='black',
@@ -96,7 +98,7 @@ def reliability_diagram(preds, confs, title, n_bins=15):
     ax.set_title(title)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.legend(prop={'size': 22}, colors=["green", "red"])
+    ax.legend(prop={'size': 22})
     ax.set_aspect('equal', adjustable='box')
     fig.tight_layout()
 
@@ -154,6 +156,9 @@ def plot_ood(model_name: str,
                                     f"{model_name}, {calibrator_name}")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
+    ece_metric = BinaryCalibrationError()
+    print(f"ECE: {ece_metric(test_data["correct"], test_data["calibrated_confs"])}")
+
     # First get highest tokens by threshold
     def metric(mean, std, response_frequency_ratio):
         return response_frequency_ratio
@@ -186,8 +191,7 @@ def plot_ood(model_name: str,
     calibrated_token_confs = torch.Tensor(calibrated_token_confs)
     calibrated_token_confs1 = torch.Tensor(calibrated_token_confs1)
 
-    print(len(test_data["correct"]))
-    print(len(modified_confs))
+
     fig3, ax3 = reliability_diagram(test_data["correct"],
                                     modified_confs,
                                     f"xi Token Reliability", n_bins=30)
@@ -213,8 +217,12 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
             prompt_version="DEFAULT",
             calibrator_name="APRICOT_TemperatureScaling"):
     prompt_version = PromptVersion.from_string(prompt_version)
-    figures_path = Path(
-        FIGURES_PATH) / model_name / input_formatter_name / prompt_version.name / loss_func_name / calibrator_name
+    figures_path = (Path(FIGURES_PATH) /
+                    model_name /
+                    input_formatter_name /
+                    prompt_version.name /
+                    loss_func_name /
+                    calibrator_name)
     figures_path.mkdir(parents=True, exist_ok=True)
 
     llm_bundle = TextGenLLMBundle(model_name)
@@ -222,7 +230,7 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
 
     calibrator_type = calibrator_dict[calibrator_name]
     input_formatter = input_formatter_dict[input_formatter_name](llm_bundle, prompt_version, calibrator_type, loss_func)
-    calib_data, test_data = input_formatter.run_pipeline()
+    _, test_data = input_formatter.run_pipeline()
     print(test_data.keys())
 
     # Plot response-based reliability diagrams
@@ -281,11 +289,14 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
     fig4.savefig(figures_path.parent.parent / "non_xi.png", dpi=600)
     fig5.savefig(figures_path.parent.parent / "calib_xi.png", dpi=600)
     fig6.savefig(figures_path.parent.parent / "calib_non_xi.png", dpi=600)
+
+    mm = ModelMetrics(test_data)
+    print(f"ECE: {mm.ece_calibrated}")
     plt.show()
 
 
 def main(model_name: str = "google/gemma-2-2b-it",
-         calibrator_name: str = "APRICOT_FrequencyTS_MS",
+         calibrator_name: str = "APRICOT_FLHS_MR",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "WEIGHTED_CORRECT_AWARE",

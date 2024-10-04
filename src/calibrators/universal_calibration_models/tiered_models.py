@@ -1,7 +1,7 @@
 from typing import Optional
 from abc import ABC, abstractmethod
 import torch
-from torch import nn
+from torch import nn, sigmoid_
 from torch.nn.functional import sigmoid
 
 class PhaseModel(nn.Module):
@@ -115,7 +115,7 @@ class TieredScalerModel(TieredModel):
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask] = sigmoid(self.a * x[mask] + self.b)
+            x[mask] = torch.sigmoid_(self.a * x[mask] + self.b)
 
         return x  # [confs]
 

@@ -19,11 +19,11 @@ class LHSModel(nn.Module):
 
     def temp_scale(self, x):
         temperatures = nn.functional.softplus(self.fc(x))  # vector of temperatures.
-        temperatures = torch.clip(temperatures, min=1e-5)
+        torch.clip_(temperatures, min=1e-5)
 
         # lm head will not be trained, so .float() and device changes are safe.
         logits = self.llm_bundle.final_hs_to_logits(x).float().to(temperatures.device)
-        logits = logits / temperatures
+        logits.div_(temperatures)
 
         return logits
 
@@ -31,11 +31,11 @@ class LHSModel(nn.Module):
         # x.shape: [hidden_feature_vecs, num_hidden_features]
         # tokens.shape: [hidden_feature_vecs]
 
-        logits = self.temp_scale(x)
+        x = self.temp_scale(x)
 
-        prob_vecs = torch.softmax(logits, dim=1)
+        x = torch.softmax(x, dim=1)
         if tokens is not None:
-            confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
+            confs = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
         else:
             confs = torch.max(x, dim=1).values
         return confs # [confs]

@@ -21,13 +21,13 @@ class LHSFTSModel(LHSModel, TieredModel):
         # tokens.shape: [hidden_feature_vecs]
 
         # First temperature scale using hidden state, then use fts top temp to further scale selected tokens.
-        logits = self.temp_scale(x)
+        x = self.temp_scale(x)
         if self.top_token_ids is not None:
-            logits[:, self.top_token_ids] = logits[:, self.top_token_ids] / self.top_temp
+            x[:, self.top_token_ids].div_(self.top_temp)
 
-        prob_vecs = torch.softmax(logits, dim=1)
+        x = torch.softmax(x, dim=1)
         if tokens is not None:
-            confs = torch.take_along_dim(prob_vecs, tokens.unsqueeze(1), dim=1).squeeze(1)
+            confs = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
         else:
             confs = torch.max(x, dim=1).values
         return confs # [confs]

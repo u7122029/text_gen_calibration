@@ -32,8 +32,8 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
-         calibrator_name="LogitConfsPlattScaling",
-         loss_fn="BCE",
+         calibrator_name="FLHS_S",
+         loss_fn="CORRECT_AWARE",
          cot_version="DEFAULT",
          model_name="google/gemma-2-2b-it",
          batch_size=4,
