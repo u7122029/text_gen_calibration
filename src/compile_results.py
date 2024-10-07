@@ -182,12 +182,12 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     return calib_collection, test_collection
 
 
-def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
+def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]=None):
+         ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
 
     @param model_name:
@@ -216,7 +216,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
         print("Comparing Loss Functions (ID).")
         calib_collections = []
         test_collections = []
-        for lfn in ["BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
+        for lfn in ["BCE", "WEIGHTED_BCE", "CORRECT_AWARE", "WEIGHTED_CORRECT_AWARE"]:
             print(sc.blue(lfn))
             calib_collection, test_collection = vary_calibrator_id(model_name,
                                                                    lfn,
@@ -248,6 +248,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
         collections = []
         loss_names = [
             "BCE",
+            "WEIGHTED_BCE",
             "CORRECT_AWARE",
             "WEIGHTED_CORRECT_AWARE"
         ]

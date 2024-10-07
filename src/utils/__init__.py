@@ -5,6 +5,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Type, Any
 import simple_colors as sc
+from torch.nn.modules.loss import _WeightedLoss
 from torchmetrics.classification import BinaryCalibrationError
 
 from torch import nn
@@ -36,7 +37,7 @@ except:
 
 
 class WeightedMSELoss(nn.Module):
-    def __init__(self, weight):
+    def __init__(self, weight: float):
         super().__init__()
         assert 0 <= weight <= 1, "Weight must be between 0 and 1"
         self.weight = weight
@@ -51,8 +52,18 @@ class WeightedMSELoss(nn.Module):
 
         weighted_errors = squared_errors * (self.weight + targets * self.weight_diff)
 
-        # Return mean
         return torch.mean(weighted_errors)
+
+
+class WeightedBCELoss(nn.Module):
+    def __init__(self, weight: float) -> None:
+        super().__init__()
+        self.weight = weight
+        self.weight_diff = 1 - 2 * weight
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        entropy_loss = nn.functional.binary_cross_entropy(input, target, reduction="none")
+        return torch.mean(entropy_loss * (self.weight + target * self.weight_diff))
 
 
 class L2ECELoss(nn.Module):
@@ -105,13 +116,15 @@ class LossFunc(Enum):
     BCE = 1
     WEIGHTED_CORRECT_AWARE = 2
     CALIB_AWARE = 3
+    WEIGHTED_BCE = 4
 
     def __call__(self, *args, **kwargs):
         losses = [nn.MSELoss(),
                   nn.BCELoss(),
                   WeightedMSELoss(*args, **kwargs),
-                  L2ECELoss()]
-        learning_rates = [0.01, 0.001, 0.01, 0.01]
+                  L2ECELoss(),
+                  WeightedBCELoss(*args, **kwargs)]
+        learning_rates = [0.01, 0.001, 0.01, 0.01, 0.01]
         return LossFunctionDetails(self.name, losses[self.value], learning_rates[self.value])
 
     @classmethod

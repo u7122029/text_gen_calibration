@@ -20,6 +20,17 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 
 
+def boxplots(confs_uncalibrated, confs_xi, confs_non_xi):
+    fig, ax = plt.subplots(figsize=(17, 8.1))
+    ax.boxplot([confs_uncalibrated, confs_xi, confs_non_xi], vert=False)
+    ax.set_yticklabels(['Original', 'xi > 0.8', 'xi <= 0.8'], fontsize=20)
+    ax.set_xlabel('Confidence', fontsize=20)
+    ax.set_title('Word Confidence Distributions', fontsize=20)
+    ax.set_xlim(0.5, 1)
+    fig.tight_layout()
+    return fig, ax
+
+
 def reliability_diagram(preds, confs, title, n_bins=15):
     if isinstance(preds, torch.Tensor):
         preds = preds.numpy()
@@ -47,7 +58,7 @@ def reliability_diagram(preds, confs, title, n_bins=15):
             [0, 1],
             linestyle="--",
             color="green",
-            label="Perfect Calibration")
+            label="Perfect Alignment")
 
     # Plot histogram bars with error
     bar_width = 1 / n_bins
@@ -93,12 +104,12 @@ def reliability_diagram(preds, confs, title, n_bins=15):
                        f'{count}', color="white", ha='center', va='bottom')
         text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 
-    ax.set_xlabel("Confidence")
-    ax.set_ylabel("Accuracy")
-    ax.set_title(title)
+    ax.set_xlabel("Confidence", fontsize=20)
+    ax.set_ylabel("Accuracy", fontsize=20)
+    ax.set_title(title, fontsize=20)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.legend(prop={'size': 22})
+    ax.legend(prop={'size': 24})
     ax.set_aspect('equal', adjustable='box')
     fig.tight_layout()
 
@@ -149,15 +160,15 @@ def plot_ood(model_name: str,
 
     # Plot and save figures
     fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"],
-                                  f"Logit-based Confidences ({model_name})")
+                                  f"Logit-based Responses ({model_name})")
     fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"],
-                                    f"Verbalised Confidences ({model_name})")
+                                    f"Verbalised Responses ({model_name})")
     fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
-                                    f"{model_name}, {calibrator_name}")
+                                    f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
     ece_metric = BinaryCalibrationError()
-    print(f"ECE: {ece_metric(test_data["correct"], test_data["calibrated_confs"])}")
+    print(f"ECE: {ece_metric(test_data["calibrated_confs"], test_data["correct"])}")
 
     # First get highest tokens by threshold
     def metric(mean, std, response_frequency_ratio):
@@ -194,20 +205,22 @@ def plot_ood(model_name: str,
 
     fig3, ax3 = reliability_diagram(test_data["correct"],
                                     modified_confs,
-                                    f"xi Token Reliability", n_bins=30)
+                                    f"xi > 0.8 Responses", n_bins=30)
     fig4, ax4 = reliability_diagram(test_data["correct"],
                                     modified_confs1,
-                                    f"non-xi Token Reliability", n_bins=30)
+                                    f"xi <= 0.8 Responses", n_bins=30)
 
     fig5, ax5 = reliability_diagram(test_data["correct"],
                                     calibrated_token_confs,
-                                    f"xi Token Reliability (calib)", n_bins=30)
+                                    f"xi > 0.8 Responses (calib)", n_bins=30)
     fig6, ax6 = reliability_diagram(test_data["correct"],
                                     calibrated_token_confs1,
-                                    f"non-xi Token Reliability (calib)", n_bins=30)
+                                    f"xi <= 0.8 Responses (calib)", n_bins=30)
 
     fig5.savefig(figures_path / "xi.png", dpi=600)
     fig6.savefig(figures_path / "non_xi.png", dpi=600)
+
+    fig7, ax7 = boxplots(test_data["logit_confs"], modified_confs, modified_confs1)
     plt.show()
 
 
@@ -235,15 +248,15 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
 
     # Plot response-based reliability diagrams
     fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"],
-                                  f"Logit-based Confidences ({model_name})")
+                                  f"Logit-based Responses ({model_name})")
     fig.savefig(figures_path.parent.parent / "logits.png", dpi=600)
 
     fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"],
-                                    f"Verbalised Confidences ({model_name})")
+                                    f"Verbalised Responses ({model_name})")
     fig1.savefig(figures_path.parent.parent / "verbalised.png", dpi=600)
 
     fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
-                                    f"Calibrated Confidences ({model_name}, {calibrator_name})")
+                                    f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
     # First get highest tokens by threshold
@@ -276,27 +289,29 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
     calibrated_token_confs1 = torch.Tensor(calibrated_token_confs1)
 
     fig3, ax3 = reliability_diagram(test_data["correct"], modified_confs,
-                                    f"xi token Reliability", n_bins=30)
+                                    f"xi > 0.8 Responses", n_bins=30)
     fig4, ax4 = reliability_diagram(test_data["correct"], modified_confs1,
-                                    f"non-xi token Reliability", n_bins=30)
+                                    f"xi <= 0.8 Responses", n_bins=30)
 
     fig5, ax5 = reliability_diagram(test_data["correct"], calibrated_token_confs,
-                                    f"xi token Reliability (calibrated)", n_bins=30)
+                                    f"xi > 0.8 Responses (calibrated)", n_bins=30)
     fig6, ax6 = reliability_diagram(test_data["correct"], calibrated_token_confs1,
-                                    f"non-xi token Reliability (calibrated)", n_bins=30)
+                                    f"x <= 0.8 Responses (calibrated)", n_bins=30)
 
     fig3.savefig(figures_path.parent.parent / "xi.png", dpi=600)
     fig4.savefig(figures_path.parent.parent / "non_xi.png", dpi=600)
-    fig5.savefig(figures_path.parent.parent / "calib_xi.png", dpi=600)
-    fig6.savefig(figures_path.parent.parent / "calib_non_xi.png", dpi=600)
+    fig5.savefig(figures_path / "calib_xi.png", dpi=600)
+    fig6.savefig(figures_path / "calib_non_xi.png", dpi=600)
 
+    fig7, ax7 = boxplots(test_data["logits_confs"], modified_confs, modified_confs1)
+    fig7.savefig(figures_path.parent.parent / "box_comparisons.png", dpi=600)
     mm = ModelMetrics(test_data)
     print(f"ECE: {mm.ece_calibrated}")
     plt.show()
 
 
 def main(model_name: str = "google/gemma-2-2b-it",
-         calibrator_name: str = "APRICOT_FLHS_MR",
+         calibrator_name: str = "LastHiddenStateCalibrator",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "WEIGHTED_CORRECT_AWARE",
