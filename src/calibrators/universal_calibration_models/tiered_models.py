@@ -133,7 +133,7 @@ class TieredPlattModel(TieredModel):
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
             x[mask] = self.top_linear(x[mask])
-            x[mask].sigmoid_()
+            x[mask] = x[mask].sigmoid()
 
         return x.flatten()  # [confs]
 
