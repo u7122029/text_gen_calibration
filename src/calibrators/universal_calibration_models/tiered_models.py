@@ -125,7 +125,7 @@ class TieredPlattModel(TieredModel):
 
     def forward(self, x: torch.Tensor, tokens=None):
         # x.shape: [logit_vec, vocab size]
-        x = torch.softmax(x, dim=1)
+        x = torch.softmax(x.clone(), dim=1)
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1)
         x = torch.sigmoid(self.general_linear(x))
 
