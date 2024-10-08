@@ -128,12 +128,12 @@ class TieredPlattModel(TieredModel):
         x = nn.functional.softmax(x.clone(), dim=1)
         x = torch.gather(x, 1, tokens.unsqueeze(1))
         x = self.general_linear(x)
-        x = x.sigmoid()
+        x = torch.sigmoid(x)
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
             x[mask] = self.top_linear(x[mask])
-            x[mask] = x[mask].sigmoid()
+            x[mask] = torch.sigmoid(x[mask])
 
         return x.flatten()  # [confs]
 
