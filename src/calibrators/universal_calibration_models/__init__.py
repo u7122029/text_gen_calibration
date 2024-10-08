@@ -35,7 +35,7 @@ class PlattScalerLogits(nn.Module):
         # x.shape: [logit_vec, vocab size]
         x = torch.softmax(x, dim=1)
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1)
-        x = sigmoid(self.linear(x))
+        x = torch.sigmoid_(self.linear(x))
         return x.flatten()  # [confs]
 
 
@@ -79,13 +79,13 @@ class PTSModel(nn.Module):
 
     def forward(self, inp, tokens):
         t, _ = torch.sort(torch.topk(inp, self.first_layer_size, dim=1).values, dim=1, descending=True)
-        t = torch.clip(nn.functional.softplus(self.layers(t)), min=1e-5)
+        t = torch.clip_(nn.functional.softplus(self.layers(t)), min=1e-5)
 
-        x = torch.div(inp, t)
-        x = torch.softmax(x, dim=1)
-        x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
+        inp.div_(inp, t)
+        inp = torch.softmax(inp, dim=1)
+        inp = torch.take_along_dim(inp, tokens.unsqueeze(1), dim=1).squeeze(1)
 
-        return x
+        return inp
 
 
 class TokenCalibratorModel(nn.Module):

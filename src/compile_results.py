@@ -53,7 +53,9 @@ calibrator_names = [
     "APRICOT_FLHS_SR",
     "APRICOT_FLHS_MS",
     "APRICOT_FLHS_MR",
-    "LogitConfsPlattScaling"
+    "LogitConfsPlattScaling",
+    "FTP",
+    "FPS"
 ]
 
 
