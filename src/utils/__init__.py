@@ -45,12 +45,12 @@ class WeightedMSELoss(nn.Module):
         assert predictions.shape == targets.shape, "Predictions and targets must have the same shape"
         assert predictions.dtype == targets.dtype, "Predictions and targets must have the same dtype"
 
-        diff = predictions - targets
-        squared_errors = diff * diff
+        squared_errors = predictions.sub(targets).pow_(2)
+        weighted_targets = targets.mul(self.weight_diff).add(self.weight)
 
-        weighted_errors = squared_errors * (self.weight + targets * self.weight_diff)
+        weighted_errors = squared_errors.mul_(weighted_targets)
 
-        return torch.mean(weighted_errors)
+        return weighted_errors.mean()
 
 
 class WeightedBCELoss(nn.Module):
@@ -61,7 +61,9 @@ class WeightedBCELoss(nn.Module):
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         entropy_loss = nn.functional.binary_cross_entropy(input, target, reduction="none")
-        return torch.mean(entropy_loss * (self.weight + target * self.weight_diff))
+        weighted_target = target.mul(self.weight_diff).add_(self.weight)
+        entropy_loss.mul_(weighted_target)
+        return entropy_loss.mean()
 
 
 class L2ECELoss(nn.Module):

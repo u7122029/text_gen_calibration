@@ -99,51 +99,41 @@ class TieredScalerModel(TieredModel):
     def __init__(self):
         super().__init__()
 
-        self.a = nn.Parameter(torch.tensor(1.0))
-        self.b = nn.Parameter(torch.tensor(0.0))
+        self.linear = nn.Linear(1,1)
         self.general_temp = nn.Parameter(torch.tensor(1.0))
 
-    def forward(self, x, tokens=None):
+    def forward(self, x, tokens):
         # x.shape: [logit_vec, vocab size]
         x.div_(self.general_temp) # Perform regular temperature scaling
 
         x = torch.softmax(x, dim=1)
-        if tokens is not None:
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-        else:
-            x = torch.max(x, dim=1).values
+        x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1)
 
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask].mul_(self.a).add_(self.b).sigmoid_()
+            x[mask] = self.linear(x[mask]).sigmoid_()
 
-        return x  # [confs]
+        return x.flatten()  # [confs]
 
 
 class TieredPlattModel(TieredModel):
     def __init__(self):
         super().__init__()
 
-        self.a = nn.Parameter(torch.tensor(1.0))
-        self.b = nn.Parameter(torch.tensor(0.0))
-        self.c = nn.Parameter(torch.tensor(1.0))
-        self.d = nn.Parameter(torch.tensor(0.0))
+        self.general_linear = nn.Linear(1, 1)
+        self.top_linear = nn.Linear(1, 1)
 
     def forward(self, x: torch.Tensor, tokens=None):
         # x.shape: [logit_vec, vocab size]
         x = torch.softmax(x, dim=1)
-        if tokens is not None:
-            x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
-        else:
-            x = torch.max(x, dim=1).values
+        x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1)
+        x = self.general_linear(x).sigmoid_()
 
-        x.mul_(self.a).add_(self.b).sigmoid_()
         if self.top_token_ids is not None and tokens is not None:
             mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask].mul_(self.c).add_(self.d).sigmoid_()
+            x[mask] = self.top_linear(x[mask]).sigmoid_()
 
-        return x  # [confs]
-
+        return x.flatten()  # [confs]
 
 
 class TieredPTSModel(TieredModel):

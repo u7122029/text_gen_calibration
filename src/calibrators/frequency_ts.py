@@ -66,7 +66,7 @@ def compute_top_bot_dfs(calibration_dset: DictDataset, llm_bundle: TextGenLLMBun
         v = torch.Tensor(v)
         n_response_occurrences = len(response_occurrences[k])
 
-        # Don't count tokens that have not occurred in less than 10% of responses
+        # Don't count tokens that have not occurred in less than 20% of responses
         n_response_proportion = n_response_occurrences / len(calibration_dset)
         if n_response_proportion < 0.2:
             continue
@@ -146,10 +146,6 @@ class LogitTokenFrequencyCalibrator(LogitCalibrator, TokenFrequencyCalibrator, A
 
         super().calibrate(calibration_dset, **kwargs)
 
-    #@abstractmethod
-    #def metric(self, mean, std, response_frequency_ratio):
-    #    pass
-
     def load(self, filepath):
         d = dill_load(filepath)
         self.score_thresh = d["score_thresh"]
@@ -163,66 +159,41 @@ class LogitTokenFrequencyCalibrator(LogitCalibrator, TokenFrequencyCalibrator, A
         LogitCalibrator.save(self, filepath, _other_entries)
 
 
-class FrequencyTS_MSR(LogitTokenFrequencyCalibrator):
+class FrequencyTS(LogitTokenFrequencyCalibrator):
     def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
         super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
 
+
+class FrequencyTS_MSR(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return mean * std_proc(std) * response_frequency_ratio
 
 
-class FrequencyTS_M(LogitTokenFrequencyCalibrator):
-    """
-    FrequencyTSModel that only considers the mean token confidence. Does not factor in anything else.
-    """
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_M(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return mean
 
 
-class FrequencyTS_MS(LogitTokenFrequencyCalibrator):
-    """
-    FrequencyTSModel that only considers the mean token confidence and their stds. Does not factor in anything else.
-    """
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_MS(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return mean * std_proc(std)
 
 
-class FrequencyTS_MR(LogitTokenFrequencyCalibrator):
-    """
-    FrequencyTSModel without response frequency ratio.
-    """
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_MR(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return mean * response_frequency_ratio
 
 
-class FrequencyTS_SR(LogitTokenFrequencyCalibrator):
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_SR(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return std_proc(std) * response_frequency_ratio
 
 
-class FrequencyTS_R(LogitTokenFrequencyCalibrator):
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_R(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
-        return torch.tensor(response_frequency_ratio)
+        return response_frequency_ratio
 
 
-class FrequencyTS_S(LogitTokenFrequencyCalibrator):
-    def __init__(self, llm_bundle, loss_fn, score_thresh=0.8):
-        super().__init__(llm_bundle, loss_fn, score_thresh, TieredTSModel())
-
+class FrequencyTS_S(FrequencyTS):
     def metric(self, mean, std, response_frequency_ratio):
         return std_proc(std)

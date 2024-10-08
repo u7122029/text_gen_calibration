@@ -54,8 +54,20 @@ calibrator_names = [
     "APRICOT_FLHS_MS",
     "APRICOT_FLHS_MR",
     "LogitConfsPlattScaling",
-    "FTP",
-    "FPS"
+    "FTP_M",
+    "FTP_S",
+    "FTP_R",
+    "FTP_MS",
+    "FTP_MR",
+    "FTP_SR",
+    "FTP_MSR",
+    "FPS_M",
+    "FPS_S",
+    "FPS_R",
+    "FPS_MS",
+    "FPS_MR",
+    "FPS_SR",
+    "FPS_MSR"
 ]
 
 
@@ -103,18 +115,6 @@ def vary_calibrator_ood(model_name: str,
 
 
 def merge_dfs(*dfs):
-    """merged = pd.merge(df1, df2, on='Calibrator', suffixes=('_1', '_2'), how='left')
-
-    # Create a mask for rows where df2's score is smaller (or df1's score is NaN)
-    mask = (merged['ece_calib_2'] < merged['ece_calib_1']) | (merged['ece_calib_1'].isna())
-
-    # Update result where the mask is True
-    cols = ["ece_calib", "brier_calib", "auroc_calib", "auprc_calib", "loss_fn"]
-    for col in cols:
-        df1.loc[mask, col] = merged.loc[mask, f"{col}_2"]
-    #df1.loc[mask, 'loss_fn'] = merged.loc[mask, 'loss_fn_2']
-
-    return df1"""
     df = pd.concat(*dfs)
     return df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
 
