@@ -5,8 +5,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Type, Any
 import simple_colors as sc
-from torch.nn.modules.loss import _WeightedLoss
-from torchmetrics.classification import BinaryCalibrationError
 
 from torch import nn
 

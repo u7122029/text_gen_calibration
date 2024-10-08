@@ -19,10 +19,11 @@ class CoTModelConfig(Enum):
             "meta-llama/Llama-3.2-3B-Instruct": cls.SYSTEM_USER_CHAT, #Done
             "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT, # DONE
             "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT, # DONE
-            "Zyphra/Zamba2-2.7B-instruct": cls.SYSTEM_USER_CHAT,
+            "Zyphra/Zamba2-2.7B-instruct": cls.SYSTEM_USER_CHAT, # Need WSL
 
             "meta-llama/Llama-3.1-8B-Instruct": cls.SYSTEM_USER_CHAT, # get results if have time.
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT, # DONE
+            "Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT
         }
         return name_dict[name]
 

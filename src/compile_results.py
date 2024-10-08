@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional
 
 import fire
@@ -6,11 +5,11 @@ import pandas as pd
 import simple_colors as sc
 from tabulate import tabulate
 
-from input_formatters import input_formatter_dict, InputFormatter
 from calibrators import calibrator_dict
+from input_formatters import input_formatter_dict, InputFormatter
 from llm_models.textgen import TextGenLLMBundle
-from prompt_formatters import PromptVersion
 from metrics import ModelMetrics, ModelMetricsCollection
+from prompt_formatters import PromptVersion
 from utils import LossFunc
 
 calibrator_names = [

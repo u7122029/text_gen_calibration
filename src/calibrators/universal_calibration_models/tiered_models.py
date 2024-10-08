@@ -1,8 +1,8 @@
 from typing import Optional
 from abc import ABC, abstractmethod
 import torch
-from torch import nn, sigmoid_
-from torch.nn.functional import sigmoid
+from torch import nn
+
 
 class PhaseModel(nn.Module):
     """
