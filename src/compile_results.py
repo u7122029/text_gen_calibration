@@ -98,9 +98,9 @@ def vary_calibrator_ood(model_name: str,
     id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
-        if calibrator_name in {"APRICOT_Original", "TokenCalibrator"} and loss_func_name in {"WEIGHTED_BCE", "WEIGHTED_CORRECT_AWARE"}:
-            print(sc.cyan("Temporarily Skipping."))
-            continue
+        #if calibrator_name in {"APRICOT_Original", "TokenCalibrator"} and loss_func_name in {"WEIGHTED_BCE", "WEIGHTED_CORRECT_AWARE"}:
+        #    print(sc.cyan("Temporarily Skipping."))
+        #    continue
 
         calibrator_type = calibrator_dict[calibrator_name]
         if id_if is None:
