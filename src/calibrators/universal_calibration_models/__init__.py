@@ -19,7 +19,7 @@ class TSModel(nn.Module):
 
     def forward(self, x, tokens):
         # x.shape: [logit_vec, vocab size]
-        x = x.div(self.temperature)
+        x.div_(self.temperature)
         x = torch.softmax(x, dim=1)
         x = torch.take_along_dim(x, tokens.unsqueeze(1), dim=1).squeeze(1)
 

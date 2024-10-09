@@ -54,15 +54,17 @@ class WeightedMSELoss(nn.Module):
 class WeightedBCELoss(nn.Module):
     def __init__(self, weight: float) -> None:
         super().__init__()
-        self.register_buffer('weight_tensor', torch.tensor(weight))
-        self.register_buffer('weight_diff_tensor', torch.tensor(1 - 2 * weight))
+        self.weight = weight
+        self.weight_diff = 1 - 2 * weight
+        #self.register_buffer('weight_tensor', torch.tensor(weight))
+        #self.register_buffer('weight_diff_tensor', torch.tensor(1 - 2 * weight))
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         log_input = torch.log(input)
         log_1_minus_input = torch.log(1 - input)
 
         entropy_loss = -target * log_input - (1 - target) * log_1_minus_input
-        weighted_loss = entropy_loss * (target * self.weight_diff_tensor + self.weight_tensor)
+        weighted_loss = entropy_loss * (target * self.weight_diff + self.weight)
 
         return weighted_loss.mean()
 
