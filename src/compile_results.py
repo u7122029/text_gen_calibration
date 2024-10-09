@@ -68,13 +68,6 @@ calibrator_names = [
     "APRICOT_FTP_MR",
     "APRICOT_FTP_SR",
     "APRICOT_FTP_MSR"
-    # "FPS_M",
-    # "FPS_S",
-    # "FPS_R",
-    # "FPS_MS",
-    # "FPS_MR",
-    # "FPS_SR",
-    # "FPS_MSR"
 ]
 
 
