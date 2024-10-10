@@ -102,7 +102,7 @@ class ModelMetrics:
         self.accuracy = torch.mean(self.correct.float()).item()
 
         self.logits_confs_diff = self.calibrated_confs - self.logits_confs[self.calibrated_successful]
-        self.verbalised_confs_diff = (self.calibrated_confs[self.verbalised_success_mask[self.calibrated_successful]]
+        self.verbalised_confs_diff = (self.calibrated_confs[self.verbalised_success_mask & self.calibrated_successful]
                                       - self.verbalised_confs)
 
         self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
