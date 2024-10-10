@@ -54,9 +54,9 @@ class ModelMetrics:
         self.extra_details = kwargs
 
         self.logits_confs = torch.Tensor(data["logits_confs"])
-        self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
+        self.logit_confs_successful = ~self.logits_confs.isnan()  # True entries indicate no outputted tokens.
 
-        self.logit_confs_successful = ~self.logits_confs.isnan() # True entries indicate no outputted tokens.
+        self.calibrated_confs = torch.Tensor(data["calibrated_confs"])[self.logit_confs_successful]
         self.logits_confs = self.logits_confs[self.logit_confs_successful]
 
         self.calibrated_successful = torch.Tensor(data["calibrated_successful"]).bool()[self.logit_confs_successful]
