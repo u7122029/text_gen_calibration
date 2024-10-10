@@ -157,18 +157,18 @@ def plot_ood(model_name: str,
                                                loss_func)
 
     test_data = ood_if.test_calibrator(id_if)
+    processed = ModelMetrics(test_data)
 
     # Plot and save figures
-    fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"],
+    fig, ax = reliability_diagram(processed.correct, processed.logits_confs,
                                   f"Logit-based Responses ({model_name})")
-    fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"],
+    fig1, ax1 = reliability_diagram(processed.correct, processed.verbalised_confs,
                                     f"Verbalised Responses ({model_name})")
-    fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
+    fig2, ax2 = reliability_diagram(processed.correct, processed.calibrated_confs,
                                     f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
-    #ece_metric = BinaryCalibrationError()
-    #print(f"ECE: {ece_metric(test_data["calibrated_confs"], test_data["correct"])}")
+    print(f"ECE: {processed.ece_calibrated}")
 
     # First get highest tokens by threshold
     def metric(mean, std, response_frequency_ratio):
@@ -185,10 +185,13 @@ def plot_ood(model_name: str,
 
     calibrated_token_confs = []
     calibrated_token_confs1 = []
-    for outcome, token_confs, tokens, calib_token_confs in zip(test_data["correct"],
-                                                               test_data["token_probs"],
-                                                               test_data["tokens"],
-                                                               test_data["calibrated_token_probs"]):
+    for outcome, token_confs, tokens, calib_token_confs, successful in zip(test_data["correct"],
+                                                                           test_data["token_probs"],
+                                                                           test_data["tokens"],
+                                                                           test_data["calibrated_token_probs"],
+                                                                           processed.logit_confs_successful):
+        if not successful: continue
+
         mask = torch.isin(tokens, token_ids)
         modified_confs.append(token_confs[mask].mean())
         modified_confs1.append(token_confs[~mask].mean())
@@ -202,25 +205,24 @@ def plot_ood(model_name: str,
     calibrated_token_confs = torch.Tensor(calibrated_token_confs)
     calibrated_token_confs1 = torch.Tensor(calibrated_token_confs1)
 
-
-    fig3, ax3 = reliability_diagram(test_data["correct"],
+    fig3, ax3 = reliability_diagram(processed.correct,
                                     modified_confs,
                                     f"xi > 0.8 Responses", n_bins=30)
-    fig4, ax4 = reliability_diagram(test_data["correct"],
+    fig4, ax4 = reliability_diagram(processed.correct,
                                     modified_confs1,
                                     f"xi <= 0.8 Responses", n_bins=30)
 
-    fig5, ax5 = reliability_diagram(test_data["correct"],
+    fig5, ax5 = reliability_diagram(processed.correct,
                                     calibrated_token_confs,
                                     f"xi > 0.8 Responses (calib)", n_bins=30)
-    fig6, ax6 = reliability_diagram(test_data["correct"],
+    fig6, ax6 = reliability_diagram(processed.correct,
                                     calibrated_token_confs1,
                                     f"xi <= 0.8 Responses (calib)", n_bins=30)
 
     fig5.savefig(figures_path / "xi.png", dpi=600)
     fig6.savefig(figures_path / "non_xi.png", dpi=600)
 
-    fig7, ax7 = boxplots(test_data["logits_confs"], modified_confs, modified_confs1)
+    fig7, ax7 = boxplots(processed.logits_confs, modified_confs, modified_confs1)
     plt.show()
 
 
