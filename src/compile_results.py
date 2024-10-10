@@ -24,6 +24,7 @@ calibrator_names = [
     "FrequencyPTS_MR",
     "FrequencyPTS_SR",
     "LastHiddenStateCalibrator",
+    "APRICOT_LHS",
     "TemperatureScaling",
     "FrequencyTS_MSR",
     "FrequencyTS_M",
