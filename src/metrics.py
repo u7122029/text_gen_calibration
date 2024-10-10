@@ -54,6 +54,7 @@ class ModelMetrics:
         self.extra_details = kwargs
         self.logits_confs = torch.Tensor(data["logits_confs"])
         self.logit_confs_successful = ~self.logits_confs.isnan() # True entries indicate no outputted tokens.
+        self.logits_confs = self.logits_confs[self.logit_confs_successful]
 
         self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
         self.correct = torch.Tensor(data["correct"]).bool() & self.logit_confs_successful
@@ -76,6 +77,7 @@ class ModelMetrics:
         self.verbalised_confs = torch.cat([self.worded_confs, self.numeric_confs])
         self.verbalised_correct = torch.cat([self.worded_correct, self.numeric_correct])
         assert len(self.verbalised_confs) == len(self.verbalised_correct)
+        print(len(self.logits_confs), len(self.verbalised_confs), len(self.logits_confs))
 
         self.num_verbalised_successful = len(self.verbalised_correct)
 
