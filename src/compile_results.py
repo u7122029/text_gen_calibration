@@ -212,6 +212,7 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_colwidth', None)
+    pd.set_option('display.expand_frame_repr', False)
 
     if ood_input_formatter_name is None and calibrator_name is None and loss_func_name is None:
         print("Comparing Loss Functions (ID).")
