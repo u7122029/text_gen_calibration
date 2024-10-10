@@ -63,9 +63,9 @@ class ModelMetrics:
         self.calibrated_correct = self.correct[self.calibrated_successful]
 
         # construct verbalised confs
-        self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool()
-        self.worded_success_mask = torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask
-        self.verbalised_success_mask = (self.num_success_mask | self.worded_success_mask) & self.logit_confs_successful
+        self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool() & self.logit_confs_successful
+        self.worded_success_mask = torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask & self.logit_confs_successful
+        #self.verbalised_success_mask = (self.num_success_mask | self.worded_success_mask) & self.logit_confs_successful
 
         self.worded_confs = torch.Tensor(data["worded_confs"])[self.worded_success_mask]
         self.numeric_confs = torch.Tensor(data["numeric_confs"])[self.num_success_mask]
@@ -102,8 +102,7 @@ class ModelMetrics:
         self.accuracy = torch.mean(self.correct.float()).item()
 
         self.logits_confs_diff = self.calibrated_confs - self.logits_confs[self.calibrated_successful]
-        self.verbalised_confs_diff = (self.calibrated_confs[self.verbalised_success_mask & self.calibrated_successful]
-                                      - self.verbalised_confs)
+        self.verbalised_confs_diff = self.calibrated_confs - self.verbalised_confs[self.calibrated_successful]
 
         self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
         self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct[self.calibrated_successful]])
