@@ -38,15 +38,17 @@ class WeightedMSELoss(nn.Module):
     def __init__(self, weight: float):
         super().__init__()
         assert 0 <= weight <= 1, "Weight must be between 0 and 1"
-        self.register_buffer('weight_tensor', torch.tensor(weight))
-        self.register_buffer('weight_diff_tensor', torch.tensor(1 - 2 * weight))
+        self.weight = weight
+        self.weight_diff = 1 - 2 * weight
 
-    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def forward(self, predictions, targets):
         assert predictions.shape == targets.shape, "Predictions and targets must have the same shape"
         assert predictions.dtype == targets.dtype, "Predictions and targets must have the same dtype"
 
-        squared_errors = (predictions - targets).pow(2)
-        weighted_errors = squared_errors * (targets * self.weight_diff_tensor + self.weight_tensor)
+        squared_errors = predictions.sub(targets).pow_(2)
+        weighted_targets = targets.mul(self.weight_diff).add(self.weight)
+
+        weighted_errors = squared_errors.mul_(weighted_targets)
 
         return weighted_errors.mean()
 
@@ -56,17 +58,12 @@ class WeightedBCELoss(nn.Module):
         super().__init__()
         self.weight = weight
         self.weight_diff = 1 - 2 * weight
-        #self.register_buffer('weight_tensor', torch.tensor(weight))
-        #self.register_buffer('weight_diff_tensor', torch.tensor(1 - 2 * weight))
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        log_input = torch.log(input)
-        log_1_minus_input = torch.log(1 - input)
-
-        entropy_loss = -target * log_input - (1 - target) * log_1_minus_input
-        weighted_loss = entropy_loss * (target * self.weight_diff + self.weight)
-
-        return weighted_loss.mean()
+        entropy_loss = nn.functional.binary_cross_entropy(input, target, reduction="none")
+        weighted_target = target.mul(self.weight_diff).add_(self.weight)
+        entropy_loss.mul_(weighted_target)
+        return entropy_loss.mean()
 
 
 class L2ECELoss(nn.Module):
