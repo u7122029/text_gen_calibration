@@ -167,8 +167,8 @@ def plot_ood(model_name: str,
                                     f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
-    ece_metric = BinaryCalibrationError()
-    print(f"ECE: {ece_metric(test_data["calibrated_confs"], test_data["correct"])}")
+    #ece_metric = BinaryCalibrationError()
+    #print(f"ECE: {ece_metric(test_data["calibrated_confs"], test_data["correct"])}")
 
     # First get highest tokens by threshold
     def metric(mean, std, response_frequency_ratio):
@@ -220,7 +220,7 @@ def plot_ood(model_name: str,
     fig5.savefig(figures_path / "xi.png", dpi=600)
     fig6.savefig(figures_path / "non_xi.png", dpi=600)
 
-    fig7, ax7 = boxplots(test_data["logit_confs"], modified_confs, modified_confs1)
+    fig7, ax7 = boxplots(test_data["logits_confs"], modified_confs, modified_confs1)
     plt.show()
 
 
@@ -310,13 +310,13 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
     plt.show()
 
 
-def main(model_name: str = "google/gemma-2-2b-it",
-         calibrator_name: str = "LastHiddenStateCalibrator",
+def main(model_name: str = "Zyphra/Zamba2-2.7B-instruct",
+         calibrator_name: str = "APRICOT_FLHS_M",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
-         loss_func_name: str = "WEIGHTED_CORRECT_AWARE",
+         loss_func_name: str = "CORRECT_AWARE",
          id_if_name: str = "SQUADV2CoT",
-         ood_if_name: Optional[str] = None):
+         ood_if_name: Optional[str] = "GSMCoT"):
     if ood_if_name is None:
         plot_id(model_name, id_if_name, loss_func_name, id_prompt_version, calibrator_name)
     else:
