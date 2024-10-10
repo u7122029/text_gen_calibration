@@ -57,7 +57,7 @@ class ModelMetrics:
         self.logits_confs = self.logits_confs[self.logit_confs_successful]
 
         self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
-        self.correct = torch.Tensor(data["correct"]).bool() & self.logit_confs_successful
+        self.correct = torch.Tensor(data["correct"]).bool()[self.logit_confs_successful]
 
         self.calibrated_successful = torch.Tensor(data["calibrated_successful"]).bool() & self.logit_confs_successful
         self.calibrated_confs = self.calibrated_confs[self.calibrated_successful]
@@ -77,7 +77,7 @@ class ModelMetrics:
         self.verbalised_confs = torch.cat([self.worded_confs, self.numeric_confs])
         self.verbalised_correct = torch.cat([self.worded_correct, self.numeric_correct])
         assert len(self.verbalised_confs) == len(self.verbalised_correct)
-        print(len(self.logits_confs), len(self.verbalised_confs), len(self.logits_confs))
+        print(len(self.logits_confs), len(self.verbalised_confs), len(self.logits_confs), len(self.correct))
 
         self.num_verbalised_successful = len(self.verbalised_correct)
 
