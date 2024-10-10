@@ -4,3 +4,4 @@ from .fts import *
 from .flhs import *
 from .fps import *
 from .ftp import *
+from .lhs import *
