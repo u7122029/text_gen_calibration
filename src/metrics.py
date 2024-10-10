@@ -101,8 +101,8 @@ class ModelMetrics:
 
         self.accuracy = torch.mean(self.correct.float()).item()
 
-        self.logits_confs_diff = self.calibrated_confs - self.logits_confs[self.calibrated_successful]
-        self.verbalised_confs_diff = self.calibrated_confs - self.verbalised_confs[self.calibrated_successful]
+        """self.logits_confs_diff = self.calibrated_confs - self.logits_confs[self.calibrated_successful]
+        self.verbalised_confs_diff = self.calibrated_confs - self.verbalised_confs
 
         self.logits_mean_conf_change = torch.mean(self.logits_confs_diff)
         self.correct_logits_mean_conf_change = torch.mean(self.logits_confs_diff[self.correct[self.calibrated_successful]])
@@ -118,7 +118,7 @@ class ModelMetrics:
 
         self.verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff)
         self.correct_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[self.verbalised_correct])
-        self.incorrect_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[~self.verbalised_correct])
+        self.incorrect_verbalised_total_conf_change = torch.sum(self.verbalised_confs_diff[~self.verbalised_correct])"""
 
         self.extra_details.update({
             "No. Samples": len(self),
@@ -141,7 +141,7 @@ class ModelMetrics:
             ["After Calibration", self.ece_calibrated, self.brier_calibrated, self.auroc_calibrated, self.auprc_calibrated]
         ]
         print(tabulate(table[1:], headers=table[0], tablefmt="github"))
-        print("\n**Changes in Confidences:**")
+        """print("\n**Changes in Confidences:**")
         table1 = [
             ["Category", "All Preds", "Correct Preds", "Incorrect Preds"],
             ["Mean Change (Logit Confs)", self.logits_mean_conf_change, self.correct_logits_mean_conf_change,
@@ -153,7 +153,7 @@ class ModelMetrics:
             ["Total Change (Verbalised Confs)", self.verbalised_total_conf_change, self.correct_verbalised_total_conf_change,
              self.incorrect_verbalised_total_conf_change]
         ]
-        print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))
+        print(tabulate(table1[1:], headers=table1[0], tablefmt="github"))"""
 
 
 class ModelMetricsCollection(list[ModelMetrics]):
