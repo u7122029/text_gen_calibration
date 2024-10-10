@@ -68,7 +68,7 @@ class ModelMetrics:
 
         # construct verbalised confs
         self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool()[self.logit_confs_successful]
-        self.worded_success_mask = (torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask)[self.logit_confs_successful]
+        self.worded_success_mask = torch.Tensor(data["worded_successful"]).bool()[self.logit_confs_successful] & ~self.num_success_mask
 
         #self.verbalised_success_mask = (self.num_success_mask | self.worded_success_mask) & self.logit_confs_successful
 
