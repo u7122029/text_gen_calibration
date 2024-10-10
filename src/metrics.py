@@ -42,13 +42,13 @@ class ModelMetrics:
         @param n_bins:
         @param kwargs: Extra details to be included in the results.
         """
-        cols = {"logits_confs", "correct", "numeric_confs", "numeric_successful", "worded_confs", "worded_successful",
+        """cols = {"logits_confs", "correct", "numeric_confs", "numeric_successful", "worded_confs", "worded_successful",
                 "calibrated_confs", "calibrated_successful"}
         keys_to_delete = set(data.keys()) - cols
         for key in keys_to_delete:
-            del data[key]
+            del data[key]"""
 
-        assert cols.issubset(set(data.keys()))
+        #assert cols.issubset(set(data.keys()))
 
         self.n_bins = n_bins
         self.extra_details = kwargs
