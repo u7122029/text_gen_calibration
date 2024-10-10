@@ -52,24 +52,28 @@ class ModelMetrics:
 
         self.n_bins = n_bins
         self.extra_details = kwargs
+
         self.logits_confs = torch.Tensor(data["logits_confs"])
+        self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
+
         self.logit_confs_successful = ~self.logits_confs.isnan() # True entries indicate no outputted tokens.
         self.logits_confs = self.logits_confs[self.logit_confs_successful]
 
-        self.calibrated_confs = torch.Tensor(data["calibrated_confs"])
+        self.calibrated_successful = torch.Tensor(data["calibrated_successful"]).bool()[self.logit_confs_successful]
+
         self.correct = torch.Tensor(data["correct"]).bool()[self.logit_confs_successful]
 
-        self.calibrated_successful = torch.Tensor(data["calibrated_successful"]).bool() & self.logit_confs_successful
         self.calibrated_confs = self.calibrated_confs[self.calibrated_successful]
         self.calibrated_correct = self.correct[self.calibrated_successful]
 
         # construct verbalised confs
-        self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool() & self.logit_confs_successful
-        self.worded_success_mask = torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask & self.logit_confs_successful
+        self.num_success_mask = torch.Tensor(data["numeric_successful"]).bool()[self.logit_confs_successful]
+        self.worded_success_mask = (torch.Tensor(data["worded_successful"]).bool() & ~self.num_success_mask)[self.logit_confs_successful]
+
         #self.verbalised_success_mask = (self.num_success_mask | self.worded_success_mask) & self.logit_confs_successful
 
-        self.worded_confs = torch.Tensor(data["worded_confs"])[self.worded_success_mask]
-        self.numeric_confs = torch.Tensor(data["numeric_confs"])[self.num_success_mask]
+        self.worded_confs = torch.Tensor(data["worded_confs"])[self.logit_confs_successful][self.worded_success_mask]
+        self.numeric_confs = torch.Tensor(data["numeric_confs"])[self.logit_confs_successful][self.num_success_mask]
 
         self.numeric_correct = self.correct[self.num_success_mask]
         self.worded_correct = self.correct[self.worded_success_mask]
