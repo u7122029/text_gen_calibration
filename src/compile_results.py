@@ -15,32 +15,31 @@ from utils import LossFunc
 calibrator_names = [
     "APRICOT_Original",
     "TokenCalibrator",
+    "TemperatureScaling",
     "APRICOT_TemperatureScaling",
-    "FrequencyPTS_MSR",
     "FrequencyPTS_M",
     "FrequencyPTS_S",
     "FrequencyPTS_R",
     "FrequencyPTS_MS",
     "FrequencyPTS_MR",
     "FrequencyPTS_SR",
+    "FrequencyPTS_MSR",
     "LastHiddenStateCalibrator",
     "APRICOT_LHS",
-    "TemperatureScaling",
-    "FrequencyTS_MSR",
     "FrequencyTS_M",
     "FrequencyTS_S",
     "FrequencyTS_R",
     "FrequencyTS_MR",
     "FrequencyTS_SR",
     "FrequencyTS_MS",
-    "APRICOT_FrequencyTS_MSR",
+    "FrequencyTS_MSR",
     "APRICOT_FrequencyTS_M",
     "APRICOT_FrequencyTS_S",
     "APRICOT_FrequencyTS_R",
     "APRICOT_FrequencyTS_MS",
     "APRICOT_FrequencyTS_SR",
     "APRICOT_FrequencyTS_MR",
-    "FLHS_MSR",
+    "APRICOT_FrequencyTS_MSR",
     "FLHS_M",
     "FLHS_S",
     "FLHS_R",
@@ -54,6 +53,7 @@ calibrator_names = [
     "APRICOT_FLHS_SR",
     "APRICOT_FLHS_MS",
     "APRICOT_FLHS_MR",
+    "APRICOT_FLHS_MSR",
     "LogitConfsPlattScaling",
     "FTP_M",
     "FTP_S",
@@ -73,7 +73,8 @@ calibrator_names = [
 
 
 def vary_calibrator_ood(model_name: str,
-                        prompt_version: PromptVersion,
+                        id_prompt_version: PromptVersion,
+                        ood_prompt_version: PromptVersion,
                         loss_func_name: str,
                         id_if_name: str,
                         ood_if_name: str):
@@ -83,7 +84,7 @@ def vary_calibrator_ood(model_name: str,
     collection = ModelMetricsCollection()
     collection.details = {
         "LLM": model_name,
-        "Prompt Version": prompt_version.name,
+        "Prompt Version": id_prompt_version.name,
         "Loss Function": loss_func_name,
         "Calib. Input Formatter": id_if_name,
         "Test Input Formatter": ood_if_name
@@ -92,19 +93,15 @@ def vary_calibrator_ood(model_name: str,
     id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
-        #if calibrator_name in {"APRICOT_Original", "TokenCalibrator"} and loss_func_name in {"WEIGHTED_BCE", "WEIGHTED_CORRECT_AWARE"}:
-        #    print(sc.cyan("Temporarily Skipping."))
-        #    continue
-
         calibrator_type = calibrator_dict[calibrator_name]
         if id_if is None:
-            id_if = input_formatter_dict[id_if_name](llm_bundle, prompt_version, calibrator_type, loss_func)
+            id_if = input_formatter_dict[id_if_name](llm_bundle, id_prompt_version, calibrator_type, loss_func)
         else:
             id_if.calibrator_type = calibrator_type
 
         if ood_if is None:
             ood_if = input_formatter_dict[ood_if_name](llm_bundle,
-                                                       prompt_version,
+                                                       ood_prompt_version,
                                                        calibrator_type,
                                                        loss_func)
         else:
@@ -188,10 +185,11 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     return calib_collection, test_collection
 
 
-def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
-         prompt_version: str="DEFAULT",
+         id_prompt_version: str="DEFAULT",
+         ood_prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
          ood_input_formatter_name: Optional[str]="GSMCoT"):
     """
@@ -199,12 +197,14 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
     @param model_name:
     @param calibrator_name:
     @param loss_func_name:
-    @param prompt_version:
+    @param id_prompt_version:
+    @param ood_prompt_version:
     @param id_input_formatter_name:
     @param ood_input_formatter_name:
     @return:
     """
-    prompt_version = PromptVersion.from_string(prompt_version)
+    id_prompt_version = PromptVersion.from_string(id_prompt_version)
+    ood_prompt_version = PromptVersion.from_string(ood_prompt_version)
 
     # Check that exactly one of the arguments is None.
     """assert sum([1 if x is None else 0
@@ -227,7 +227,7 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
             print(sc.blue(lfn))
             calib_collection, test_collection = vary_calibrator_id(model_name,
                                                                    lfn,
-                                                                   prompt_version,
+                                                                   id_prompt_version,
                                                                    id_input_formatter_name)
             calib_collections.append(calib_collection)
             test_collections.append(test_collection)
@@ -246,7 +246,7 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
 
     elif ood_input_formatter_name is None and calibrator_name is None:
         print("vary_calibrator_id")
-        vary_calibrator_id(model_name, loss_func_name, prompt_version, id_input_formatter_name)
+        vary_calibrator_id(model_name, loss_func_name, id_prompt_version, id_input_formatter_name)
     #elif ood_input_formatter_name is None:
     #    print("vary_ood_if")
     #    vary_ood_if(model_name, calibrator_name, id_prompt_version, id_input_formatter_name)
@@ -262,7 +262,8 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
         for lfn in loss_names:
             print(sc.blue(lfn))
             collections.append(vary_calibrator_ood(model_name,
-                                                   prompt_version,
+                                                   id_prompt_version,
+                                                   ood_prompt_version,
                                                    lfn,
                                                    id_input_formatter_name,
                                                    ood_input_formatter_name))
@@ -274,7 +275,7 @@ def main(model_name: str="Zyphra/Zamba2-2.7B-instruct",
 
     elif calibrator_name is None:
         print("vary_calibrator_ood")
-        vary_calibrator_ood(model_name, prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
+        vary_calibrator_ood(model_name, id_prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
 
 
 if __name__ == "__main__":

@@ -237,19 +237,21 @@ class AltCoTPromptFormat(CoTPromptFormat):
     """
     def __init__(self, llm_bundle: TextGenLLMBundle, **kwargs):
         super().__init__(llm_bundle,
-                         "Question:",
-                         "Context:",
-                         "Final Answer:",
-                         "Explanation:",
-                         "Confidence:")
+                         "**Question:**",
+                         "**Context:**",
+                         "**Conclusion:**",
+                         "**Reasoning:**",
+                         "**Certainty:**")
 
 
-class AltWordAnswerCoTPromptFormat(WordAnswerCoTPromptFormat, AltCoTPromptFormat):
+class AltWordAnswerCoTPromptFormat(WordAnswerCoTPromptFormat):
     def __init__(self, llm_bundle, **kwargs):
-        AltCoTPromptFormat.__init__(self, llm_bundle)
-        self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
-                              f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <Your final answer only>")
+        super().__init__(llm_bundle,
+                         question_tag="**Question:**",
+                         context_tag="**Context:**",
+                         final_answer_tag="**Conclusion:**",
+                         explanation_tag="**Reasoning:**",
+                         confidence_tag="**Certainty:**")
 
     def obtain_answers(self, decoded_responses):
         return WordAnswerCoTPromptFormat.obtain_answers(self, decoded_responses)
@@ -262,11 +264,11 @@ class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
     def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None, **kwargs):
         super().__init__(llm_bundle,
                          mcq_options,
-                         question_tag="Question:",
-                         context_tag="Context:",
-                         final_answer_tag="Final Answer:",
-                         explanation_tag="Explanation:",
-                         confidence_tag="Confidence:")
+                         question_tag="**Question:**",
+                         context_tag="**Context:**",
+                         final_answer_tag="**Conclusion:**",
+                         explanation_tag="**Reasoning:**",
+                         confidence_tag="**Certainty:**")
 
 
 class PromptVersion(Enum):

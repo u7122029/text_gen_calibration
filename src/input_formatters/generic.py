@@ -56,6 +56,7 @@ class InputFormatter(ABC):
 
         self.__llm_bundle = llm_bundle
         self.__dataset = dataset
+        self.__prompt_version = prompt_version
         self.__prompt_formatter = prompt_version(variant=_pf_variant)(llm_bundle, mcq_options=_mcq_options)
         self.__loss_fn = loss_fn
 
@@ -85,6 +86,10 @@ class InputFormatter(ABC):
     @property
     def calib_dataset(self):
         return self.__calib_dataset
+
+    @property
+    def prompt_version(self):
+        return self.__prompt_version
 
     @property
     def test_dataset(self):
@@ -167,6 +172,7 @@ class InputFormatter(ABC):
         self.llm_bundle.load_model(silent=True, lm_head_only=True)
         save_path = (original_input_formatter.calibrator_dir /
                      "ood" /
+                     self.prompt_version.name /
                      f"{self.__class__.__name__}.dill")
         calib_data, test_data = self.get_calib_test_data(batch_size)
         accuracy = torch.mean(calib_data["correct"].float())
