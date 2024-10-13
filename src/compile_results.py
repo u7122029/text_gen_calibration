@@ -3,6 +3,7 @@ from typing import Optional
 import fire
 import pandas as pd
 import simple_colors as sc
+import torch.cuda
 from tabulate import tabulate
 
 from calibrators import calibrator_dict
@@ -185,7 +186,7 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     return calib_collection, test_collection
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
@@ -207,13 +208,6 @@ def main(model_name: str="google/gemma-2-2b-it",
     ood_prompt_version = PromptVersion.from_string(ood_prompt_version)
 
     # Check that exactly one of the arguments is None.
-    """assert sum([1 if x is None else 0
-                for x in [model_name,
-                          calibrator_name,
-                          loss_func_name,
-                          prompt_format,
-                          id_input_formatter_name,
-                          ood_input_formatter_name]]) == 1"""
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_colwidth', None)
@@ -267,6 +261,7 @@ def main(model_name: str="google/gemma-2-2b-it",
                                                    lfn,
                                                    id_input_formatter_name,
                                                    ood_input_formatter_name))
+            torch.cuda.empty_cache()
         compiled_df, details = compare_collections_by_loss(collections)
 
         print(tabulate(details.items(), tablefmt="github"))

@@ -1,4 +1,5 @@
 import re
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional
 
@@ -36,6 +37,7 @@ class CoTPromptFormat(PromptFormat):
                  final_answer_tag="**Final Answer:**",
                  explanation_tag="**Explanation:**",
                  confidence_tag="**Confidence:**",
+                 final_answer_description="The final number obtained from your explanation ONLY, nothing else.",
                  **kwargs):
         super().__init__()
         self.llm_bundle = llm_bundle
@@ -46,6 +48,8 @@ class CoTPromptFormat(PromptFormat):
         self.final_answer_tag = final_answer_tag
         self.explanation_tag = explanation_tag
         self.confidence_tag = confidence_tag
+
+        self.final_answer_description = final_answer_description
 
         self.qualitative_scale = {
             "Very low": 0,
@@ -62,8 +66,8 @@ class CoTPromptFormat(PromptFormat):
                                    f"{' / '.join([f'{exp}' for exp in self.qualitative_scale.keys()])}.\n"
                                    f"{self.confidence_tag}")
         self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
-                              f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <A single number>\n")
+                              f"{self.explanation_tag} <Your explanation.>\n"
+                              f"{self.final_answer_tag} <{self.final_answer_description}>\n")
 
         self.final_answer_format = f"{self.final_answer_tag} " + "{answer}"
         self.question_format = f"{self.question_tag} " + "{question}"
@@ -147,7 +151,7 @@ class CoTPromptFormat(PromptFormat):
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "system", "content": self.system_prompt},
                  {"role": "user", "content": f"{context_formatted}\n"
-                                             f"Provide ONLY the exact answer to the following question:\n"
+                                             #f"Provide ONLY the exact answer to the following question:\n"
                                              f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
@@ -156,7 +160,7 @@ class CoTPromptFormat(PromptFormat):
             formatted_q = self.llm_bundle.tokeniser.apply_chat_template(
                 [{"role": "user", "content": f"{self.system_prompt}\n\n"
                                              f"{context_formatted}\n"
-                                             f"Provide ONLY the exact answer to the following question:\n"
+                                             #f"Provide ONLY the exact answer to the following question:\n"
                                              f"{question_formatted}"}],
                 tokenize=False,
                 add_generation_prompt=True,
@@ -164,7 +168,7 @@ class CoTPromptFormat(PromptFormat):
             )
         else:
             formatted_q = (f"{self.system_prompt}\n\n{context_formatted}\n"
-                           f"Provide ONLY the exact answer to the following question:\n"
+                           #f"Provide ONLY the exact answer to the following question:\n"
                            f"{question_formatted}")
 
         return formatted_q
@@ -172,11 +176,8 @@ class CoTPromptFormat(PromptFormat):
 
 class WordAnswerCoTPromptFormat(CoTPromptFormat):
     def __init__(self, llm_bundle, **kwargs):
-        super().__init__(llm_bundle)
-
-        self.system_prompt = (f"You are a chatbot that only outputs in the form:\n"
-                              f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <Only the exact answer, nothing more>")
+        super().__init__(llm_bundle,
+                         final_answer_description="The exact answer from your explanation ONLY, nothing else.")
 
     def obtain_answers(self, decoded_responses):
         final_answer_tag_lower = self.final_answer_tag.lower()
@@ -199,14 +200,17 @@ class WordAnswerCoTPromptFormat(CoTPromptFormat):
 
 class MCQCoTPromptFormat(CoTPromptFormat):
     def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None, **kwargs):
-        super().__init__(llm_bundle, **kwargs)
         if mcq_options is None:
             self.mcq_options = {'a', 'b', 'c', 'd', 'e'}
         else:
-            self.mcq_options = mcq_options
-        self.system_prompt = ("You are a chatbot that only outputs in the form:\n"
-                              f"{self.explanation_tag} <Your explanation>\n"
-                              f"{self.final_answer_tag} <A single letter indicating your choice, nothing more.>")
+            self.mcq_options = set(mcq_options)
+
+        uppers = [x.upper() for x in mcq_options]
+        uppers.sort()
+        super().__init__(llm_bundle,
+                         final_answer_description=f"A single letter indicating your final choice out of [{', '.join(uppers)}] ONLY, nothing else.",
+                         **kwargs)
+
 
     def obtain_answers(self, decoded_responses):
         final_answer_tag_lower = self.final_answer_tag.lower()
@@ -290,6 +294,7 @@ class PromptVersion(Enum):
             mult = 2
         elif variant is not None:
             assert False, f"variant {variant} unrecognised."
+
         formatters = [CoTPromptFormat,
                       AltCoTPromptFormat,
                       MCQCoTPromptFormat,
