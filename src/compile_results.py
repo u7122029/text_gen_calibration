@@ -94,6 +94,10 @@ def vary_calibrator_ood(model_name: str,
     id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
+        if calibrator_name.startswith("APRICOT") and loss_func.name.startswith("WEIGHTED"):
+            print("APRICOT models have no class imbalance. Skipping.")
+            continue
+
         calibrator_type = calibrator_dict[calibrator_name]
         if id_if is None:
             id_if = input_formatter_dict[id_if_name](llm_bundle, id_prompt_version, calibrator_type, loss_func)

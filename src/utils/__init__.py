@@ -128,7 +128,7 @@ class LossFunc(Enum):
         return LossFunctionDetails(self.name, losses[self.value], learning_rates[self.value])
 
     @classmethod
-    def from_string(cls, x):
+    def from_string(cls, x) -> 'LossFunc':
         return cls.__members__[x]
 
 
