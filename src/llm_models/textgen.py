@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM
 from data import DictDataset
 from llm_models import LLMBundle, extract_verbalized_confidence, VerbalisedConfidence
 from utils import HF_TOKEN, dill_save, DEVICE
+from utils.earlystopping import TEMP_DIR
 
 
 class TextGenLLMBundle(LLMBundle):
@@ -22,13 +23,20 @@ class TextGenLLMBundle(LLMBundle):
             print("Successfully loaded model with flash attention 2.")
         except:
             print("Failed to use flash attention 2. Loading default model.")"""
+        save_data = {}
         self.llm_model = AutoModelForCausalLM.from_pretrained(self.llm_name,
                                                               device_map="auto",
                                                               torch_dtype=torch.float16,
                                                               token=HF_TOKEN)
         self.llm_model.eval()
         self.lm_head = self.llm_model.lm_head
+
+        pth = Path(TEMP_DIR) / "lm_heads" / self.llm_name
+        pth.mkdir(exist_ok=True, parents=True)
+        torch.save(self.lm_head, pth / f"lm_head.pth")
         self.hidden_features = self.llm_model.config.hidden_size
+        save_data["hidden_features"] = self.hidden_features
+        torch.save(save_data, pth / "saved_data.pth")
 
         # Freeze all the parameters
         for parameter in self.llm_model.parameters():

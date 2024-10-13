@@ -1,4 +1,6 @@
 import re
+from pathlib import Path
+
 import torch
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -8,6 +10,7 @@ from torch import nn
 from transformers import AutoTokenizer
 
 from utils import QUALITATIVE_SCALE, HF_TOKEN, DEVICE
+from utils.earlystopping import TEMP_DIR
 
 
 class VerbalisedConfidence(Enum):
@@ -133,8 +136,13 @@ class LLMBundle(ABC):
         """
         if lm_head_only:
             if self.lm_head is None:
-                self.get_model()
-                self.unload_model() # unload the feature layers.
+                p = Path(TEMP_DIR) / "lm_heads" / self.llm_name
+                if (p / "lm_head.pth").exists() and (p / "saved_data.pth").exists():
+                    self.lm_head = torch.load(p / "lm_head.pth")
+                    self.hidden_features = torch.load(p / "saved_data.pth")["hidden_features"]
+                else:
+                    self.get_model()
+                    self.unload_model() # unload the feature layers.
             return
 
         if self.llm_model is None:
