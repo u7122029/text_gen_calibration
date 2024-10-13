@@ -33,7 +33,10 @@ class TextGenLLMBundle(LLMBundle):
 
         pth = Path(TEMP_DIR) / "lm_heads" / self.llm_name
         pth.mkdir(exist_ok=True, parents=True)
-        torch.save(self.lm_head, pth / f"lm_head.pth")
+        try:
+            torch.save(self.lm_head, pth / f"lm_head.pth")
+        except:
+            print("failed to save last hidden state to disk.")
         self.hidden_features = self.llm_model.config.hidden_size
         save_data["hidden_features"] = self.hidden_features
         torch.save(save_data, pth / "saved_data.pth")
