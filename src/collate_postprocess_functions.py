@@ -6,7 +6,7 @@ from utils import DEVICE
 
 def logit_token_repeat_label_key(label_key, llm_bundle: LLMBundle):
     def collate_fn(out_dict: dict):
-        out_dict["logits"] = torch.cat([llm_bundle.final_hs_to_logits(fhs.float()).cpu()
+        out_dict["logits"] = torch.cat([llm_bundle.final_hs_to_logits(fhs.float())
                                         for fhs in out_dict["final_hidden_states"]], dim=0)
         out_dict[label_key] = torch.cat(
             [c.repeat(len(t)) for c, t in zip(out_dict[label_key], out_dict["tokens"])]).float()
