@@ -274,7 +274,7 @@ def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
 
     elif calibrator_name is None:
         print("vary_calibrator_ood")
-        vary_calibrator_ood(model_name, id_prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
+        vary_calibrator_ood(model_name, id_prompt_version, ood_prompt_version, loss_func_name, id_input_formatter_name, ood_input_formatter_name)
 
 
 if __name__ == "__main__":

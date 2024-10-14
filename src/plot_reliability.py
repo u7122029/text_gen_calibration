@@ -295,6 +295,7 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
     fig4, ax4 = reliability_diagram(test_data["correct"], modified_confs1,
                                     f"xi <= 0.8 Responses", n_bins=30)
 
+
     fig5, ax5 = reliability_diagram(test_data["correct"], calibrated_token_confs,
                                     f"xi > 0.8 Responses (calibrated)", n_bins=30)
     fig6, ax6 = reliability_diagram(test_data["correct"], calibrated_token_confs1,

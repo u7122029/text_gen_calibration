@@ -138,8 +138,12 @@ class LLMBundle(ABC):
             if self.lm_head is None:
                 p = Path(TEMP_DIR) / "lm_heads" / self.llm_name
                 if (p / "lm_head.pth").exists() and (p / "saved_data.pth").exists():
-                    self.lm_head = torch.load(p / "lm_head.pth").to(DEVICE)
-                    self.hidden_features = torch.load(p / "saved_data.pth")["hidden_features"]
+                    try:
+                        self.lm_head = torch.load(p / "lm_head.pth").to(DEVICE)
+                        self.hidden_features = torch.load(p / "saved_data.pth")["hidden_features"]
+                    except:
+                        self.get_model()
+                        self.unload_model()  # unload the feature layers.
                 else:
                     self.get_model()
                     self.unload_model() # unload the feature layers.
