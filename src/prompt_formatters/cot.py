@@ -177,7 +177,8 @@ class CoTPromptFormat(PromptFormat):
 class WordAnswerCoTPromptFormat(CoTPromptFormat):
     def __init__(self, llm_bundle, **kwargs):
         super().__init__(llm_bundle,
-                         final_answer_description="The exact answer from your explanation ONLY, nothing else.")
+                         final_answer_description="The exact answer from your explanation ONLY, nothing else.",
+                         **kwargs)
 
     def obtain_answers(self, decoded_responses):
         final_answer_tag_lower = self.final_answer_tag.lower()
