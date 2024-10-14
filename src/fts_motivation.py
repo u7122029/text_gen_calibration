@@ -95,11 +95,14 @@ def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
     # First get calibration dset
     dset = DictDataset.from_file(path)
     top_df, bot_df = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
-    print(top_df[top_df["token_values"] >= 0.8])
+    plt.figure()
+    plt.scatter(top_df["stds_proc"], top_df["means"])
+    print(top_df[top_df["token_values"] >= 0.2])
+    plt.show()
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
-         model_name="google/gemma-2-2b-it"):
+         model_name="microsoft/Phi-3-mini-4k-instruct"):
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 10000)
@@ -107,7 +110,7 @@ def main(input_formatter_name: str="SQUADV2CoT",
 
     #zeroing_results(input_formatter_name, model_name)
     llm_bundle = TextGenLLMBundle(model_name)
-    metrics = [m_metric, s_metric, r_metric, ms_metric, mr_metric, msr_metric]
+    metrics = [ms_metric]#, mr_metric, sr_metric, msr_metric]
     for metric in metrics:
         print(metric.__name__)
         show_xi_scores(input_formatter_name, llm_bundle, metric)
