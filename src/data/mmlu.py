@@ -11,10 +11,11 @@ def construct_mmlu(out_path: Path):
     print("MMLU dataset not found on disk. Constructing dataset from scratch.")
     dset_name = "cais/mmlu"
     datasets = []
-    subjects = {"machine_learning", "computer_security", "econometrics", "jurisprudence", "philosophy", "prehistory"}
+    #subjects = {"machine_learning", "computer_security", "econometrics", "jurisprudence", "philosophy", "prehistory"}
+    subjects = set()
     for name in get_dataset_config_names(dset_name):
         if (
-                (name.startswith("high") or name.startswith("college") or name.startswith("professional"))
+                (name.startswith("high") or name.startswith("college"))
                 and not name.endswith("mathematics")
         ) or name in subjects:
             print(f"mmlu: loading {name}")
