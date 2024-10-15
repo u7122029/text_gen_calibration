@@ -123,18 +123,15 @@ class TieredPlattModel(TieredModel):
         self.general_linear = nn.Linear(1, 1)
         self.top_linear = nn.Linear(1, 1)
 
-    def forward(self, x: torch.Tensor, tokens=None):
+    def forward(self, x: torch.Tensor, tokens):
+        assert tokens is not None
+        assert self.top_token_ids is not None
+
         # x.shape: [logit_vec, vocab size]
-        x = nn.functional.softmax(x, dim=1)
-        x = torch.gather(x, 1, tokens.unsqueeze(1))
-        x = self.general_linear(x)
-        x = torch.sigmoid(x)
-
-        if self.top_token_ids is not None and tokens is not None:
-            mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
-            x[mask] = self.top_linear(x[mask])
-            x[mask] = torch.sigmoid(x[mask])
-
+        mask = torch.isin(tokens, self.top_token_ids.to(tokens.device))
+        x = torch.gather(x.softmax(dim=1), 1, tokens.unsqueeze(1))
+        x[mask] = self.top_linear(x[mask]).sigmoid_()
+        x[~mask] = self.general_linear(x[~mask]).sigmoid_()
         return x.flatten()  # [confs]
 
 

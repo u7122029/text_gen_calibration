@@ -68,7 +68,7 @@ class FLHS_S(FrequencyLastHiddenStateCalibrator):
 
 class FLHS_R(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return torch.tensor(rfr)
+        return rfr
 
 
 class FLHS_SR(FrequencyLastHiddenStateCalibrator):
@@ -78,7 +78,7 @@ class FLHS_SR(FrequencyLastHiddenStateCalibrator):
 
 class FLHS_MR(FrequencyLastHiddenStateCalibrator):
     def metric(self, mean, std, rfr):
-        return torch.tensor(mean * rfr)
+        return mean * rfr
 
 
 class FLHS_MS(FrequencyLastHiddenStateCalibrator):

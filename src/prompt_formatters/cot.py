@@ -17,14 +17,14 @@ class CoTModelConfig(Enum):
         name_dict = {
             # confirmed models.
             "google/gemma-2-2b-it": cls.USER_CHAT, # doing now
-            "meta-llama/Llama-3.2-3B-Instruct": cls.SYSTEM_USER_CHAT, #Done
-            "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT, # DONE
+            "meta-llama/Llama-3.2-3B-Instruct": cls.SYSTEM_USER_CHAT, # doing now
+            "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT,
             "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT, # DONE
             "Zyphra/Zamba2-2.7B-instruct": cls.SYSTEM_USER_CHAT, # doing now
 
-            "meta-llama/Llama-3.1-8B-Instruct": cls.SYSTEM_USER_CHAT,
+            "meta-llama/Llama-3.1-8B-Instruct": cls.SYSTEM_USER_CHAT, # doing now
             "mistralai/Mistral-7B-Instruct-v0.3": cls.USER_CHAT, # DONE
-            "Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT
+            "Qwen/Qwen2.5-7B-Instruct": cls.SYSTEM_USER_CHAT # doing now
         }
         return name_dict[name]
 

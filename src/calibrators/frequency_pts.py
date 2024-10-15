@@ -27,7 +27,7 @@ class FrequencyPTS_M(LogitTokenFrequencyCalibrator):
         super().__init__(llm_bundle, loss_fn, score_thresh, TieredPTSModel())
 
     def metric(self, mean, std, response_frequency_ratio):
-        return torch.tensor(mean)
+        return mean
 
 
 class FrequencyPTS_S(LogitTokenFrequencyCalibrator):
@@ -53,7 +53,7 @@ class FrequencyPTS_R(LogitTokenFrequencyCalibrator):
         super().__init__(llm_bundle, loss_fn, score_thresh, TieredPTSModel())
 
     def metric(self, mean, std, response_frequency_ratio):
-        return torch.tensor(response_frequency_ratio)
+        return response_frequency_ratio
 
 
 class FrequencyPTS_MS(LogitTokenFrequencyCalibrator):
@@ -79,7 +79,7 @@ class FrequencyPTS_SR(LogitTokenFrequencyCalibrator):
         super().__init__(llm_bundle, loss_fn, score_thresh, TieredPTSModel())
 
     def metric(self, mean, std, response_frequency_ratio):
-        return torch.tensor(std_proc(std) * response_frequency_ratio)
+        return std_proc(std) * response_frequency_ratio
 
 
 class FrequencyPTS_MR(LogitTokenFrequencyCalibrator):
@@ -92,4 +92,4 @@ class FrequencyPTS_MR(LogitTokenFrequencyCalibrator):
         super().__init__(llm_bundle, loss_fn, score_thresh, TieredPTSModel())
 
     def metric(self, mean, std, response_frequency_ratio):
-        return torch.tensor(mean * response_frequency_ratio)
+        return mean * response_frequency_ratio
