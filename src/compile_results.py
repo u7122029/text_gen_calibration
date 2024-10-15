@@ -122,8 +122,8 @@ def vary_calibrator_ood(model_name: str,
 
 
 def merge_dfs(*dfs):
-    df = pd.concat(*dfs)
-    return df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
+    df = pd.concat(*dfs).reset_index()
+    return df#df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
 
 
 def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
