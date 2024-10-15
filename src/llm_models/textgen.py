@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import torch
 from torch.utils.data import DataLoader
@@ -118,9 +118,8 @@ class TextGenLLMBundle(LLMBundle):
                 tokens_path = storage_root / idx_name / f"tokens.dill"
                 dill_save(tokens, tokens_path)
 
-                all_final_hs_paths.append(final_hs_path)
-                all_tokens_paths.append(tokens_path)
-                file_idx += 1
+                all_final_hs_paths.append(PurePosixPath(final_hs_path))
+                all_tokens_paths.append(PurePosixPath(tokens_path))
 
                 prob_vecs = torch.softmax(processed_logits, dim=1)  # response_idx, response length, vocab_size
 
@@ -130,10 +129,11 @@ class TextGenLLMBundle(LLMBundle):
 
                 token_probs_path = storage_root / idx_name / f"token_probs.dill"
                 dill_save(token_confidences, token_probs_path)
-                all_token_probs_paths.append(token_probs_path)
+                all_token_probs_paths.append(PurePosixPath(token_probs_path))
 
                 response_confidence = torch.mean(token_confidences).item()
                 all_logit_confs.append(response_confidence)
+                file_idx += 1
 
         dset = dset.update({"final_hidden_states": all_final_hs_paths,
                             "logits_confs": all_logit_confs,
