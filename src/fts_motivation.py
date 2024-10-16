@@ -67,22 +67,29 @@ def msr_metric(mean, std, rfr):
     return mean * std_proc(std) * rfr
 
 
-def zeroing_results(input_formatter_name, model_name):
-    path = Path(RESULTS_PATH) / model_name / input_formatter_name / "DEFAULT" / "calib_data" / "data.dill"
-    llm_bundle = TextGenLLMBundle(model_name)
+def get_calib_dset(input_formatter_name, llm_bundle: TextGenLLMBundle):
+    path = Path(RESULTS_PATH) / llm_bundle.llm_name / input_formatter_name / "DEFAULT" / "calib_data" / "data.dill"
 
     # First get calibration dset
     dset = DictDataset.from_file(path)
-    top_df, bot_df = compute_top_bot_dfs(dset, llm_bundle, metric_func=sr_metric)
+    return dset
+
+
+def get_top_df(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
+    dset = get_calib_dset(input_formatter_name, llm_bundle)
+    top_df, _ = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
+    return top_df
+
+
+def zeroing_results(input_formatter_name, llm_bundle: TextGenLLMBundle):
+    dset = get_calib_dset(input_formatter_name, llm_bundle)
+    top_df = get_top_df(input_formatter_name, llm_bundle, metric=sr_metric)
 
     high_xi_tokens = torch.Tensor(top_df[top_df["token_values"] >= 0.8]["token_ids"].to_numpy())
     low_xi_tokens = torch.Tensor(top_df[top_df["token_values"] <= 0.2]["token_ids"].to_numpy())
     dset_confs = dset["logits_confs"]
     adjust_high_xi0 = []
     adjust_low_xi0 = []
-
-    adjust_high_xi1 = []
-    adjust_low_xi1 = []
 
     llm_bundle.lm_head.cuda()
     for x in dset:
@@ -96,45 +103,25 @@ def zeroing_results(input_formatter_name, model_name):
         token_confs_high0 = token_confs.clone()
         token_confs_high0[mask_high] = 0
 
-        token_confs_high1 = token_confs.clone()
-        token_confs_high1[mask_high] = 1
-
         token_confs_low0 = token_confs.clone()
         token_confs_low0[mask_low] = 0
-
-        token_confs_low1 = token_confs.clone()
-        token_confs_low1[mask_low] = 1
 
         adjust_high_xi0.append(torch.mean(token_confs_high0))
         adjust_low_xi0.append(torch.mean(token_confs_low0))
 
-        adjust_high_xi1.append(torch.mean(token_confs_high1))
-        adjust_low_xi1.append(torch.mean(token_confs_low1))
-
     adjust_low_xi0 = torch.Tensor(adjust_low_xi0)
     adjust_high_xi0 = torch.Tensor(adjust_high_xi0)
 
-    adjust_low_xi1 = torch.Tensor(adjust_low_xi1)
-    adjust_high_xi1 = torch.Tensor(adjust_high_xi1)
-
     plt.figure()
-    plt.boxplot([dset_confs, adjust_high_xi0, adjust_low_xi0, adjust_high_xi1, adjust_low_xi1])
-    plt.xticks([1, 2, 3, 4, 5], ['Control', r'$\geq M$, 0', r'$\leq 1 - M$, 0', r'$\geq M$, 1', r'$\leq 1 - M$, 1'])
-    plt.title(rf"Response Confidence Distributions based on $\xi$-score ({model_name}).")
+    plt.boxplot([dset_confs, adjust_high_xi0, adjust_low_xi0])
+    plt.xticks([1, 2, 3], ['Control', r'$\geq M$, 0', r'$\leq 1 - M$, 0'])
+    plt.title(rf"Response Confidence Distributions based on $\xi$-score ({llm_bundle.llm_name}).")
     plt.ylabel("Response Confidence")
+    plt.ylim([0,1])
     plt.show()
     #path = Path(FIGURES_PATH) / model_name
     #path.mkdir(parents=True, exist_ok=True)
     #plt.savefig(path / "zeroing.png", dpi=600, transparent=True)
-
-
-def get_top_df(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
-    path = Path(RESULTS_PATH) / llm_bundle.llm_name / input_formatter_name / "DEFAULT" / "calib_data" / "data.dill"
-
-    # First get calibration dset
-    dset = DictDataset.from_file(path)
-    top_df, _ = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
-    return top_df
 
 
 def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
@@ -171,12 +158,13 @@ def main(input_formatter_name: str="SQUADV2CoT",
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
-    #zeroing_results(input_formatter_name, model_name)
     llm_bundle = TextGenLLMBundle(model_name)
-    metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
-    for metric in metrics:
-        print(metric.__name__)
-        show_xi_scores(input_formatter_name, llm_bundle, metric)
+    zeroing_results(input_formatter_name, llm_bundle)
+    #llm_bundle = TextGenLLMBundle(model_name)
+    #metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
+    #for metric in metrics:
+    #    print(metric.__name__)
+    #    show_xi_scores(input_formatter_name, llm_bundle, metric)
 
 
 if __name__ == "__main__":
