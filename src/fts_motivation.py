@@ -128,20 +128,25 @@ def zeroing_results(input_formatter_name, model_name):
     #plt.savefig(path / "zeroing.png", dpi=600, transparent=True)
 
 
-def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
-    temp = pathlib.PosixPath
-    pathlib.PosixPath = pathlib.WindowsPath
+def get_top_df(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
     path = Path(RESULTS_PATH) / llm_bundle.llm_name / input_formatter_name / "DEFAULT" / "calib_data" / "data.dill"
 
     # First get calibration dset
     dset = DictDataset.from_file(path)
-    top_df, bot_df = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
+    top_df, _ = compute_top_bot_dfs(dset, llm_bundle, metric_func=metric)
+    return top_df
 
-    """lr = LinearRegression()
+
+def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
+    top_df = get_top_df(input_formatter_name, llm_bundle, metric)
+
+    lr = LinearRegression()
     lr.fit(top_df["stds_proc"].to_numpy().reshape(-1,1), top_df["means"])
+
     coef = lr.coef_
     y_int = lr.intercept_
     approx = lambda x: coef * x + y_int
+
     gamma = compute_gamma(top_df["stds_proc"], top_df["means"])
     x_low = top_df["stds_proc"].min()
     x_high = top_df["stds_proc"].max()
@@ -155,11 +160,8 @@ def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
     plt.ylabel(r"$\mu$")
     plt.legend(loc="best")
     plt.tight_layout()
-
-    pathlib.PosixPath = temp
-    plt.show()"""
-    print(top_df)
-    pathlib.PosixPath = temp
+    plt.savefig("mean_std.png", dpi=300)
+    plt.show()
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
@@ -169,12 +171,12 @@ def main(input_formatter_name: str="SQUADV2CoT",
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
-    zeroing_results(input_formatter_name, model_name)
-    """llm_bundle = TextGenLLMBundle(model_name)
+    #zeroing_results(input_formatter_name, model_name)
+    llm_bundle = TextGenLLMBundle(model_name)
     metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
     for metric in metrics:
         print(metric.__name__)
-        show_xi_scores(input_formatter_name, llm_bundle, metric)"""
+        show_xi_scores(input_formatter_name, llm_bundle, metric)
 
 
 if __name__ == "__main__":
