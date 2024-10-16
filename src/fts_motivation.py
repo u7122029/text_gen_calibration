@@ -114,14 +114,12 @@ def zeroing_results(input_formatter_name, llm_bundle: TextGenLLMBundle):
 
     plt.figure()
     plt.boxplot([dset_confs, adjust_high_xi0, adjust_low_xi0])
-    plt.xticks([1, 2, 3], ['Control', r'$\geq M$, 0', r'$\leq 1 - M$, 0'])
-    plt.title(rf"Response Confidence Distributions based on $\xi$-score ({llm_bundle.llm_name}).")
+    plt.xticks([1, 2, 3], ['Control', r'$\geq M$', r'$\leq 1 - M$'])
+    plt.title(rf"Response Confidence Distributions based on \(\xi\)-score")
     plt.ylabel("Response Confidence")
-    plt.ylim([0,1])
+    plt.ylim(top=1)
+    plt.savefig("rcd.png", dpi=300)
     plt.show()
-    #path = Path(FIGURES_PATH) / model_name
-    #path.mkdir(parents=True, exist_ok=True)
-    #plt.savefig(path / "zeroing.png", dpi=600, transparent=True)
 
 
 def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
