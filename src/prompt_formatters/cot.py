@@ -16,7 +16,7 @@ class CoTModelConfig(Enum):
     def from_model_name(cls, name):
         name_dict = {
             # confirmed models.
-            "google/gemma-2-2b-it": cls.USER_CHAT, # doing now
+            "google/gemma-2-2b-it": cls.USER_CHAT, # DONE
             "meta-llama/Llama-3.2-3B-Instruct": cls.SYSTEM_USER_CHAT, # DONE
             "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT, # doing now
             "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT, # DONE
@@ -242,21 +242,21 @@ class AltCoTPromptFormat(CoTPromptFormat):
     """
     def __init__(self, llm_bundle: TextGenLLMBundle, **kwargs):
         super().__init__(llm_bundle,
-                         "**Question:**",
-                         "**Context:**",
-                         "**Conclusion:**",
-                         "**Reasoning:**",
-                         "**Certainty:**")
+                         "[Question]",
+                         "[Context]",
+                         "[Conclusion]",
+                         "[Reasoning]",
+                         "[Certainty]")
 
 
 class AltWordAnswerCoTPromptFormat(WordAnswerCoTPromptFormat):
     def __init__(self, llm_bundle, **kwargs):
         super().__init__(llm_bundle,
-                         question_tag="**Question:**",
-                         context_tag="**Context:**",
-                         final_answer_tag="**Conclusion:**",
-                         explanation_tag="**Reasoning:**",
-                         confidence_tag="**Certainty:**")
+                         question_tag="[Question]",
+                         context_tag="[Context]",
+                         final_answer_tag="[Conclusion]",
+                         explanation_tag="[Reasoning]",
+                         confidence_tag="[Certainty]")
 
     def obtain_answers(self, decoded_responses):
         return WordAnswerCoTPromptFormat.obtain_answers(self, decoded_responses)
@@ -269,11 +269,11 @@ class AltMCQCoTPromptFormat(MCQCoTPromptFormat):
     def __init__(self, llm_bundle: TextGenLLMBundle, mcq_options=None, **kwargs):
         super().__init__(llm_bundle,
                          mcq_options,
-                         question_tag="**Question:**",
-                         context_tag="**Context:**",
-                         final_answer_tag="**Conclusion:**",
-                         explanation_tag="**Reasoning:**",
-                         confidence_tag="**Certainty:**")
+                         question_tag="[Question]",
+                         context_tag="[Context]",
+                         final_answer_tag="[Conclusion]",
+                         explanation_tag="[Reasoning]",
+                         confidence_tag="[Certainty]")
 
 
 class PromptVersion(Enum):
