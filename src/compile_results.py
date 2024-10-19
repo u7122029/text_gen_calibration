@@ -200,7 +200,72 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     return calib_collection, test_collection
 
 
-def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
+def modify_calib_names(df: pd.DataFrame):
+    def renaming(name: str):
+        apricot = False
+        if "APRICOT" in name:
+            name = name.replace("APRICOT", "A")
+            apricot = True
+
+        match name:
+            case "TokenCalibrator":
+                return "RE"
+            case "LogitConfsPlattScaling":
+                return "PS"
+            case "LastHiddenStateCalibrator":
+                return "LHS"
+            case "A_Original":
+                return "A\\_RE"
+
+        parts = name.split("_")
+        if apricot:
+            idx = 1
+        else:
+            idx = 0
+
+        target = parts[idx]
+        match target:
+            case "FTP":
+                modified = f"\\(\\xi_{{{parts[idx + 1].lower()}}}\\)-TP"
+            case "FPS":
+                modified = f"\\(\\xi_{{{parts[idx + 1].lower()}}}\\)-PS"
+            case "FLHS":
+                modified = f"\\(\\xi_{{{parts[idx + 1].lower()}}}\\)-LHS"
+            case "FrequencyTS":
+                modified = f"\\(\\xi_{{{parts[idx + 1].lower()}}}\\)-TS"
+            case "FrequencyPTS":
+                modified = f"\\(\\xi_{{{parts[idx + 1].lower()}}}\\)-PTS"
+            case "TemperatureScaling":
+                modified = "TS"
+            case _:
+                modified = target
+        lst = []
+        if apricot:
+            lst = ["A"]
+        lst.append(modified)
+        return "\\_".join(lst)
+
+    df["Calibrator"] = df["Calibrator"].apply(renaming)
+    return df
+
+
+def modify_loss_names(df: pd.DataFrame):
+    def renaming(name: str):
+        match name:
+            case "WEIGHTED_BCE":
+                name = "W-BCE\\\\"
+            case "WEIGHTED_CORRECT_AWARE":
+                name = "W-CA\\\\"
+            case "CORRECT_AWARE":
+                name = "CA\\\\"
+            case _:
+                name += "\\\\"
+        return name
+    df["loss_fn"] = df["loss_fn"].apply(renaming)
+    return df
+
+
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
@@ -242,6 +307,8 @@ def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
 
         calib_compiled_df, calib_details = compare_collections_by_loss(calib_collections)
         test_compiled_df, test_details = compare_collections_by_loss(test_collections)
+        calib_compiled_df = modify_loss_names(modify_calib_names(calib_compiled_df))
+        test_compiled_df = modify_loss_names(modify_calib_names(test_compiled_df))
 
         print(tabulate(calib_details.items(), tablefmt="github"))
         print()
@@ -277,7 +344,7 @@ def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
                                                    ood_input_formatter_name))
             torch.cuda.empty_cache()
         compiled_df, details = compare_collections_by_loss(collections)
-
+        compiled_df = modify_loss_names(modify_calib_names(compiled_df))
         print(tabulate(details.items(), tablefmt="github"))
         print()
         print(compiled_df.sort_values(by="ece_calib", ascending=True))
