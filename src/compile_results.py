@@ -129,7 +129,8 @@ def vary_calibrator_ood(model_name: str,
 
 def merge_dfs(*dfs):
     df = pd.concat(*dfs).reset_index()
-    return df#df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
+    #groups = df.groupby("Calibrator")
+    return df.loc[df.groupby('Calibrator')['ece_calib'].idxmin()]
 
 
 def compare_collections_by_loss(collections: list[ModelMetricsCollection]):
@@ -174,6 +175,9 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     id_if: Optional[InputFormatter] = None
     for calibrator_name in calibrator_names:
         print(sc.green(calibrator_name))
+        if calibrator_name.startswith("APRICOT") and loss_func.name.startswith("WEIGHTED"):
+            print("APRICOT models have no class imbalance. Skipping.")
+            continue
         calibrator_type = calibrator_dict[calibrator_name]
         if id_if is None:
             id_if = input_formatter_dict[input_formatter](llm_bundle,
@@ -196,13 +200,13 @@ def vary_calibrator_id(model_name: str, loss_func_name: str, prompt_version: Pro
     return calib_collection, test_collection
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
          ood_prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]="AQUARATCoT"):
+         ood_input_formatter_name: Optional[str]=None):
     """
 
     @param model_name:

@@ -123,6 +123,7 @@ class LLMBundle(ABC):
     def unload_model(self):
         # Really free up GPU space, but keep the attribute existent.
         if self.llm_model is not None:
+            #self.llm_model.cpu()
             print("Unloading model.")
             del self.llm_model
             self.llm_model = None

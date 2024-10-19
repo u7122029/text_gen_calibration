@@ -124,6 +124,7 @@ def zeroing_results(input_formatter_name, llm_bundle: TextGenLLMBundle):
 
 def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
     top_df = get_top_df(input_formatter_name, llm_bundle, metric)
+    print(top_df)
 
     lr = LinearRegression()
     lr.fit(top_df["stds_proc"].to_numpy().reshape(-1,1), top_df["means"])
@@ -150,19 +151,19 @@ def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
-         model_name="microsoft/Phi-3-mini-4k-instruct"):
+         model_name="mistralai/Mistral-7B-Instruct-v0.3"):
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
     llm_bundle = TextGenLLMBundle(model_name)
-    zeroing_results(input_formatter_name, llm_bundle)
-    #llm_bundle = TextGenLLMBundle(model_name)
-    #metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
-    #for metric in metrics:
-    #    print(metric.__name__)
-    #    show_xi_scores(input_formatter_name, llm_bundle, metric)
+    #zeroing_results(input_formatter_name, llm_bundle)
+    llm_bundle = TextGenLLMBundle(model_name)
+    metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
+    for metric in metrics:
+       print(metric.__name__)
+       show_xi_scores(input_formatter_name, llm_bundle, metric)
 
 
 if __name__ == "__main__":

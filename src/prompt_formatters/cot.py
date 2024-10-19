@@ -18,7 +18,7 @@ class CoTModelConfig(Enum):
             # confirmed models.
             "google/gemma-2-2b-it": cls.USER_CHAT, # DONE
             "meta-llama/Llama-3.2-3B-Instruct": cls.SYSTEM_USER_CHAT, # DONE
-            "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT, # doing now
+            "Qwen/Qwen2.5-3B-Instruct": cls.SYSTEM_USER_CHAT, # DONE
             "microsoft/Phi-3-mini-4k-instruct": cls.USER_CHAT, # DONE
             "Zyphra/Zamba2-2.7B-instruct": cls.SYSTEM_USER_CHAT, # DONE
 
