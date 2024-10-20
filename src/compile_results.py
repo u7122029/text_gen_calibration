@@ -265,7 +265,7 @@ def modify_loss_names(df: pd.DataFrame):
     return df
 
 
-def main(model_name: str="google/gemma-2-2b-it",
+def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
