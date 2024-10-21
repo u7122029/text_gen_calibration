@@ -265,13 +265,13 @@ def modify_loss_names(df: pd.DataFrame):
     return df
 
 
-def main(model_name: str="microsoft/Phi-3-mini-4k-instruct",
+def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
          ood_prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]=None):
+         ood_input_formatter_name: Optional[str]="AQUARATCoT"):
     """
 
     @param model_name:

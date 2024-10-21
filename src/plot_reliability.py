@@ -3,6 +3,7 @@ from typing import Optional
 import fire
 from pathlib import Path
 
+import torchmetrics.classification
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 
 from calibrators import calibrator_dict, compute_top_bot_dfs, std_proc
@@ -26,7 +27,7 @@ def boxplots(confs_uncalibrated, confs_xi, confs_non_xi):
     ax.set_yticklabels(['Original', 'xi > 0.8', 'xi <= 0.8'], fontsize=20)
     ax.set_xlabel('Confidence', fontsize=20)
     ax.set_title('Word Confidence Distributions', fontsize=20)
-    ax.set_xlim(0.5, 1)
+    ax.set_xlim(0.2, 1)
     fig.tight_layout()
     return fig, ax
 
@@ -226,7 +227,7 @@ def plot_ood(model_name: str,
     plt.show()
 
 
-def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
+def plot_id(model_name="google/gemma-2-2b-it",
             input_formatter_name="SQUADV2CoT",
             loss_func_name="CORRECT_AWARE",
             prompt_version="DEFAULT",
@@ -247,17 +248,20 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
     input_formatter = input_formatter_dict[input_formatter_name](llm_bundle, prompt_version, calibrator_type, loss_func)
     _, test_data = input_formatter.run_pipeline()
     print(test_data.keys())
+    mm = ModelMetrics(test_data)
+    print(f"ECE: {mm.ece_calibrated}")
+    print(mm.ece_verbalised)
 
     # Plot response-based reliability diagrams
-    fig, ax = reliability_diagram(test_data["correct"], test_data["logits_confs"],
-                                  f"Logit-based Responses ({model_name})")
+    fig, ax = reliability_diagram(mm.correct, mm.logits_confs,
+                                  f"Logit-based Responses")
     fig.savefig(figures_path.parent.parent / "logits.png", dpi=600)
 
-    fig1, ax1 = reliability_diagram(test_data["correct"], test_data["worded_confs"],
-                                    f"Verbalised Responses ({model_name})")
+    fig1, ax1 = reliability_diagram(mm.verbalised_correct, mm.verbalised_confs,
+                                    f"Verbalised Responses")
     fig1.savefig(figures_path.parent.parent / "verbalised.png", dpi=600)
 
-    fig2, ax2 = reliability_diagram(test_data["correct"], test_data["calibrated_confs"],
+    fig2, ax2 = reliability_diagram(mm.calibrated_correct, mm.calibrated_confs,
                                     f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
@@ -276,7 +280,10 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
 
     calibrated_token_confs = []
     calibrated_token_confs1 = []
-    for outcome, token_confs, tokens, calib_token_confs in zip(test_data["correct"], test_data["token_probs"], test_data["tokens"], test_data["calibrated_token_probs"]):
+    for outcome, token_confs, tokens, calib_token_confs in zip(test_data["correct"],
+                                                               test_data["token_probs"],
+                                                               test_data["tokens"],
+                                                               test_data["calibrated_token_probs"]):
         mask = torch.isin(tokens, token_ids)
         modified_confs.append(token_confs[mask].mean())
         modified_confs1.append(token_confs[~mask].mean())
@@ -308,18 +315,17 @@ def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
 
     fig7, ax7 = boxplots(test_data["logits_confs"], modified_confs, modified_confs1)
     fig7.savefig(figures_path.parent.parent / "box_comparisons.png", dpi=600)
-    mm = ModelMetrics(test_data)
-    print(f"ECE: {mm.ece_calibrated}")
+
     plt.show()
 
 
-def main(model_name: str = "Zyphra/Zamba2-2.7B-instruct",
-         calibrator_name: str = "APRICOT_FLHS_M",
+def main(model_name: str = "google/gemma-2-2b-it",
+         calibrator_name: str = "TemperatureScaling",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "CORRECT_AWARE",
          id_if_name: str = "SQUADV2CoT",
-         ood_if_name: Optional[str] = "GSMCoT"):
+         ood_if_name: Optional[str] = None):
     if ood_if_name is None:
         plot_id(model_name, id_if_name, loss_func_name, id_prompt_version, calibrator_name)
     else:

@@ -157,7 +157,6 @@ def main(input_formatter_name: str="SQUADV2CoT",
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
-    llm_bundle = TextGenLLMBundle(model_name)
     #zeroing_results(input_formatter_name, llm_bundle)
     llm_bundle = TextGenLLMBundle(model_name)
     metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
