@@ -320,7 +320,7 @@ def plot_id(model_name="google/gemma-2-2b-it",
 
 
 def main(model_name: str = "google/gemma-2-2b-it",
-         calibrator_name: str = "TemperatureScaling",
+         calibrator_name: str = "APRICOT_FrequencyTS_M",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "CORRECT_AWARE",

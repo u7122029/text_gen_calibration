@@ -23,7 +23,7 @@ class LHSFTSModel(LHSModel, TieredModel):
         # First temperature scale using hidden state, then use fts top temp to further scale selected tokens.
         x = self.temp_scale(x)
         if self.top_token_ids is not None:
-            x[:, self.top_token_ids].div_(self.top_temp)
+            x[:, self.top_token_ids] = x[:, self.top_token_ids].div(self.top_temp)
 
         x = torch.softmax(x, dim=1)
         if tokens is not None:

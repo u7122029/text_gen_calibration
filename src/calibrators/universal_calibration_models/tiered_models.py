@@ -77,7 +77,7 @@ class TieredTSModel(TieredModel):
 
     def top_temp_scale(self, x):
         if self.top_token_ids is not None:
-            x[:, self.top_token_ids].div_(self.top_temp)
+            x[:, self.top_token_ids] = x[:, self.top_token_ids].div(self.top_temp)
 
         return x
 
@@ -155,7 +155,7 @@ class TieredPTSModel(TieredModel):
         x.div_(self.general_temp)
         if self.top_token_ids is not None:
             top_temp = self.top_linear(x[:, self.top_token_ids])
-            x[:, self.top_token_ids].div_(top_temp)
+            x[:, self.top_token_ids] = x[:, self.top_token_ids].div(top_temp)
 
         # if self.bot_token_ids is not None:
         #     bot_temp = self.bot_linear(x[:, self.bot_token_ids])

@@ -149,6 +149,9 @@ class LogitCalibrator(Calibrator, ABC):
             label_batch = label_batch.to(out_token_confs.dtype)
             loss = self.loss_fn(out_token_confs, label_batch)
             loss.backward()
+            for name, param in self.calibrator_model.named_parameters():
+                print(f"Parameter: {name}, Gradient: {param.grad}")
+
             optimiser.step()
             postfix["total_loss_last_epoch"] += loss.item()
 

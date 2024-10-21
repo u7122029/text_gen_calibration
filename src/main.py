@@ -32,10 +32,10 @@ def show_results(calib_data: DictDataset,
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
-         calibrator_name="FLHS_S",
-         loss_fn="CORRECT_AWARE",
+         calibrator_name="FTP_M",
+         loss_fn="BCE",
          cot_version="DEFAULT",
-         model_name="google/gemma-2-2b-it",
+         model_name="meta-llama/Llama-3.2-3B-Instruct",
          batch_size=4,
          calib_dset_size=None,
          test_dset_size=None,
