@@ -1,4 +1,4 @@
-for llm_name in microsoft/Phi-3-mini-4k-instruct meta-llama/Llama-3.2-3B-Instruct
+for llm_name in meta-llama/Llama-3.1-8B-Instruct
 do
   for dset_name in GSMCoT MMLUCoT AQUARATCoT
   do
