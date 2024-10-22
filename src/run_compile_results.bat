@@ -1,7 +1,7 @@
 REM @echo off
 setlocal enabledelayedexpansion
 
-set llm_names=microsoft/Phi-3-mini-4k-instruct meta-llama/Llama-3.2-3B-Instruct
+set llm_names=meta-llama/Llama-3.2-3B-Instruct
 set loss_names=BCE WEIGHTED_BCE CORRECT_AWARE WEIGHTED_CORRECT_AWARE
 set dset_names=GSMCoT MMLUCoT AQUARATCoT
 

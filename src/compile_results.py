@@ -14,48 +14,38 @@ from prompt_formatters import PromptVersion
 from utils import LossFunc
 
 calibrator_names = [
-    #"APRICOT_Original",
-    #"TokenCalibrator",
-    #"TemperatureScaling",
-    #"APRICOT_TemperatureScaling",
+    # "APRICOT_Original",
+    # "TokenCalibrator",
+    # "TemperatureScaling",
+    # "APRICOT_TemperatureScaling",
     "FrequencyPTS_M",
     "FrequencyPTS_S",
     "FrequencyPTS_R",
-    #"FrequencyPTS_MS",
     "FrequencyPTS_MR",
     "FrequencyPTS_SR",
-    #"FrequencyPTS_MSR",
-    #"LastHiddenStateCalibrator",
-    #"APRICOT_LHS",
+    # "LastHiddenStateCalibrator",
+    # "APRICOT_LHS",
     "FrequencyTS_M",
     "FrequencyTS_S",
     "FrequencyTS_R",
     "FrequencyTS_MR",
     "FrequencyTS_SR",
-    #"FrequencyTS_MS",
-    #"FrequencyTS_MSR",
     "APRICOT_FrequencyTS_M",
     "APRICOT_FrequencyTS_S",
     "APRICOT_FrequencyTS_R",
-    #"APRICOT_FrequencyTS_MS",
     "APRICOT_FrequencyTS_SR",
     "APRICOT_FrequencyTS_MR",
-    #"APRICOT_FrequencyTS_MSR",
     "FLHS_M",
     "FLHS_S",
     "FLHS_R",
     "FLHS_SR",
-    #"FLHS_MS",
     "FLHS_MR",
-    #"FLHS_MSR",
     "APRICOT_FLHS_M",
     "APRICOT_FLHS_S",
     "APRICOT_FLHS_R",
     "APRICOT_FLHS_SR",
-    #"APRICOT_FLHS_MS",
     "APRICOT_FLHS_MR",
-    #"APRICOT_FLHS_MSR",
-    #"LogitConfsPlattScaling",
+    # "LogitConfsPlattScaling",
     # "FTP_M",
     # "FTP_S",
     # "FTP_R",
@@ -77,7 +67,6 @@ calibrator_names = [
     # "APRICOT_FPS_MR",
     # "APRICOT_FPS_SR"
 ]
-
 
 def vary_calibrator_ood(model_name: str,
                         id_prompt_version: PromptVersion,
@@ -265,13 +254,13 @@ def modify_loss_names(df: pd.DataFrame):
     return df
 
 
-def main(model_name: str="mistralai/Mistral-7B-Instruct-v0.3",
+def main(model_name: str="google/gemma-2-2b-it",
          calibrator_name: str=None,
          loss_func_name: Optional[str]=None, #"CORRECT_AWARE",
          id_prompt_version: str="DEFAULT",
          ood_prompt_version: str="DEFAULT",
          id_input_formatter_name: str="SQUADV2CoT",
-         ood_input_formatter_name: Optional[str]="AQUARATCoT"):
+         ood_input_formatter_name: Optional[str]=None):
     """
 
     @param model_name:

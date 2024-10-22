@@ -87,6 +87,7 @@ def zeroing_results(input_formatter_name, llm_bundle: TextGenLLMBundle):
 
     high_xi_tokens = torch.Tensor(top_df[top_df["token_values"] >= 0.8]["token_ids"].to_numpy())
     low_xi_tokens = torch.Tensor(top_df[top_df["token_values"] <= 0.2]["token_ids"].to_numpy())
+    print(low_xi_tokens)
     dset_confs = dset["logits_confs"]
     adjust_high_xi0 = []
     adjust_low_xi0 = []
@@ -151,18 +152,19 @@ def show_xi_scores(input_formatter_name, llm_bundle: TextGenLLMBundle, metric):
 
 
 def main(input_formatter_name: str="SQUADV2CoT",
-         model_name="mistralai/Mistral-7B-Instruct-v0.3"):
+         model_name="google/gemma-2-2b-it"):
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 10000)
     torch.manual_seed(0)
 
-    #zeroing_results(input_formatter_name, llm_bundle)
+
     llm_bundle = TextGenLLMBundle(model_name)
-    metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
-    for metric in metrics:
-       print(metric.__name__)
-       show_xi_scores(input_formatter_name, llm_bundle, metric)
+    zeroing_results(input_formatter_name, llm_bundle)
+    #metrics = [sr_metric]#, mr_metric, sr_metric, msr_metric]
+    #for metric in metrics:
+    #   print(metric.__name__)
+    #   show_xi_scores(input_formatter_name, llm_bundle, metric)
 
 
 if __name__ == "__main__":

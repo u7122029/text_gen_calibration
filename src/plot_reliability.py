@@ -162,10 +162,10 @@ def plot_ood(model_name: str,
 
     # Plot and save figures
     fig, ax = reliability_diagram(processed.correct, processed.logits_confs,
-                                  f"Logit-based Responses ({model_name})")
-    fig1, ax1 = reliability_diagram(processed.correct, processed.verbalised_confs,
-                                    f"Verbalised Responses ({model_name})")
-    fig2, ax2 = reliability_diagram(processed.correct, processed.calibrated_confs,
+                                  f"Logit-based Responses")
+    fig1, ax1 = reliability_diagram(processed.verbalised_correct, processed.verbalised_confs,
+                                    f"Verbalised Responses")
+    fig2, ax2 = reliability_diagram(processed.calibrated_correct, processed.calibrated_confs,
                                     f"Calibrated Responses ({calibrator_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
@@ -227,7 +227,7 @@ def plot_ood(model_name: str,
     plt.show()
 
 
-def plot_id(model_name="google/gemma-2-2b-it",
+def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
             input_formatter_name="SQUADV2CoT",
             loss_func_name="CORRECT_AWARE",
             prompt_version="DEFAULT",
@@ -319,13 +319,13 @@ def plot_id(model_name="google/gemma-2-2b-it",
     plt.show()
 
 
-def main(model_name: str = "google/gemma-2-2b-it",
-         calibrator_name: str = "APRICOT_FrequencyTS_M",
+def main(model_name: str = "microsoft/Phi-3-mini-4k-instruct",
+         calibrator_name: str = "FrequencyTS_MR",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "CORRECT_AWARE",
          id_if_name: str = "SQUADV2CoT",
-         ood_if_name: Optional[str] = None):
+         ood_if_name: Optional[str] = "MMLUCoT"):
     if ood_if_name is None:
         plot_id(model_name, id_if_name, loss_func_name, id_prompt_version, calibrator_name)
     else:

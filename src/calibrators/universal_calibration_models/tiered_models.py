@@ -154,7 +154,7 @@ class TieredPTSModel(TieredModel):
         # x.shape: [logit_vec, vocab size]
         x.div_(self.general_temp)
         if self.top_token_ids is not None:
-            top_temp = self.top_linear(x[:, self.top_token_ids])
+            top_temp = torch.clamp(self.top_linear(x[:, self.top_token_ids]), min=1e-6)
             x[:, self.top_token_ids] = x[:, self.top_token_ids].div(top_temp)
 
         # if self.bot_token_ids is not None:

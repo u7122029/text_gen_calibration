@@ -2,12 +2,14 @@ import dill
 import torch
 from transformers import AutoTokenizer
 
-model_name = "google/gemma-2-2b-it"
+model_name = "mistralai/Mistral-7B-Instruct-v0.3"
 dataset_name = "SQUADV2CoT"
 ood_dataset_name = None
 tokeniser = AutoTokenizer.from_pretrained(model_name)
+loss = "WEIGHTED_CORRECT_AWARE"
+calibrator = "FrequencyTS_MR"
 
-n = 40 # 40 is the default!!!
+n = 49 # 40 is the default for ID!!!
 d = str(n).zfill(4)
 #print(d)
 
@@ -17,23 +19,21 @@ if ood_dataset_name is not None:
         print("keys:", x.keys())
         print(x["question"][n])
         print(x["correct"][n])
-        print(x["answer"][n])
-        print(x["logits_confs"][n])
+        print("ANSWER:",x["answer"][n])
+        print("LOGIT_CONF:",x["logits_confs"][n])
+        print("NUM_CONF:", x["numeric_confs"][n])
+        print("WORD_CONF:", x["worded_confs"][n])
         print()
 
     with open(f"results/{model_name}/{ood_dataset_name}/DEFAULT/test_data/{d}/tokens.dill", "rb") as f:
         x = dill.load(f)
         print(tokeniser.decode(x))
 
-    with open(f"results/{model_name}/{ood_dataset_name}/DEFAULT/test_data/{d}/token_probs.dill", "rb") as f:
-        x = dill.load(f)
-        print(x.mean())
+    #with open(f"results/{model_name}/{ood_dataset_name}/DEFAULT/test_data/{d}/token_probs.dill", "rb") as f:
+        #x = dill.load(f)
+        #print(x.mean())
 
-    with open(f"results/{model_name}/{dataset_name}/DEFAULT/CORRECT_AWARE/APRICOT_FLHS_MR/ood/DEFAULT/{ood_dataset_name}.dill", "rb") as f:
-        x = dill.load(f)
-        print(x["calibrated_confs"][n])
-
-    with open(f"results/{model_name}/{dataset_name}/DEFAULT/CORRECT_AWARE/APRICOT_LHS/ood/DEFAULT/{ood_dataset_name}.dill", "rb") as f:
+    with open(f"results/{model_name}/{dataset_name}/DEFAULT/CORRECT_AWARE/{calibrator}/ood/DEFAULT/{ood_dataset_name}.dill", "rb") as f:
         x = dill.load(f)
         print(x["calibrated_confs"][n])
 else:
@@ -47,7 +47,11 @@ else:
         print("correct:", correct)
 
         #print("keys:", x.keys())
-        print(x["context"][n])
+        try:
+           print(x["context"][n])
+        except:
+            pass
+
         print()
         print(x["question"][n])
 
@@ -61,7 +65,7 @@ else:
         x = dill.load(f)
         original_token_probs = x
 
-    with open(f"results/{model_name}/{dataset_name}/DEFAULT/CORRECT_AWARE/APRICOT_FrequencyTS_M/test_results.dill", "rb") as f:
+    with open(f"results/{model_name}/{dataset_name}/DEFAULT/{loss}/{calibrator}/test_results.dill", "rb") as f:
         x = dill.load(f)
         #print(x.keys())
         print("CALIBRATED CONF:",x["calibrated_confs"][n])
@@ -73,7 +77,7 @@ else:
     for t, c in zip(token_list, token_confs):
         print(f"\\confnew{{{round(c.item(), 2)}}}{{{t}}}{{5}}")
 
-    with open(f"results/{model_name}/{dataset_name}/DEFAULT/CORRECT_AWARE/FrequencyPTS_MR/calib_weights.dill",
+    with open(f"results/{model_name}/{dataset_name}/DEFAULT/{loss}/{calibrator}/calib_weights.dill",
               "rb") as f:
         x = dill.load(f)
         print(x)
