@@ -141,6 +141,13 @@ def plot_ood(model_name: str,
                     calibrator_name /
                     ood_if_name /
                     ood_prompt_version.name)
+
+    ood_figures_path = (Path(FIGURES_PATH) /
+                        model_name /
+                        ood_if_name /
+                        ood_prompt_version.name)
+
+    ood_figures_path.mkdir(parents=True, exist_ok=True)
     figures_path.mkdir(parents=True, exist_ok=True)
 
     llm_bundle = TextGenLLMBundle(model_name)
@@ -167,6 +174,8 @@ def plot_ood(model_name: str,
                                     f"Verbalised Responses")
     fig2, ax2 = reliability_diagram(processed.calibrated_correct, processed.calibrated_confs,
                                     f"Calibrated Responses ({calibrator_name})")
+    fig.savefig(ood_figures_path / "logits.png", dpi=600)
+    fig1.savefig(ood_figures_path / "verbalised.png", dpi=600)
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
     print(f"ECE: {processed.ece_calibrated}")
@@ -197,14 +206,14 @@ def plot_ood(model_name: str,
         modified_confs.append(token_confs[mask].mean())
         modified_confs1.append(token_confs[~mask].mean())
 
-        calibrated_token_confs.append(calib_token_confs[mask].mean())
-        calibrated_token_confs1.append(calib_token_confs[~mask].mean())
+        try:
+            calibrated_token_confs.append(calib_token_confs[mask].mean())
+            calibrated_token_confs1.append(calib_token_confs[~mask].mean())
+        except:
+            pass
 
     modified_confs = torch.Tensor(modified_confs)
     modified_confs1 = torch.Tensor(modified_confs1)
-
-    calibrated_token_confs = torch.Tensor(calibrated_token_confs)
-    calibrated_token_confs1 = torch.Tensor(calibrated_token_confs1)
 
     fig3, ax3 = reliability_diagram(processed.correct,
                                     modified_confs,
@@ -212,22 +221,24 @@ def plot_ood(model_name: str,
     fig4, ax4 = reliability_diagram(processed.correct,
                                     modified_confs1,
                                     f"xi <= 0.8 Responses", n_bins=30)
+    if calibrated_token_confs:
+        calibrated_token_confs = torch.Tensor(calibrated_token_confs)
+        calibrated_token_confs1 = torch.Tensor(calibrated_token_confs1)
+        fig5, ax5 = reliability_diagram(processed.correct,
+                                        calibrated_token_confs,
+                                        f"xi > 0.8 Responses (calib)", n_bins=30)
+        fig6, ax6 = reliability_diagram(processed.correct,
+                                        calibrated_token_confs1,
+                                        f"xi <= 0.8 Responses (calib)", n_bins=30)
 
-    fig5, ax5 = reliability_diagram(processed.correct,
-                                    calibrated_token_confs,
-                                    f"xi > 0.8 Responses (calib)", n_bins=30)
-    fig6, ax6 = reliability_diagram(processed.correct,
-                                    calibrated_token_confs1,
-                                    f"xi <= 0.8 Responses (calib)", n_bins=30)
-
-    fig5.savefig(figures_path / "xi.png", dpi=600)
-    fig6.savefig(figures_path / "non_xi.png", dpi=600)
+        fig5.savefig(figures_path / "xi.png", dpi=600)
+        fig6.savefig(figures_path / "non_xi.png", dpi=600)
 
     fig7, ax7 = boxplots(processed.logits_confs, modified_confs, modified_confs1)
     plt.show()
 
 
-def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
+def plot_id(model_name="microsoft/Phi-3-mini-4k-instruct",
             input_formatter_name="SQUADV2CoT",
             loss_func_name="CORRECT_AWARE",
             prompt_version="DEFAULT",
@@ -261,13 +272,18 @@ def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
                                     f"Verbalised Responses")
     fig1.savefig(figures_path.parent.parent / "verbalised.png", dpi=600)
 
+    modified_name = calibrator_name
+    if calibrator_name == "TokenCalibrator":
+        modified_name = "RE"
+    elif calibrator_name == "APRICOT_Original":
+        modified_name = "APRICOT_RE"
     fig2, ax2 = reliability_diagram(mm.calibrated_correct, mm.calibrated_confs,
-                                    f"Calibrated Responses ({calibrator_name})")
+                                    f"Calibrated Responses ({modified_name})")
     fig2.savefig(figures_path / "calibrated.png", dpi=600)
 
     # First get highest tokens by threshold
     def metric(mean, std, response_frequency_ratio):
-        return response_frequency_ratio
+        return std * response_frequency_ratio
 
     df_top, bot_df = compute_top_bot_dfs(test_data, llm_bundle, metric)
     df_top = df_top[df_top["token_values"] >= 0.8]
@@ -287,9 +303,11 @@ def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
         mask = torch.isin(tokens, token_ids)
         modified_confs.append(token_confs[mask].mean())
         modified_confs1.append(token_confs[~mask].mean())
-
-        calibrated_token_confs.append(calib_token_confs[mask].mean())
-        calibrated_token_confs1.append(calib_token_confs[~mask].mean())
+        try:
+            calibrated_token_confs.append(calib_token_confs[mask].mean())
+            calibrated_token_confs1.append(calib_token_confs[~mask].mean())
+        except:
+            pass
 
     modified_confs = torch.Tensor(modified_confs)
     modified_confs1 = torch.Tensor(modified_confs1)
@@ -302,16 +320,17 @@ def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
     fig4, ax4 = reliability_diagram(test_data["correct"], modified_confs1,
                                     f"xi <= 0.8 Responses", n_bins=30)
 
-
-    fig5, ax5 = reliability_diagram(test_data["correct"], calibrated_token_confs,
-                                    f"xi > 0.8 Responses (calibrated)", n_bins=30)
-    fig6, ax6 = reliability_diagram(test_data["correct"], calibrated_token_confs1,
-                                    f"x <= 0.8 Responses (calibrated)", n_bins=30)
+    if calibrated_token_confs is not None:
+        fig5, ax5 = reliability_diagram(test_data["correct"], calibrated_token_confs,
+                                        f"xi > 0.8 Responses (calibrated)", n_bins=30)
+        fig6, ax6 = reliability_diagram(test_data["correct"], calibrated_token_confs1,
+                                        f"x <= 0.8 Responses (calibrated)", n_bins=30)
+        fig5.savefig(figures_path / "calib_xi.png", dpi=600)
+        fig6.savefig(figures_path / "calib_non_xi.png", dpi=600)
 
     fig3.savefig(figures_path.parent.parent / "xi.png", dpi=600)
     fig4.savefig(figures_path.parent.parent / "non_xi.png", dpi=600)
-    fig5.savefig(figures_path / "calib_xi.png", dpi=600)
-    fig6.savefig(figures_path / "calib_non_xi.png", dpi=600)
+
 
     fig7, ax7 = boxplots(test_data["logits_confs"], modified_confs, modified_confs1)
     fig7.savefig(figures_path.parent.parent / "box_comparisons.png", dpi=600)
@@ -319,8 +338,8 @@ def plot_id(model_name="Qwen/Qwen2.5-3B-Instruct",
     plt.show()
 
 
-def main(model_name: str = "microsoft/Phi-3-mini-4k-instruct",
-         calibrator_name: str = "FrequencyTS_MR",
+def main(model_name: str = "Qwen/Qwen2.5-3B-Instruct",
+         calibrator_name: str = "TemperatureScaling",
          id_prompt_version: str = "DEFAULT",
          ood_prompt_version: str = "DEFAULT",
          loss_func_name: str = "CORRECT_AWARE",
