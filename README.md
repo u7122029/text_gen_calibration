@@ -1,128 +1,50 @@
-# text_gen_calibration
-Calibrating Text Generation Large Language Models
+# How can Token Occurences Calibrate Large Language Model Confidence?
 
-confidence of high frequency tokens don't align with accuracy.
+## Abstract
+Model calibration involves adjusting the confidence of responses such that they better represent the accuracy of the model in question. That is, if a model has a mean confidence of \(c\%\) over a set of outputs, then its accuracy should be \(c\%\). We propose a new group of model calibration heuristics that help adjust the confidences of tokens that appear often between responses, or commonly have high, consistent confidence. These calibration methods can be employed to extend existing calibrators to further adjust the confidences of targeted tokens.  By calibrating a model's confidences in this manner, it would be less overconfident in its incorrect answers, and less underconfident in its correct answers. Although the current state-of-the-art calibratiors show varying levels of success on many text generation Large Language Models (LLMs), they can be further improved by considering intuitive natural language patterns. Our results show that our heuristics can improve the Expected Calibration Error (ECE) of existing calibrators, both on data in the same domain or otherwise, though the calibrators we have tested could have been too small or large to display more consistent improvements. Our work also highlights the complexity of distinguishing the correctness of responses, how larger amounts of training data can aid with calibration and the effects of out-of-distribution data on calibrator models.
 
+## Overview
+LLMs often indicate a high level of confidence, regardless of whether the answer provided to a given question is correct or not. This confidence comes in the form of wording,
+token-based confidences or obtaining the confidence from the LLM itself. LLMs that cannot give confidences that align with their accuracies tend to give misinformation that appears legitimate.
 
-Make a separate chapter on experiment settings.
-Talk about the models that were tested, loss functions, training parameters, datasets used, 
+Though there are many ways to obtain confidence from an LLM, the way we choose to do so is via the mean token confidence. Our proposed methods hence aim to adjust the confidences given by each token.
 
-Add concrete toy examples in the Methods chapter to demonstrate effectiveness of removing high \xi tokens.
+We propose a new \(\xi\) metric that assigns a score to each token in the LLM's vocabulary, giving higher scores to those that are more viable for stronger calibration strategies. This metric can take on any form, and we are unsure which one would theoretically perform best, so we devise 5 different versions.
+1. \(\xi_{m}(t, R) = \mu(t, R)\),
+2. \(\xi_{s}(t, R) = -2\sigma(t, R) + 1\), 
+3. \(\xi_{r}(t, R) = \text{rfr}(t, R)\),
+4. \(\xi_{mr}(t, r) = (\mu \cdot \text{rfr})(t, R)\),
+5. \(\xi_{sr}(t, r) = (\sigma \cdot \text{rfr})(t, R)\)
 
-# FrequencyTS Variant Results
-## google/gemma-1.1-2b-it
-<details>
-  <summary>View Results</summary>
+Where 
+- \(R\) is the set of responses, 
+- \(t\) is a token, 
+- \(\mu\) is the mean token confidence,
+- \(\sigma\) is the standard deviation of token confidences,
+- \(\text{rfr}\) is the **Response Frequency Ratio** - the proportion of responses that token \(t\) appears across all responses in \(R\).
 
-### Calibration Set
-```
-ece_logits: 0.881216
-ece_verbalised: 0.256036
+Metric 2 gives higher scores to tokens that have consistent confidences, metric 4 gives higher scores to tokens that have high mean confidence and high response frequency ratio, and so on.
 
-brier_logits: 0.814754
-brier_verbalised: 0.172123
+We find that tokens that tend to score high \(\xi\)-scores tend to strongly affect response confidence - we saw this by setting the confidences of these tokens to 0, to which we observed decreases in overall response confidence. 
 
-auroc_logits: 0.631076
-auroc_verbalised: 0.491197
+Our strategy from here was to choose simple calibrators and add some extra parameters that solely focus on adjusting these tokens. In our paper we call these \(\xi\)-calibrators,
+while our code prefixes the calibrators with the word `Frequency` or `F` if the name was too long. `complie_results.py` contains the full list of calibrators that we tested.
 
-auprc_logits: 0.0741467
-auprc_verbalised: 0.0762646
-```
-| name                   |   ece_calib |   brier_calib |   auroc_calib |   auprc_calib |
-|:-----------------------|------------:|--------------:|--------------:|--------------:|
-| FrequencyTS            |  0.00963191 |     0.0383401 |      0.630787 |     0.0652092 |
-| FrequencyTSBotOnly     |  0.0230489  |     0.0388787 |      0.591146 |     0.070289  |
-| FrequencyTSMeanOnly    |  0.00963191 |     0.0383401 |      0.630787 |     0.0652092 |
-| FrequencyTSMeanStdOnly |  0.00963191 |     0.0383401 |      0.630787 |     0.0652092 |
-| FrequencyTSNoRF        |  0.00963191 |     0.0383401 |      0.630787 |     0.0652092 |
-| FrequencyTSTopOnly     |  0.0106741  |     0.0384153 |      0.618056 |     0.0634603 |
+## Reproducing our Results
+1. Ensure you are in the `src` directory. 
+    ```
+    cd src
+    ```
+2. Install all necessary packages:
+    ```
+    pip install -r requirements.txt
+    ```
+3. If you are on Windows, run 
+    ```
+    ./run_compile_results.bat
+    ```
+    If you are on a UNIX system, run
+    ```
+    bash run_compile_results.sh
+    ```
 
-### Test Set
-```
-ece_logits: 0.853072
-ece_verbalised: 0.254713
-
-brier_logits: 0.789192
-brier_verbalised: 0.169274
-
-auroc_logits: 0.630536
-auroc_verbalised: 0.542066
-
-auprc_logits: 0.13184
-auprc_verbalised: 0.114857
-```
-| name                   | ece_calib |          brier_calib | auroc_calib | auprc_calib |
-|:-----------------------|----------:|---------------------:|------------:|------------:|
-| FrequencyTS            | 0.0244503 |            0.0626174 |    0.544643 |   0.0777686 |
-| FrequencyTSBotOnly     | 0.0032739 |            0.0624013 |    0.530536 |   0.0837853 |
-| FrequencyTSMeanOnly    | 0.0244503 |            0.0626174 |    0.544643 |   0.0777686 |
-| FrequencyTSMeanStdOnly | 0.0244503 |            0.0626174 |    0.544643 |   0.0777686 |
-| FrequencyTSNoRF        | 0.0244503 |            0.0626174 |    0.544643 |   0.0777686 |
-| FrequencyTSTopOnly     | 0.0164172 |            0.0626752 |      0.5275 |   0.0748827 |
-
-### MATH Test Set
-
-### Aqua QA Test Set
-
-### TriviaQA Test Set
-
-</details>
-
-## mistralai/Mistral-7B-Instruct-v0.3
-<details>
-<summary>View Results</summary>
-
-### Calibration Set
-```
-ece_logits: 0.509288
-ece_verbalised: 0.596667
-
-brier_logits: 0.492303
-brier_verbalised: 0.598333
-
-auroc_logits: 0.616412
-auroc_verbalised: 0.505184
-
-auprc_logits: 0.460833
-auprc_verbalised: 0.392476
-```
-| name                   | ece_calib |        brier_calib | auroc_calib | auprc_calib |
-|:-----------------------|----------:|-------------------:|------------:|------------:|
-| TemperatureScaling     |   0.14449 |           0.246273 |    0.597216 |    0.447351 |
-| FrequencyTS            |  0.123627 |           0.245095 |    0.592826 |    0.444943 |
-| FrequencyTSBotOnly     |  0.129551 |           0.244916 |    0.594507 |    0.448702 |
-| FrequencyTSMeanOnly    |  0.117799 |           0.244066 |    0.593433 |    0.446024 |
-| FrequencyTSMeanStdOnly |  0.117799 |           0.244066 |    0.593433 |    0.446024 |
-| FrequencyTSNoRF        |  0.117799 |           0.244066 |    0.593433 |    0.446024 |
-| FrequencyTSTopOnly     |  0.136381 |           0.245285 |    0.596002 |    0.445691 |
-
-### Test Set
-```
-ece_logits: 0.515209
-ece_verbalised: 0.616667
-
-brier_logits: 0.496182
-brier_verbalised: 0.616667
-
-auroc_logits: 0.628249
-auroc_verbalised: 0.498355
-
-auprc_logits: 0.506961
-auprc_verbalised: 0.382557
-```
-| name                   | ece_calib |    brier_calib | auroc_calib | auprc_calib |
-|:-----------------------|----------:|---------------:|------------:|------------:|
-| TemperatureScaling     |   0.11207 |       0.238776 |    0.656733 |    0.552965 |
-| FrequencyTS            |  0.104548 |       0.237937 |     0.65114 |    0.551856 |
-| FrequencyTSBotOnly     |  0.105197 |       0.237909 |    0.651328 |    0.551826 |
-| FrequencyTSMeanOnly    |  0.100128 |       0.236955 |    0.651469 |    0.552908 |
-| FrequencyTSMeanStdOnly |  0.100128 |       0.236955 |    0.651469 |    0.552908 |
-| FrequencyTSNoRF        |  0.100128 |       0.236955 |    0.651469 |    0.552908 |
-| FrequencyTSTopOnly     |  0.107629 |       0.237745 |    0.656216 |     0.55309 |
-
-### MATH Test Set
-
-### Aqua QA Test Set
-
-### TriviaQA Test Set
-</details>
